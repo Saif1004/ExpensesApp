@@ -15,7 +15,6 @@ export default function SignIn() {
   const handleSignIn = async () => {
     try {
       await signInWithEmailAndPassword(auth, email.trim(), password);
-      // AuthProvider will redirect to /home
     } catch (err) {
       alert(err.message);
     }

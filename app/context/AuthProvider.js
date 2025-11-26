@@ -15,18 +15,16 @@ export function AuthProvider({ children }) {
       setUser(firebaseUser);
       setAuthLoaded(true);
 
-      // If logged in, go to tabs
       if (firebaseUser) {
         router.replace("/(tabs)/explore");
       }
 
-      // ❗ If NOT logged in → DO NOTHING (show home page normally)
+    
     });
 
     return unsubscribe;
   }, []);
 
-  // Don't render app until Firebase finishes loading
   if (!authLoaded) return null;
 
   return (
