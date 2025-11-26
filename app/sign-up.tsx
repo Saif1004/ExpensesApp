@@ -1,20 +1,20 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { createUserWithEmailAndPassword } from "firebase/auth";
 import React, { useState } from "react";
 import { Text, TextInput, TouchableOpacity, View } from "react-native";
 import tw from "twrnc";
 import { auth } from "./firebase/firebaseConfig";
 
-export default function SignIn() {
+export default function SignUp() {
   const router = useRouter();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleSignIn = async () => {
+  const handleSignUp = async () => {
     try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
+      await createUserWithEmailAndPassword(auth, email.trim(), password);
       // AuthProvider will redirect to /home
     } catch (err) {
       alert(err.message);
@@ -26,11 +26,11 @@ export default function SignIn() {
       <View style={{ flex: 1, paddingHorizontal: 24, justifyContent: "center" }}>
         <View
           style={[
-            { borderRadius: 24, padding: 20, backgroundColor: "rgba(31,41,55,0.9)" },
+            { borderRadius: 24, padding: 22, backgroundColor: "rgba(31,41,55,0.92)" },
             tw`shadow-lg`,
           ]}
         >
-          <Text style={tw`text-slate-100 text-2xl font-bold mb-2`}>Sign In</Text>
+          <Text style={tw`text-slate-100 text-2xl font-bold mb-2`}>Create Account</Text>
 
           {/* Email */}
           <View style={tw`mb-4`}>
@@ -38,8 +38,9 @@ export default function SignIn() {
             <TextInput
               value={email}
               onChangeText={setEmail}
-              placeholder="your@email.com"
+              placeholder="you@example.com"
               placeholderTextColor="#64748B"
+              keyboardType="email-address"
               style={[
                 { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 9999, borderWidth: 1 },
                 tw`border-slate-700 text-slate-100`,
@@ -64,14 +65,14 @@ export default function SignIn() {
           </View>
 
           <TouchableOpacity
-            style={[{ paddingVertical: 12, borderRadius: 9999, alignItems: "center", marginBottom: 10 }, tw`bg-blue-500`]}
-            onPress={handleSignIn}
+            style={[{ paddingVertical: 12, borderRadius: 9999, alignItems: "center", marginBottom: 12 }, tw`bg-blue-600`]}
+            onPress={handleSignUp}
           >
-            <Text style={tw`text-white text-base font-semibold`}>Sign In</Text>
+            <Text style={tw`text-white text-base font-semibold`}>Create Account</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => router.push("/sign-up")}>
-            <Text style={tw`text-slate-400 text-center text-xs mt-2`}>Don't have an account? Sign Up</Text>
+          <TouchableOpacity onPress={() => router.push("/sign-in")}>
+            <Text style={tw`text-slate-400 text-center text-xs`}>Already have an account? Sign In</Text>
           </TouchableOpacity>
         </View>
       </View>
