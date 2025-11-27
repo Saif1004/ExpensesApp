@@ -1,53 +1,31 @@
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Fonts } from '@/constants/theme';
-import { StyleSheet, TouchableOpacity } from 'react-native';
+import { ThemedText } from "@/components/themed-text";
+import { ThemedView } from "@/components/themed-view";
+import { StyleSheet } from "react-native";
 
-export default function AddExpense() {
+export default function AddExpenseScreen() {
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#E4E4E4', dark: '#1E293B' }}
-      headerImage={
-        <IconSymbol
-          size={260}
-          color="#64748B"
-          name="camera.fill"
-          style={styles.headerImage}
-        />
-      }
-    >
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title" style={{ fontFamily: Fonts.rounded }}>
-          Add Expense
-        </ThemedText>
-      </ThemedView>
-
-      <ThemedText>Upload a receipt and we’ll extract the details for you.</ThemedText>
-
-      <TouchableOpacity style={styles.uploadBtn}>
-        <ThemedText type="defaultSemiBold">Upload Receipt</ThemedText>
-      </TouchableOpacity>
-    </ParallaxScrollView>
+    <ThemedView style={styles.container}>
+      <ThemedText style={styles.title}>Add Expense</ThemedText>
+      <ThemedText style={styles.subtitle}>Create a new expense entry.</ThemedText>
+    </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  headerImage: {
-    position: 'absolute',
-    bottom: -70,
-    left: -30,
+  container: {
+    padding: 20,
+    backgroundColor: "#0F172A",
+    minHeight: "100%",
   },
-  titleContainer: {
-    flexDirection: 'row',
-    gap: 8,
+
+  title: {
+    fontSize: 30,
+    color: "#F8FAFC",
+    fontWeight: "bold",
+    marginBottom: 8,
   },
-  uploadBtn: {
-    marginTop: 25,
-    padding: 16,
-    backgroundColor: '#3B82F6',
-    borderRadius: 12,
-    alignItems: 'center',
+
+  subtitle: {
+    color: "#94A3B8",
   },
 });
