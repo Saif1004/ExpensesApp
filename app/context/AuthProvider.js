@@ -16,7 +16,7 @@ export function AuthProvider({ children }) {
       setAuthLoaded(true);
 
       if (firebaseUser) {
-        router.replace("/(tabs)/explore");
+        router.replace("/(tabs)/home");
       }
 
     
