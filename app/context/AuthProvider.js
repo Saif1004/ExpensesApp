@@ -15,11 +15,13 @@ export function AuthProvider({ children }) {
       setUser(firebaseUser);
       setAuthLoaded(true);
 
-      if (firebaseUser) {
-        router.replace("/(tabs)/home");
-      }
-
-    
+      setTimeout(() => {
+        if (firebaseUser) {
+          router.replace("/(tabs)/home");
+        } else {
+          router.replace("/sign-in");
+        }
+      }, 0);
     });
 
     return unsubscribe;
