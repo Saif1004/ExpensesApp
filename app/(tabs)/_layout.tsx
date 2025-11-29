@@ -1,26 +1,43 @@
 import { Tabs } from "expo-router";
 import React from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { HapticTab } from "@/components/haptic-tab";
 import { IconSymbol } from "@/components/ui/icon-symbol";
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarButton: HapticTab,
 
-        // 🔥 FIXED COLORS
+        // Colors
         tabBarActiveTintColor: "#FFFFFF",
-        tabBarInactiveTintColor: "#FFFFFF",
+        tabBarInactiveTintColor: "#64748B",
 
+        tabBarShowLabel: true,
+
+        // ✨ Lower tab bar, NO extra blank space
         tabBarStyle: {
           backgroundColor: "#0F172A",
           borderTopColor: "#1E293B",
-          height: 62,
-          paddingBottom: 6,
-          paddingTop: 6,
+          height: 56 + insets.bottom,   // Compact height
+          paddingBottom: insets.bottom, // ONLY real safe area
+          paddingTop: 4,
+        },
+
+        // Center icon + text perfectly
+        tabBarItemStyle: {
+          justifyContent: "center",
+          alignItems: "center",
+        },
+
+        tabBarLabelStyle: {
+          fontSize: 11,
+          marginTop: -2,
         },
       }}
     >
@@ -29,7 +46,7 @@ export default function TabLayout() {
         options={{
           title: "Home",
           tabBarIcon: ({ color }) => (
-            <IconSymbol name="house.fill" size={24} color={color} />
+            <IconSymbol name="house.fill" size={22} color={color} />
           ),
         }}
       />
@@ -39,7 +56,7 @@ export default function TabLayout() {
         options={{
           title: "Analytics",
           tabBarIcon: ({ color }) => (
-            <IconSymbol name="chart.bar.xaxis" size={24} color={color} />
+            <IconSymbol name="chart.bar.xaxis" size={22} color={color} />
           ),
         }}
       />
@@ -49,7 +66,7 @@ export default function TabLayout() {
         options={{
           title: "Claims",
           tabBarIcon: ({ color }) => (
-            <IconSymbol name="doc.text.fill" size={24} color={color} />
+            <IconSymbol name="doc.text.fill" size={22} color={color} />
           ),
         }}
       />
@@ -59,7 +76,11 @@ export default function TabLayout() {
         options={{
           title: "Profile",
           tabBarIcon: ({ color }) => (
-            <IconSymbol name="person.crop.circle.fill" size={24} color={color} />
+            <IconSymbol
+              name="person.crop.circle.fill"
+              size={22}
+              color={color}
+            />
           ),
         }}
       />
@@ -69,7 +90,7 @@ export default function TabLayout() {
         options={{
           title: "Add",
           tabBarIcon: ({ color }) => (
-            <IconSymbol name="plus.circle.fill" size={30} color={color} />
+            <IconSymbol name="plus.circle.fill" size={26} color={color} />
           ),
         }}
       />
