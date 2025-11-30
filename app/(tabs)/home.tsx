@@ -21,7 +21,7 @@ export default function HomeScreen() {
       <ThemedView style={styles.wrapper}>
 
         {/* TITLE */}
-        <ThemedText style={styles.title}>Dashboard</ThemedText>
+        <ThemedText type="title" style={styles.title}>Dashboard</ThemedText>
         <ThemedText style={styles.subtitle}>
           Track spending, upload receipts, and manage your claims.
         </ThemedText>

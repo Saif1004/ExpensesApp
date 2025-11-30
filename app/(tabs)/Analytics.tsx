@@ -18,7 +18,7 @@ export default function AnalyticsScreen() {
       }
     >
       <ThemedView style={styles.screen}>
-        <ThemedText style={styles.title}>Analytics</ThemedText>
+        <ThemedText type="title" style={styles.title}>Analytics</ThemedText>
         <ThemedText style={styles.subtitle}>
           Expense breakdown and monthly stats.
         </ThemedText>

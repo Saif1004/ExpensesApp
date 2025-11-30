@@ -7,7 +7,7 @@ import { StyleSheet, TouchableOpacity } from "react-native";
 export default function ProfileScreen() {
   return (
     <ThemedView style={styles.container}>
-      <ThemedText style={styles.title}>Profile</ThemedText>
+      <ThemedText type="title" style={styles.title}>Profile</ThemedText>
       <ThemedText style={styles.subtitle}>Manage your account information.</ThemedText>
 
       <ThemedView style={styles.card}>
@@ -38,6 +38,7 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: "bold",
     color: "#F8FAFC",
+    marginTop: 24,
   },
   subtitle: {
     color: "#94A3B8",
@@ -69,4 +70,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "600",
   },
+  
 });

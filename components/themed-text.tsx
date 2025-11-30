@@ -46,7 +46,8 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: 'bold',
-    lineHeight: 32,
+    // bigger lineHeight so tall/low glyphs (ascenders/descenders) don't clip
+    lineHeight: 40,
   },
   subtitle: {
     fontSize: 20,

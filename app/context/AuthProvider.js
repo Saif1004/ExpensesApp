@@ -19,7 +19,7 @@ export function AuthProvider({ children }) {
         if (firebaseUser) {
           router.replace("/(tabs)/home");
         } else {
-          router.replace("/sign-in");
+          router.replace("/home");
         }
       }, 0);
     });

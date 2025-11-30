@@ -6,7 +6,7 @@ import { StyleSheet, TouchableOpacity } from "react-native";
 export default function AddExpenseScreen() {
   return (
     <ThemedView style={styles.container}>
-      <ThemedText style={styles.title}>Add Expense</ThemedText>
+      <ThemedText type="title" style={styles.title}>Add Expense</ThemedText>
       <ThemedText style={styles.subtitle}>Upload a receipt or enter details.</ThemedText>
 
       <TouchableOpacity style={styles.uploadBox}>
@@ -34,6 +34,7 @@ const styles = StyleSheet.create({
     fontSize: 32,
     color: "#F8FAFC",
     fontWeight: "bold",
+    marginTop: 24,
   },
   subtitle: {
     color: "#94A3B8",
@@ -67,4 +68,5 @@ const styles = StyleSheet.create({
     color: "#94A3B8",
     marginTop: 6,
   },
+  
 });

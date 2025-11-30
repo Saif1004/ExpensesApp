@@ -5,7 +5,7 @@ import { StyleSheet } from "react-native";
 export default function ClaimsScreen() {
   return (
     <ThemedView style={styles.container}>
-      <ThemedText style={styles.title}>Claims</ThemedText>
+      <ThemedText type="title" style={styles.title}>Claims</ThemedText>
       <ThemedText style={styles.subtitle}>
         View and manage your reimbursement claims.
       </ThemedText>
@@ -29,6 +29,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: "bold",
+    marginTop: 24,
     color: "#F8FAFC",
   },
   subtitle: {
@@ -49,4 +50,5 @@ const styles = StyleSheet.create({
   cardText: {
     color: "#94A3B8",
   },
+  
 });

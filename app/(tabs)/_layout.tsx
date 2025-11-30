@@ -19,19 +19,25 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: "#0F172A",
           borderTopColor: "#1E293B",
-          height: 56 + insets.bottom,
-          paddingBottom: insets.bottom,
-          paddingTop: 4,
+          // increase height + bottom padding so labels with descenders (p, y) are not clipped
+          // and give some top room for ascenders (e.g. 'f')
+          height: 72 + insets.bottom,
+          paddingBottom: insets.bottom + 12,
+          paddingTop: 10,
         },
 
         tabBarItemStyle: {
           justifyContent: "center",
           alignItems: "center",
         },
+        tabBarIconStyle: { transform: [{ translateY: 0 }] },
 
         tabBarLabelStyle: {
-          fontSize: 11,
-          marginTop: -2,
+          fontSize: 12,
+          lineHeight: 18,
+          paddingTop: 8,
+          paddingBottom: 14,
+          includeFontPadding: true,
         },
       }}
     >
