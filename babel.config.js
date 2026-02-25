@@ -9,10 +9,10 @@ module.exports = function (api) {
           extensions: [".js", ".jsx", ".ts", ".tsx"],
           alias: {
             "@": "./",
-            "@components": "./components"
-          }
-        }
-      ]
-    ]
+            "@components": "./components",
+          },
+        },
+      ],
+    ],
   };
 };
