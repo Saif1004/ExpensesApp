@@ -1,7 +1,6 @@
-import { IconSymbol } from "@/components/ui/icon-symbol";
 import { Tabs } from "expo-router";
-import React from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { IconSymbol } from "../../components/ui/icon-symbol";
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
