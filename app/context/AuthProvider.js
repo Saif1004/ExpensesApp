@@ -1,6 +1,6 @@
-import { useRouter } from "expo-router";
+import { useRouter, useSegments } from "expo-router";
 import { onAuthStateChanged } from "firebase/auth";
-import React, { createContext, useEffect, useState } from "react";
+import { createContext, useEffect, useState } from "react";
 import { auth } from "../firebase/firebaseConfig";
 
 export const AuthContext = createContext(null);
@@ -8,24 +8,31 @@ export const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [authLoaded, setAuthLoaded] = useState(false);
+
   const router = useRouter();
+  const segments = useSegments(); 
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsub = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       setAuthLoaded(true);
-
-      setTimeout(() => {
-        if (firebaseUser) {
-          router.replace("/(tabs)/home");
-        } else {
-          router.replace("/home");
-        }
-      }, 0);
     });
-
-    return unsubscribe;
+    return unsub;
   }, []);
+
+  useEffect(() => {
+    if (!authLoaded) return;
+
+    const inTabs = segments[0] === "(tabs)";
+
+    if (user && !inTabs) {
+      router.replace("/(tabs)/home");
+    }
+
+    if (!user && inTabs) {
+      router.replace("/sign-in"); 
+    }
+  }, [user, authLoaded, segments]);
 
   if (!authLoaded) return null;
 
