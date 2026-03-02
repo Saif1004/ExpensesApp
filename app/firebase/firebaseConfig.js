@@ -1,9 +1,13 @@
-// app/firebase/firebaseConfig.js
+// firebase/firebaseConfig.js
 
-import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import ReactNativeAsyncStorage from "@react-native-async-storage/async-storage";
+import { getApp, getApps, initializeApp } from "firebase/app";
+import {
+  getReactNativePersistence,
+  initializeAuth,
+} from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 
-// Your Firebase config
 const firebaseConfig = {
   apiKey: "AIzaSyBMlIPiP6tk52j1VrPQD7BVnybczhQAg6Y",
   authDomain: "expenseapp-3dafd.firebaseapp.com",
@@ -14,8 +18,14 @@ const firebaseConfig = {
   measurementId: "G-2QKDWK0W3E",
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// ⭐ THIS WAS MISSING
-export const auth = getAuth(app);
+// ✅ Proper React Native Auth persistence
+export const auth = initializeAuth(app, {
+  persistence: getReactNativePersistence(ReactNativeAsyncStorage),
+});
+
+// Firestore
+export const db = getFirestore(app);
+
+export default firebaseConfig;
