@@ -1,4 +1,3 @@
-import { Picker } from "@react-native-picker/picker";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { useState } from "react";
 import {
@@ -16,14 +15,10 @@ import { IconSymbol } from "../../components/ui/icon-symbol";
 import { useAuth } from "../context/AuthProvider";
 import { db } from "../firebase/firebaseConfig";
 
-const AZURE_VALIDATE_URL = process.env.EXPO_PUBLIC_AZURE_VALIDATE_URL!;
+const AZURE_VALIDATE_URL =
+  process.env.EXPO_PUBLIC_AZURE_VALIDATE_URL!;
 
-const CATEGORIES = [
-  "Meals",
-  "Travel",
-  "Technology",
-  "Office",
-];
+const CATEGORIES = ["Meals", "Travel", "Technology", "Office"];
 
 export default function AddExpenseScreen() {
   const { user } = useAuth();
@@ -34,6 +29,11 @@ export default function AddExpenseScreen() {
   const [purchaseDate, setPurchaseDate] = useState("");
   const [hasReceipt, setHasReceipt] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  const validateDateFormat = (date: string) => {
+    return /^\d{4}-\d{2}-\d{2}$/.test(date);
+  };
 
   const handleSubmit = async () => {
     if (!user) {
@@ -46,15 +46,20 @@ export default function AddExpenseScreen() {
       return;
     }
 
-    if (!merchant.trim() || !purchaseDate) {
-      Alert.alert("Missing fields", "Please complete all fields.");
+    if (!merchant.trim()) {
+      Alert.alert("Missing merchant", "Enter merchant name.");
+      return;
+    }
+
+    if (!validateDateFormat(purchaseDate)) {
+      Alert.alert("Invalid date format", "Use YYYY-MM-DD.");
       return;
     }
 
     try {
       setSaving(true);
 
-      // 🔥 Validate via Azure
+      // 🔥 Azure Validation
       const response = await fetch(AZURE_VALIDATE_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -63,6 +68,8 @@ export default function AddExpenseScreen() {
           category,
           purchaseDate,
           hasReceipt,
+          userId: user.uid,
+          merchant: merchant.trim(),
         }),
       });
 
@@ -73,7 +80,6 @@ export default function AddExpenseScreen() {
           "Policy Violation",
           result?.reason || "Claim rejected."
         );
-        setSaving(false);
         return;
       }
 
@@ -86,7 +92,8 @@ export default function AddExpenseScreen() {
         category,
         purchaseDate,
         hasReceipt,
-        status: result.autoApprove ? "approved" : "pending",
+        status: result.status.toLowerCase(), // approved | pending
+        suspicious: result.suspicious,
         createdAt: serverTimestamp(),
         statusUpdatedAt: serverTimestamp(),
         approvedBy: "",
@@ -94,13 +101,17 @@ export default function AddExpenseScreen() {
         rejectionReason: "",
       });
 
-      Alert.alert("Success", "Claim submitted.");
+      Alert.alert(
+        "Success",
+        `Claim submitted. Status: ${result.status}`
+      );
 
+      // Reset
       setAmount("");
       setMerchant("");
       setPurchaseDate("");
       setHasReceipt(false);
-
+      setCategory("Meals");
     } catch (err: any) {
       Alert.alert("Error", err?.message ?? "Something went wrong.");
     } finally {
@@ -143,15 +154,34 @@ export default function AddExpenseScreen() {
           style={styles.input}
         />
 
-        <Picker
-          selectedValue={category}
-          onValueChange={(itemValue) => setCategory(itemValue)}
-          style={{ color: "#fff", backgroundColor: "#1E293B", marginBottom: 12 }}
+        {/* Category Dropdown */}
+        <TouchableOpacity
+          style={styles.input}
+          onPress={() => setShowDropdown(!showDropdown)}
         >
-          {CATEGORIES.map((cat) => (
-            <Picker.Item key={cat} label={cat} value={cat} />
-          ))}
-        </Picker>
+          <ThemedText style={{ color: "#F8FAFC" }}>
+            {category}
+          </ThemedText>
+        </TouchableOpacity>
+
+        {showDropdown && (
+          <View style={styles.dropdown}>
+            {CATEGORIES.map((cat) => (
+              <TouchableOpacity
+                key={cat}
+                style={styles.dropdownItem}
+                onPress={() => {
+                  setCategory(cat);
+                  setShowDropdown(false);
+                }}
+              >
+                <ThemedText style={{ color: "#F8FAFC" }}>
+                  {cat}
+                </ThemedText>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
         <TextInput
           placeholder="Purchase Date (YYYY-MM-DD)"
@@ -172,7 +202,10 @@ export default function AddExpenseScreen() {
         </View>
 
         <TouchableOpacity
-          style={[styles.submitButton, saving && { opacity: 0.6 }]}
+          style={[
+            styles.submitButton,
+            saving && { opacity: 0.6 },
+          ]}
           onPress={handleSubmit}
           disabled={saving}
         >
@@ -230,6 +263,16 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 10,
     marginBottom: 12,
+  },
+  dropdown: {
+    backgroundColor: "#1E293B",
+    borderRadius: 10,
+    marginBottom: 12,
+  },
+  dropdownItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#334155",
   },
   switchRow: {
     flexDirection: "row",
