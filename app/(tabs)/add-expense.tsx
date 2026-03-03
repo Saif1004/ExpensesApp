@@ -1,11 +1,14 @@
+import { Picker } from "@react-native-picker/picker";
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   StyleSheet,
+  Switch,
   TextInput,
   TouchableOpacity,
+  View,
 } from "react-native";
 import { ThemedText } from "../../components/themed-text";
 import { ThemedView } from "../../components/themed-view";
@@ -15,13 +18,21 @@ import { db } from "../firebase/firebaseConfig";
 
 const AZURE_VALIDATE_URL = process.env.EXPO_PUBLIC_AZURE_VALIDATE_URL!;
 
+const CATEGORIES = [
+  "Meals",
+  "Travel",
+  "Technology",
+  "Office",
+];
+
 export default function AddExpenseScreen() {
   const { user } = useAuth();
 
   const [amount, setAmount] = useState("");
   const [merchant, setMerchant] = useState("");
-  const [category, setCategory] = useState("");
+  const [category, setCategory] = useState("Meals");
   const [purchaseDate, setPurchaseDate] = useState("");
+  const [hasReceipt, setHasReceipt] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async () => {
@@ -35,7 +46,7 @@ export default function AddExpenseScreen() {
       return;
     }
 
-    if (!merchant.trim() || !category.trim() || !purchaseDate) {
+    if (!merchant.trim() || !purchaseDate) {
       Alert.alert("Missing fields", "Please complete all fields.");
       return;
     }
@@ -43,14 +54,15 @@ export default function AddExpenseScreen() {
     try {
       setSaving(true);
 
-      // 🔥 1️⃣ Validate via Azure
+      // 🔥 Validate via Azure
       const response = await fetch(AZURE_VALIDATE_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           amount: Number(amount),
-          category: category.trim(),
+          category,
           purchaseDate,
+          hasReceipt,
         }),
       });
 
@@ -59,34 +71,36 @@ export default function AddExpenseScreen() {
       if (!response.ok || !result.valid) {
         Alert.alert(
           "Policy Violation",
-          result?.reason || "Claim rejected by policy engine."
+          result?.reason || "Claim rejected."
         );
         setSaving(false);
         return;
       }
 
-      // 🔥 2️⃣ Save to Firestore (MATCHES CLAIMS SCREEN)
+      // 🔥 Save to Firestore
       await addDoc(collection(db, "claims"), {
         userId: user.uid,
         userEmail: user.email ?? "",
         amount: Number(amount),
         merchant: merchant.trim(),
-        category: category.trim(),
+        category,
         purchaseDate,
+        hasReceipt,
         status: result.autoApprove ? "approved" : "pending",
-        createdAt: serverTimestamp(), // 🔥 IMPORTANT
+        createdAt: serverTimestamp(),
         statusUpdatedAt: serverTimestamp(),
         approvedBy: "",
         rejectedBy: "",
         rejectionReason: "",
       });
 
-      Alert.alert("Success", "Claim submitted successfully.");
+      Alert.alert("Success", "Claim submitted.");
 
       setAmount("");
       setMerchant("");
-      setCategory("");
       setPurchaseDate("");
+      setHasReceipt(false);
+
     } catch (err: any) {
       Alert.alert("Error", err?.message ?? "Something went wrong.");
     } finally {
@@ -101,13 +115,13 @@ export default function AddExpenseScreen() {
       </ThemedText>
 
       <ThemedText style={styles.subtitle}>
-        Claims are validated by cloud policy engine.
+        Claims validated by Azure policy engine
       </ThemedText>
 
       <TouchableOpacity style={styles.uploadBox}>
         <IconSymbol name="camera.fill" size={40} color="#38BDF8" />
         <ThemedText style={styles.uploadText}>
-          Upload Receipt (Azure OCR Next)
+          Upload Receipt (OCR Coming Soon)
         </ThemedText>
       </TouchableOpacity>
 
@@ -129,13 +143,15 @@ export default function AddExpenseScreen() {
           style={styles.input}
         />
 
-        <TextInput
-          placeholder="Category"
-          placeholderTextColor="#64748B"
-          value={category}
-          onChangeText={setCategory}
-          style={styles.input}
-        />
+        <Picker
+          selectedValue={category}
+          onValueChange={(itemValue) => setCategory(itemValue)}
+          style={{ color: "#fff", backgroundColor: "#1E293B", marginBottom: 12 }}
+        >
+          {CATEGORIES.map((cat) => (
+            <Picker.Item key={cat} label={cat} value={cat} />
+          ))}
+        </Picker>
 
         <TextInput
           placeholder="Purchase Date (YYYY-MM-DD)"
@@ -144,6 +160,16 @@ export default function AddExpenseScreen() {
           onChangeText={setPurchaseDate}
           style={styles.input}
         />
+
+        <View style={styles.switchRow}>
+          <ThemedText style={{ color: "#fff" }}>
+            Receipt Attached
+          </ThemedText>
+          <Switch
+            value={hasReceipt}
+            onValueChange={setHasReceipt}
+          />
+        </View>
 
         <TouchableOpacity
           style={[styles.submitButton, saving && { opacity: 0.6 }]}
@@ -203,6 +229,12 @@ const styles = StyleSheet.create({
     color: "#F8FAFC",
     padding: 12,
     borderRadius: 10,
+    marginBottom: 12,
+  },
+  switchRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 12,
   },
   submitButton: {
