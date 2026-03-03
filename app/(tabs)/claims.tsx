@@ -45,26 +45,18 @@ export default function ClaimsScreen() {
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<
-    "pending" | "approved" | "rejected"
-  >("pending");
+  const [filter, setFilter] =
+    useState<"pending" | "approved" | "rejected">("pending");
 
   const [selectedClaim, setSelectedClaim] =
     useState<Claim | null>(null);
 
-  // ✅ Reset badge when screen opens
+  // Mark as seen for badge logic
   useEffect(() => {
-    const markSeen = async () => {
-      await AsyncStorage.setItem(
-        LAST_SEEN_KEY,
-        Date.now().toString()
-      );
-    };
-
-    markSeen();
+    AsyncStorage.setItem(LAST_SEEN_KEY, Date.now().toString());
   }, []);
 
-  // ✅ Real-time listener
+  // Firestore real-time listener
   useEffect(() => {
     if (!user) return;
 
@@ -88,9 +80,7 @@ export default function ClaimsScreen() {
         rejected: 0,
       };
 
-      data.forEach((c) => {
-        tempCounts[c.status]++;
-      });
+      data.forEach((c) => tempCounts[c.status]++);
 
       setCounts(tempCounts);
       setLoading(false);
@@ -100,7 +90,7 @@ export default function ClaimsScreen() {
     return unsub;
   }, [user]);
 
-  // ✅ Update filtered list when filter changes
+  // Filter claims by status
   useEffect(() => {
     setClaims(allClaims.filter((c) => c.status === filter));
   }, [filter, allClaims]);
@@ -116,13 +106,13 @@ export default function ClaimsScreen() {
         Claims
       </ThemedText>
 
-      {/* 🔥 Filter Buttons */}
+      {/* Filter Buttons */}
       <View style={styles.filterRow}>
         {["pending", "approved", "rejected"].map((status) => (
           <TouchableOpacity
             key={status}
             onPress={() =>
-              setFilter(status as "pending" | "approved" | "rejected")
+              setFilter(status as any)
             }
             style={[
               styles.filterBtn,
@@ -149,11 +139,8 @@ export default function ClaimsScreen() {
         </View>
       ) : claims.length === 0 ? (
         <ThemedView style={styles.card}>
-          <ThemedText style={styles.cardTitle}>
+          <ThemedText style={{ color: "#94A3B8" }}>
             No {filter} claims
-          </ThemedText>
-          <ThemedText style={styles.cardText}>
-            You currently have no {filter} claims.
           </ThemedText>
         </ThemedView>
       ) : (
@@ -183,9 +170,12 @@ export default function ClaimsScreen() {
                 <ThemedText
                   style={[
                     styles.status,
-                    item.status === "pending" && styles.pending,
-                    item.status === "approved" && styles.approved,
-                    item.status === "rejected" && styles.rejected,
+                    item.status === "pending" &&
+                      styles.pending,
+                    item.status === "approved" &&
+                      styles.approved,
+                    item.status === "rejected" &&
+                      styles.rejected,
                   ]}
                 >
                   {item.status.toUpperCase()}
@@ -196,12 +186,11 @@ export default function ClaimsScreen() {
         />
       )}
 
-      {/* 🔥 Claim Detail Modal */}
+      {/* Modal */}
       <Modal
         visible={!!selectedClaim}
-        animationType="slide"
         transparent
-        onRequestClose={() => setSelectedClaim(null)}
+        animationType="slide"
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -223,15 +212,13 @@ export default function ClaimsScreen() {
                   Category: {selectedClaim.category}
                 </ThemedText>
 
-                <ThemedText style={styles.modalText}>
-                  Status: {selectedClaim.status.toUpperCase()}
-                </ThemedText>
-
                 <TouchableOpacity
                   style={styles.closeBtn}
-                  onPress={() => setSelectedClaim(null)}
+                  onPress={() =>
+                    setSelectedClaim(null)
+                  }
                 >
-                  <ThemedText style={{ color: "#FFF" }}>
+                  <ThemedText style={{ color: "#fff" }}>
                     Close
                   </ThemedText>
                 </TouchableOpacity>
@@ -283,15 +270,6 @@ const styles = StyleSheet.create({
     padding: 18,
     borderRadius: 14,
   },
-  cardTitle: {
-    color: "#E2E8F0",
-    fontSize: 16,
-    fontWeight: "600",
-    marginBottom: 6,
-  },
-  cardText: {
-    color: "#94A3B8",
-  },
   claimCard: {
     backgroundColor: "#1E293B",
     padding: 16,
@@ -334,6 +312,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "bold",
     marginBottom: 12,
+    color: "#F8FAFC",
   },
   modalAmount: {
     fontSize: 22,
