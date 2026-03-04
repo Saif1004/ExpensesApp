@@ -43,6 +43,8 @@ app.http("validateClaim", {
         purchaseDate,
         hasReceipt,
         userId,
+        merchant,
+        userEmail
       } = body;
 
       // =============================
@@ -53,7 +55,8 @@ app.http("validateClaim", {
         amount === undefined ||
         category === undefined ||
         purchaseDate === undefined ||
-        userId === undefined
+        userId === undefined ||
+        merchant === undefined
       ) {
         return {
           status: 400,
@@ -129,7 +132,7 @@ app.http("validateClaim", {
           status: 400,
           jsonBody: {
             valid: false,
-            reason: "Future dates are not allowed.",
+            reason: "Future dates not allowed.",
           },
         };
       }
@@ -157,7 +160,7 @@ app.http("validateClaim", {
       // =============================
 
       const duplicateQuery = await db
-        .collection("expenses")
+        .collection("claims")
         .where("userId", "==", userId)
         .where("amount", "==", numericAmount)
         .where("purchaseDate", "==", purchaseDate)
@@ -177,54 +180,83 @@ app.http("validateClaim", {
       // 6️⃣ Suspicious Pattern Detection
       // =============================
 
-      const recentExpenses = await db
-        .collection("expenses")
+      const previousClaims = await db
+        .collection("claims")
         .where("userId", "==", userId)
         .where("category", "==", category)
         .get();
 
-      const suspicious = recentExpenses.size >= 5;
+      const suspicious = previousClaims.size >= 5;
 
       // =============================
-      // 7️⃣ Auto Approval Logic
+      // 7️⃣ AI Spending Anomaly Detection
       // =============================
 
-      let status = "Pending";
+      let anomalyScore = 0;
+      let anomalous = false;
 
-      if (numericAmount <= 50 && hasReceipt === true && !suspicious) {
-        status = "Approved";
+      if (!previousClaims.empty) {
+        const amounts = previousClaims.docs.map(
+          (doc) => doc.data().amount
+        );
+
+        const avg =
+          amounts.reduce((a, b) => a + b, 0) / amounts.length;
+
+        anomalyScore = numericAmount / avg;
+
+        if (anomalyScore > 3) {
+          anomalous = true;
+        }
       }
 
       // =============================
-      // 8️⃣ Save Expense
+      // 8️⃣ Auto Approval Logic
       // =============================
 
-      await db.collection("expenses").add({
+      let status = "pending";
+
+      if (numericAmount <= 50 && hasReceipt === true && !suspicious) {
+        status = "approved";
+      }
+
+      // =============================
+      // 9️⃣ Save Claim
+      // =============================
+
+      const claimRef = await db.collection("claims").add({
         userId,
+        userEmail,
+        merchant,
         amount: numericAmount,
         category,
         purchaseDate,
         hasReceipt: Boolean(hasReceipt),
         status,
         suspicious,
+        anomalyScore,
+        anomalous,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
       // =============================
-      // ✅ Success Response
+      // ✅ Success
       // =============================
 
       return {
         status: 200,
         jsonBody: {
           valid: true,
+          claimId: claimRef.id,
           status,
           suspicious,
+          anomalous,
+          anomalyScore,
         },
       };
 
     } catch (error) {
-      context.log("❌ ERROR:", error);
+      context.log("ERROR:", error);
 
       return {
         status: 500,

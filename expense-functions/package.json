@@ -9,7 +9,8 @@
   },
   "dependencies": {
     "@azure/functions": "^4.0.0",
-    "firebase-admin": "^13.7.0"
+    "firebase-admin": "^13.7.0",
+    "proto-loader-gen-types": "^1.0.0"
   },
   "devDependencies": {
     "azure-functions-core-tools": "^4.x"

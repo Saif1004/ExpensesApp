@@ -1,4 +1,3 @@
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -9,11 +8,11 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
 import { ThemedText } from "../../components/themed-text";
 import { ThemedView } from "../../components/themed-view";
 import { IconSymbol } from "../../components/ui/icon-symbol";
 import { useAuth } from "../context/AuthProvider";
-import { db } from "../firebase/firebaseConfig";
 
 const AZURE_VALIDATE_URL =
   process.env.EXPO_PUBLIC_AZURE_VALIDATE_URL!;
@@ -59,17 +58,20 @@ export default function AddExpenseScreen() {
     try {
       setSaving(true);
 
-      // 🔥 Azure Validation
       const response = await fetch(AZURE_VALIDATE_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
+
         body: JSON.stringify({
           amount: Number(amount),
+          merchant: merchant.trim(),
           category,
           purchaseDate,
           hasReceipt,
           userId: user.uid,
-          merchant: merchant.trim(),
+          userEmail: user.email,
         }),
       });
 
@@ -83,35 +85,17 @@ export default function AddExpenseScreen() {
         return;
       }
 
-      // 🔥 Save to Firestore
-      await addDoc(collection(db, "claims"), {
-        userId: user.uid,
-        userEmail: user.email ?? "",
-        amount: Number(amount),
-        merchant: merchant.trim(),
-        category,
-        purchaseDate,
-        hasReceipt,
-        status: result.status.toLowerCase(), // approved | pending
-        suspicious: result.suspicious,
-        createdAt: serverTimestamp(),
-        statusUpdatedAt: serverTimestamp(),
-        approvedBy: "",
-        rejectedBy: "",
-        rejectionReason: "",
-      });
-
       Alert.alert(
         "Success",
         `Claim submitted. Status: ${result.status}`
       );
 
-      // Reset
       setAmount("");
       setMerchant("");
       setPurchaseDate("");
       setHasReceipt(false);
       setCategory("Meals");
+
     } catch (err: any) {
       Alert.alert("Error", err?.message ?? "Something went wrong.");
     } finally {
@@ -154,7 +138,6 @@ export default function AddExpenseScreen() {
           style={styles.input}
         />
 
-        {/* Category Dropdown */}
         <TouchableOpacity
           style={styles.input}
           onPress={() => setShowDropdown(!showDropdown)}
@@ -228,16 +211,19 @@ const styles = StyleSheet.create({
     backgroundColor: "#0F172A",
     minHeight: "100%",
   },
+
   title: {
     fontSize: 32,
     color: "#F8FAFC",
     fontWeight: "bold",
     marginTop: 24,
   },
+
   subtitle: {
     color: "#94A3B8",
     marginBottom: 20,
   },
+
   uploadBox: {
     borderWidth: 2,
     borderColor: "#1E293B",
@@ -247,16 +233,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 20,
   },
+
   uploadText: {
     color: "#38BDF8",
     marginTop: 10,
     fontSize: 16,
   },
+
   card: {
     backgroundColor: "rgba(30,41,59,0.95)",
     padding: 18,
     borderRadius: 14,
   },
+
   input: {
     backgroundColor: "#1E293B",
     color: "#F8FAFC",
@@ -264,28 +253,33 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginBottom: 12,
   },
+
   dropdown: {
     backgroundColor: "#1E293B",
     borderRadius: 10,
     marginBottom: 12,
   },
+
   dropdownItem: {
     padding: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#334155",
   },
+
   switchRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 12,
   },
+
   submitButton: {
     backgroundColor: "#2563EB",
     padding: 14,
     borderRadius: 12,
     alignItems: "center",
   },
+
   submitText: {
     color: "#FFFFFF",
     fontWeight: "600",

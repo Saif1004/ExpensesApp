@@ -1,12 +1,16 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
 import {
   collection,
   onSnapshot,
   orderBy,
   query,
-  where,
+  Timestamp,
+  where
 } from "firebase/firestore";
+
 import { useEffect, useState } from "react";
+
 import {
   ActivityIndicator,
   FlatList,
@@ -14,10 +18,12 @@ import {
   RefreshControl,
   StyleSheet,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
+
 import { ThemedText } from "../../components/themed-text";
 import { ThemedView } from "../../components/themed-view";
+
 import { useAuth } from "../context/AuthProvider";
 import { db } from "../firebase/firebaseConfig";
 
@@ -29,7 +35,7 @@ type Claim = {
   merchant: string;
   category: string;
   status: "pending" | "approved" | "rejected";
-  createdAt: any;
+  createdAt: Timestamp;
 };
 
 export default function ClaimsScreen() {
@@ -37,26 +43,28 @@ export default function ClaimsScreen() {
 
   const [allClaims, setAllClaims] = useState<Claim[]>([]);
   const [claims, setClaims] = useState<Claim[]>([]);
+
   const [counts, setCounts] = useState({
     pending: 0,
     approved: 0,
-    rejected: 0,
+    rejected: 0
   });
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
   const [filter, setFilter] =
     useState<"pending" | "approved" | "rejected">("pending");
 
   const [selectedClaim, setSelectedClaim] =
     useState<Claim | null>(null);
 
-  // Mark as seen for badge logic
+  // Mark screen opened
   useEffect(() => {
     AsyncStorage.setItem(LAST_SEEN_KEY, Date.now().toString());
   }, []);
 
-  // Firestore real-time listener
+  // Firestore listener
   useEffect(() => {
     if (!user) return;
 
@@ -69,7 +77,7 @@ export default function ClaimsScreen() {
     const unsub = onSnapshot(q, (snapshot) => {
       const data: Claim[] = snapshot.docs.map((doc) => ({
         id: doc.id,
-        ...(doc.data() as Omit<Claim, "id">),
+        ...(doc.data() as Omit<Claim, "id">)
       }));
 
       setAllClaims(data);
@@ -77,10 +85,14 @@ export default function ClaimsScreen() {
       const tempCounts = {
         pending: 0,
         approved: 0,
-        rejected: 0,
+        rejected: 0
       };
 
-      data.forEach((c) => tempCounts[c.status]++);
+      data.forEach((c) => {
+        if (c.status in tempCounts) {
+          tempCounts[c.status]++;
+        }
+      });
 
       setCounts(tempCounts);
       setLoading(false);
@@ -90,7 +102,7 @@ export default function ClaimsScreen() {
     return unsub;
   }, [user]);
 
-  // Filter claims by status
+  // Filter
   useEffect(() => {
     setClaims(allClaims.filter((c) => c.status === filter));
   }, [filter, allClaims]);
@@ -106,7 +118,7 @@ export default function ClaimsScreen() {
         Claims
       </ThemedText>
 
-      {/* Filter Buttons */}
+      {/* Filters */}
       <View style={styles.filterRow}>
         {["pending", "approved", "rejected"].map((status) => (
           <TouchableOpacity
@@ -116,7 +128,7 @@ export default function ClaimsScreen() {
             }
             style={[
               styles.filterBtn,
-              filter === status && styles.filterActive,
+              filter === status && styles.filterActive
             ]}
           >
             <ThemedText
@@ -175,7 +187,7 @@ export default function ClaimsScreen() {
                     item.status === "approved" &&
                       styles.approved,
                     item.status === "rejected" &&
-                      styles.rejected,
+                      styles.rejected
                   ]}
                 >
                   {item.status.toUpperCase()}
@@ -214,9 +226,7 @@ export default function ClaimsScreen() {
 
                 <TouchableOpacity
                   style={styles.closeBtn}
-                  onPress={() =>
-                    setSelectedClaim(null)
-                  }
+                  onPress={() => setSelectedClaim(null)}
                 >
                   <ThemedText style={{ color: "#fff" }}>
                     Close
@@ -235,100 +245,119 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: "#0F172A",
     padding: 20,
-    flex: 1,
+    flex: 1
   },
+
   title: {
     fontSize: 32,
     fontWeight: "bold",
     marginTop: 24,
-    color: "#F8FAFC",
+    color: "#F8FAFC"
   },
+
   filterRow: {
     flexDirection: "row",
     marginVertical: 16,
-    gap: 10,
+    gap: 10
   },
+
   filterBtn: {
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 20,
-    backgroundColor: "#1E293B",
+    backgroundColor: "#1E293B"
   },
+
   filterActive: {
-    backgroundColor: "#2563EB",
+    backgroundColor: "#2563EB"
   },
+
   filterText: {
     color: "#94A3B8",
-    fontSize: 12,
+    fontSize: 12
   },
+
   filterTextActive: {
     color: "#FFFFFF",
-    fontSize: 12,
+    fontSize: 12
   },
+
   card: {
     backgroundColor: "rgba(30,41,59,0.95)",
     padding: 18,
-    borderRadius: 14,
+    borderRadius: 14
   },
+
   claimCard: {
     backgroundColor: "#1E293B",
     padding: 16,
     borderRadius: 14,
-    marginBottom: 14,
+    marginBottom: 14
   },
+
   amount: {
     fontSize: 18,
     fontWeight: "bold",
-    color: "#F8FAFC",
+    color: "#F8FAFC"
   },
+
   meta: {
     marginTop: 4,
-    color: "#94A3B8",
+    color: "#94A3B8"
   },
+
   status: {
     marginTop: 8,
-    fontWeight: "700",
+    fontWeight: "700"
   },
+
   pending: { color: "#FACC15" },
   approved: { color: "#22C55E" },
   rejected: { color: "#EF4444" },
+
   center: {
     flex: 1,
     justifyContent: "center",
-    alignItems: "center",
+    alignItems: "center"
   },
+
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.6)",
     justifyContent: "center",
-    padding: 20,
+    padding: 20
   },
+
   modalContent: {
     backgroundColor: "#1E293B",
     padding: 20,
-    borderRadius: 16,
+    borderRadius: 16
   },
+
   modalTitle: {
     fontSize: 18,
     fontWeight: "bold",
     marginBottom: 12,
-    color: "#F8FAFC",
+    color: "#F8FAFC"
   },
+
   modalAmount: {
     fontSize: 22,
     fontWeight: "bold",
     color: "#38BDF8",
-    marginBottom: 12,
+    marginBottom: 12
   },
+
   modalText: {
     marginBottom: 8,
-    color: "#E2E8F0",
+    color: "#E2E8F0"
   },
+
   closeBtn: {
     marginTop: 16,
     backgroundColor: "#2563EB",
     padding: 12,
     borderRadius: 12,
-    alignItems: "center",
-  },
+    alignItems: "center"
+  }
 });
