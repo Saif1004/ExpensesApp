@@ -4,66 +4,148 @@ app.http("receiptOCR", {
   methods: ["POST"],
   authLevel: "anonymous",
 
-  handler: async (request) => {
+  handler: async (request, context) => {
 
-    const { image } = await request.json();
+    try {
 
-    const endpoint = process.env.AZURE_DOC_ENDPOINT;
-    const key = process.env.AZURE_DOC_KEY;
+      const body = await request.json();
+      const image = body?.image;
 
-    const url =
-      `${endpoint}/formrecognizer/documentModels/prebuilt-receipt:analyze?api-version=2023-07-31`;
+      if (!image) {
+        return {
+          status: 400,
+          jsonBody: { error: "No image provided" }
+        };
+      }
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Ocp-Apim-Subscription-Key": key
-      },
-      body: JSON.stringify({
-        base64Source: image
-      })
-    });
+      const endpoint = process.env.AZURE_DOC_ENDPOINT;
+      const key = process.env.AZURE_DOC_KEY;
 
-    const operationLocation =
-      response.headers.get("operation-location");
+      if (!endpoint || !key) {
+        context.log("Missing AZURE_DOC_ENDPOINT or AZURE_DOC_KEY");
 
-    // Wait for Azure to finish analyzing receipt
-    let result;
+        return {
+          status: 500,
+          jsonBody: { error: "OCR environment variables missing" }
+        };
+      }
 
-    while (true) {
+      const cleanEndpoint = endpoint.replace(/\/$/, "");
 
-      const poll = await fetch(operationLocation, {
+      const analyzeUrl =
+        `${cleanEndpoint}/formrecognizer/documentModels/prebuilt-receipt:analyze?api-version=2023-07-31`;
+
+      // STEP 1: Send receipt to Azure
+      const analyzeResponse = await fetch(analyzeUrl, {
+        method: "POST",
         headers: {
+          "Content-Type": "application/json",
           "Ocp-Apim-Subscription-Key": key
-        }
+        },
+        body: JSON.stringify({
+          base64Source: image
+        })
       });
 
-      result = await poll.json();
+      if (!analyzeResponse.ok) {
 
-      if (result.status === "succeeded") break;
+        const text = await analyzeResponse.text();
 
-      await new Promise(r => setTimeout(r, 1500));
-    }
+        context.log("Azure analyze failed:", text);
 
-    const receipt =
-      result.analyzeResult.documents[0];
-
-    const merchant =
-      receipt.fields?.MerchantName?.valueString ?? "";
-
-    const amount =
-      receipt.fields?.Total?.valueCurrency?.amount ?? null;
-
-    const date =
-      receipt.fields?.TransactionDate?.valueDate ?? "";
-
-    return {
-      jsonBody: {
-        merchant,
-        amount,
-        date
+        return {
+          status: 500,
+          jsonBody: { error: "Azure analyze request failed" }
+        };
       }
-    };
+
+      const operationLocation =
+        analyzeResponse.headers.get("operation-location");
+
+      if (!operationLocation) {
+
+        context.log("No operation-location header returned");
+
+        return {
+          status: 500,
+          jsonBody: { error: "Azure OCR polling URL missing" }
+        };
+      }
+
+      // STEP 2: Poll until finished
+      let result;
+
+      while (true) {
+
+        const pollResponse = await fetch(operationLocation, {
+          method: "GET",
+          headers: {
+            "Ocp-Apim-Subscription-Key": key
+          }
+        });
+
+        result = await pollResponse.json();
+
+        if (result.status === "succeeded") break;
+
+        if (result.status === "failed") {
+
+          context.log("OCR processing failed:", result);
+
+          return {
+            status: 500,
+            jsonBody: { error: "OCR processing failed" }
+          };
+        }
+
+        await new Promise(r => setTimeout(r, 1500));
+      }
+
+      // STEP 3: Parse result safely
+      const doc =
+        result?.analyzeResult?.documents?.[0];
+
+      if (!doc) {
+
+        context.log("No receipt detected");
+
+        return {
+          jsonBody: {
+            merchant: "",
+            amount: null,
+            date: ""
+          }
+        };
+      }
+
+      const merchant =
+        doc.fields?.MerchantName?.valueString ?? "";
+
+      const amount =
+        doc.fields?.Total?.valueCurrency?.amount ?? null;
+
+      const date =
+        doc.fields?.TransactionDate?.valueDate ?? "";
+
+      return {
+        jsonBody: {
+          merchant,
+          amount,
+          date
+        }
+      };
+
+    } catch (error) {
+
+      context.log("OCR ERROR:", error);
+
+      return {
+        status: 500,
+        jsonBody: {
+          error: "Internal OCR error"
+        }
+      };
+
+    }
   }
 });
