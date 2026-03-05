@@ -8,9 +8,16 @@
     "scheme": "expensesapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app uses the camera to scan receipts for expense claims.",
+        "NSPhotoLibraryUsageDescription": "This app accesses your photos to upload receipt images.",
+        "NSPhotoLibraryAddUsageDescription": "This app may save receipt images for expense records."
+      }
     },
+
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -22,10 +29,12 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.saif1004.ExpensesApp"
     },
+
     "web": {
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
+
     "plugins": [
       "expo-router",
       [
@@ -41,6 +50,7 @@
         }
       ]
     ],
+
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true

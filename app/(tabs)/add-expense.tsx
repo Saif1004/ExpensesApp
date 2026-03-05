@@ -26,326 +26,385 @@ const AZURE_OCR_URL =
 const AZURE_UPLOAD_URL =
   process.env.EXPO_PUBLIC_UPLOAD_URL!;
 
-const CATEGORIES = ["Meals", "Travel", "Technology", "Office"];
+const CATEGORIES = ["Meals","Travel","Technology","Office"];
 
-export default function AddExpenseScreen() {
+export default function AddExpenseScreen(){
 
-  const { user } = useAuth();
+const { user } = useAuth();
 
-  const [amount,setAmount] = useState("");
-  const [merchant,setMerchant] = useState("");
-  const [category,setCategory] = useState("Meals");
-  const [purchaseDate,setPurchaseDate] = useState("");
-
-  const [receiptUrl,setReceiptUrl] = useState("");
-  const [hasReceipt,setHasReceipt] = useState(false);
+const [amount,setAmount] = useState("");
+const [merchant,setMerchant] = useState("");
+const [category,setCategory] = useState("Meals");
+const [purchaseDate,setPurchaseDate] = useState("");
 
-  const [saving,setSaving] = useState(false);
-  const [ocrLoading,setOcrLoading] = useState(false);
+const [receiptUrl,setReceiptUrl] = useState("");
+const [hasReceipt,setHasReceipt] = useState(false);
 
-  const [showDropdown,setShowDropdown] = useState(false);
+const [saving,setSaving] = useState(false);
+const [ocrLoading,setOcrLoading] = useState(false);
 
-  const validateDateFormat=(date:string)=>{
-    return /^\d{4}-\d{2}-\d{2}$/.test(date);
-  };
+const [showDropdown,setShowDropdown] = useState(false);
 
-  /*
-  ========================
-  RECEIPT PICKER
-  ========================
-  */
+const validateDateFormat=(date:string)=>{
+return /^\d{4}-\d{2}-\d{2}$/.test(date);
+};
 
-  const pickReceipt = () => {
+////////////////////////////////////////////////////////
+//// PERMISSION REQUESTS
+////////////////////////////////////////////////////////
 
-    Alert.alert(
-      "Add Receipt",
-      "Choose image source",
-      [
-        { text:"Camera", onPress: openCamera },
-        { text:"Photo Library", onPress: openLibrary },
-        { text:"Cancel", style:"cancel" }
-      ]
-    );
+const requestCameraPermission = async () => {
 
-  };
+const { status } =
+await ImagePicker.requestCameraPermissionsAsync();
 
-  const openCamera = async () => {
+if(status !== "granted"){
+Alert.alert(
+"Permission required",
+"Camera permission is needed to scan receipts."
+);
+return false;
+}
 
-    const result =
-      await ImagePicker.launchCameraAsync({
-        base64:true,
-        quality:0.7
-      });
+return true;
+};
 
-    if(!result.canceled){
-      processReceipt(result.assets[0]);
-    }
+const requestLibraryPermission = async () => {
 
-  };
+const { status } =
+await ImagePicker.requestMediaLibraryPermissionsAsync();
 
-  const openLibrary = async () => {
-
-    const result =
-      await ImagePicker.launchImageLibraryAsync({
-        base64:true,
-        quality:0.7
-      });
+if(status !== "granted"){
+Alert.alert(
+"Permission required",
+"Photo library access is required."
+);
+return false;
+}
 
-    if(!result.canceled){
-      processReceipt(result.assets[0]);
-    }
+return true;
+};
 
-  };
-
-  /*
-  ========================
-  OCR + BLOB UPLOAD
-  ========================
-  */
-
-  const processReceipt = async(image:any)=>{
-
-    try{
-
-      setOcrLoading(true);
-
-      // upload to blob
-      const uploadRes =
-        await fetch(AZURE_UPLOAD_URL,{
-          method:"POST",
-          headers:{
-            "Content-Type":"application/json"
-          },
-          body:JSON.stringify({
-            image:image.base64
-          })
-        });
-
-      const uploadData = await uploadRes.json();
-
-      setReceiptUrl(uploadData.url);
-
-      // OCR
-      const ocrRes =
-        await fetch(AZURE_OCR_URL,{
-          method:"POST",
-          headers:{
-            "Content-Type":"application/json"
-          },
-          body:JSON.stringify({
-            image:image.base64
-          })
-        });
-
-      const data = await ocrRes.json();
-
-      if(data.amount) setAmount(String(data.amount));
-      if(data.merchant) setMerchant(data.merchant);
-      if(data.date) setPurchaseDate(data.date);
-
-      setHasReceipt(true);
-
-      Alert.alert("Receipt scanned");
-
-    }
-    catch{
-      Alert.alert("OCR failed");
-    }
-    finally{
-      setOcrLoading(false);
-    }
-
-  };
-
-  /*
-  ========================
-  SUBMIT CLAIM
-  ========================
-  */
-
-  const handleSubmit = async ()=>{
-
-    if(!user){
-      Alert.alert("Not logged in");
-      return;
-    }
-
-    if(!amount || isNaN(Number(amount))){
-      Alert.alert("Invalid amount");
-      return;
-    }
-
-    if(!merchant.trim()){
-      Alert.alert("Enter merchant");
-      return;
-    }
-
-    if(!validateDateFormat(purchaseDate)){
-      Alert.alert("Use YYYY-MM-DD date");
-      return;
-    }
-
-    try{
-
-      setSaving(true);
-
-      const response =
-        await fetch(AZURE_VALIDATE_URL,{
-          method:"POST",
-          headers:{
-            "Content-Type":"application/json"
-          },
-          body:JSON.stringify({
-            amount:Number(amount),
-            merchant:merchant.trim(),
-            category,
-            purchaseDate,
-            hasReceipt,
-            receiptUrl,
-            userId:user.uid,
-            userEmail:user.email
-          })
-        });
-
-      const result = await response.json();
-
-      if(!result.valid){
-        Alert.alert("Policy violation",result.reason);
-        return;
-      }
-
-      Alert.alert("Claim submitted");
-
-      setAmount("");
-      setMerchant("");
-      setPurchaseDate("");
-      setReceiptUrl("");
-      setHasReceipt(false);
-
-    }
-    finally{
-      setSaving(false);
-    }
-
-  };
-
-  return(
-
-    <ThemedView style={styles.container}>
-
-      <ThemedText type="title" style={styles.title}>
-        Add Expense
-      </ThemedText>
-
-      <TouchableOpacity
-        style={styles.uploadBox}
-        onPress={pickReceipt}
-      >
-
-        {ocrLoading
-          ? <ActivityIndicator color="#38BDF8"/>
-          : <>
-              <IconSymbol
-                name="camera.fill"
-                size={40}
-                color="#38BDF8"
-              />
-              <ThemedText style={styles.uploadText}>
-                Scan Receipt
-              </ThemedText>
-            </>
-        }
-
-      </TouchableOpacity>
-
-      <ThemedView style={styles.card}>
-
-        <TextInput
-          placeholder="Amount (£)"
-          placeholderTextColor="#64748B"
-          value={amount}
-          onChangeText={setAmount}
-          keyboardType="decimal-pad"
-          style={styles.input}
-        />
-
-        <TextInput
-          placeholder="Merchant"
-          placeholderTextColor="#64748B"
-          value={merchant}
-          onChangeText={setMerchant}
-          style={styles.input}
-        />
-
-        <TouchableOpacity
-          style={styles.input}
-          onPress={()=>setShowDropdown(!showDropdown)}
-        >
-          <ThemedText style={{color:"#F8FAFC"}}>
-            {category}
-          </ThemedText>
-        </TouchableOpacity>
-
-        {showDropdown &&(
-
-          <View style={styles.dropdown}>
-            {CATEGORIES.map(cat=>(
-              <TouchableOpacity
-                key={cat}
-                style={styles.dropdownItem}
-                onPress={()=>{
-                  setCategory(cat);
-                  setShowDropdown(false);
-                }}
-              >
-                <ThemedText style={{color:"#F8FAFC"}}>
-                  {cat}
-                </ThemedText>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-        )}
-
-        <TextInput
-          placeholder="Purchase Date (YYYY-MM-DD)"
-          placeholderTextColor="#64748B"
-          value={purchaseDate}
-          onChangeText={setPurchaseDate}
-          style={styles.input}
-        />
-
-        <View style={styles.switchRow}>
-          <ThemedText style={{color:"#fff"}}>
-            Receipt Attached
-          </ThemedText>
-
-          <Switch
-            value={hasReceipt}
-            onValueChange={setHasReceipt}
-          />
-        </View>
-
-        <TouchableOpacity
-          style={styles.submitButton}
-          onPress={handleSubmit}
-          disabled={saving}
-        >
-          {saving
-            ? <ActivityIndicator color="#fff"/>
-            : <ThemedText style={styles.submitText}>
-                Submit Claim
-              </ThemedText>
-          }
-        </TouchableOpacity>
-
-      </ThemedView>
-
-    </ThemedView>
-
-  );
+////////////////////////////////////////////////////////
+//// RECEIPT PICKER UI
+////////////////////////////////////////////////////////
+
+const pickReceipt = () => {
+
+Alert.alert(
+"Add Receipt",
+"Choose image source",
+[
+{ text:"Take Photo", onPress: openCamera },
+{ text:"Choose from Library", onPress: openLibrary },
+{ text:"Cancel", style:"cancel" }
+]
+);
+
+};
+
+////////////////////////////////////////////////////////
+//// CAMERA
+////////////////////////////////////////////////////////
+
+const openCamera = async () => {
+
+const granted = await requestCameraPermission();
+if(!granted) return;
+
+const result =
+await ImagePicker.launchCameraAsync({
+base64:true,
+quality:0.7,
+allowsEditing:true
+});
+
+if(!result.canceled){
+processReceipt(result.assets[0]);
+}
+
+};
+
+////////////////////////////////////////////////////////
+//// PHOTO LIBRARY
+////////////////////////////////////////////////////////
+
+const openLibrary = async () => {
+
+const granted = await requestLibraryPermission();
+if(!granted) return;
+
+const result =
+await ImagePicker.launchImageLibraryAsync({
+base64:true,
+quality:0.7
+});
+
+if(!result.canceled){
+processReceipt(result.assets[0]);
+}
+
+};
+
+////////////////////////////////////////////////////////
+//// OCR + BLOB UPLOAD
+////////////////////////////////////////////////////////
+
+const processReceipt = async(image:any)=>{
+
+try{
+
+setOcrLoading(true);
+
+////////////////////////
+//// Upload to Blob
+////////////////////////
+
+const uploadRes =
+await fetch(AZURE_UPLOAD_URL,{
+method:"POST",
+headers:{
+"Content-Type":"application/json"
+},
+body:JSON.stringify({
+image:image.base64
+})
+});
+
+const uploadData = await uploadRes.json();
+
+setReceiptUrl(uploadData.url);
+
+////////////////////////
+//// OCR
+////////////////////////
+
+const ocrRes =
+await fetch(AZURE_OCR_URL,{
+method:"POST",
+headers:{
+"Content-Type":"application/json"
+},
+body:JSON.stringify({
+image:image.base64
+})
+});
+
+const data = await ocrRes.json();
+
+if(data.amount) setAmount(String(data.amount));
+if(data.merchant) setMerchant(data.merchant);
+if(data.date) setPurchaseDate(data.date);
+
+setHasReceipt(true);
+
+Alert.alert("Receipt scanned");
 
 }
+catch{
+Alert.alert("OCR failed");
+}
+finally{
+setOcrLoading(false);
+}
+
+};
+
+////////////////////////////////////////////////////////
+//// SUBMIT CLAIM
+////////////////////////////////////////////////////////
+
+const handleSubmit = async()=>{
+
+if(!user){
+Alert.alert("Not logged in");
+return;
+}
+
+if(!amount || isNaN(Number(amount))){
+Alert.alert("Invalid amount");
+return;
+}
+
+if(!merchant.trim()){
+Alert.alert("Enter merchant");
+return;
+}
+
+if(!validateDateFormat(purchaseDate)){
+Alert.alert("Use YYYY-MM-DD date");
+return;
+}
+
+try{
+
+setSaving(true);
+
+const response =
+await fetch(AZURE_VALIDATE_URL,{
+method:"POST",
+headers:{
+"Content-Type":"application/json"
+},
+body:JSON.stringify({
+amount:Number(amount),
+merchant:merchant.trim(),
+category,
+purchaseDate,
+hasReceipt,
+receiptUrl,
+userId:user.uid,
+userEmail:user.email
+})
+});
+
+const result = await response.json();
+
+if(!result.valid){
+Alert.alert("Policy violation",result.reason);
+return;
+}
+
+Alert.alert("Claim submitted");
+
+setAmount("");
+setMerchant("");
+setPurchaseDate("");
+setReceiptUrl("");
+setHasReceipt(false);
+
+}
+finally{
+setSaving(false);
+}
+
+};
+
+////////////////////////////////////////////////////////
+//// UI
+////////////////////////////////////////////////////////
+
+return(
+
+<ThemedView style={styles.container}>
+
+<ThemedText type="title" style={styles.title}>
+Add Expense
+</ThemedText>
+
+<TouchableOpacity
+style={styles.uploadBox}
+onPress={pickReceipt}
+>
+
+{ocrLoading
+? <ActivityIndicator color="#38BDF8"/>
+: <>
+<IconSymbol
+name="camera.fill"
+size={40}
+color="#38BDF8"
+/>
+<ThemedText style={styles.uploadText}>
+Scan Receipt
+</ThemedText>
+</>
+}
+
+</TouchableOpacity>
+
+<ThemedView style={styles.card}>
+
+<TextInput
+placeholder="Amount (£)"
+placeholderTextColor="#64748B"
+value={amount}
+onChangeText={setAmount}
+keyboardType="decimal-pad"
+style={styles.input}
+/>
+
+<TextInput
+placeholder="Merchant"
+placeholderTextColor="#64748B"
+value={merchant}
+onChangeText={setMerchant}
+style={styles.input}
+/>
+
+<TouchableOpacity
+style={styles.input}
+onPress={()=>setShowDropdown(!showDropdown)}
+>
+<ThemedText style={{color:"#F8FAFC"}}>
+{category}
+</ThemedText>
+</TouchableOpacity>
+
+{showDropdown &&(
+
+<View style={styles.dropdown}>
+{CATEGORIES.map(cat=>(
+<TouchableOpacity
+key={cat}
+style={styles.dropdownItem}
+onPress={()=>{
+setCategory(cat);
+setShowDropdown(false);
+}}
+>
+<ThemedText style={{color:"#F8FAFC"}}>
+{cat}
+</ThemedText>
+</TouchableOpacity>
+))}
+</View>
+
+)}
+
+<TextInput
+placeholder="Purchase Date (YYYY-MM-DD)"
+placeholderTextColor="#64748B"
+value={purchaseDate}
+onChangeText={setPurchaseDate}
+style={styles.input}
+/>
+
+<View style={styles.switchRow}>
+<ThemedText style={{color:"#fff"}}>
+Receipt Attached
+</ThemedText>
+
+<Switch
+value={hasReceipt}
+onValueChange={setHasReceipt}
+/>
+</View>
+
+<TouchableOpacity
+style={styles.submitButton}
+onPress={handleSubmit}
+disabled={saving}
+>
+{saving
+? <ActivityIndicator color="#fff"/>
+: <ThemedText style={styles.submitText}>
+Submit Claim
+</ThemedText>
+}
+</TouchableOpacity>
+
+</ThemedView>
+
+</ThemedView>
+
+);
+
+}
+
+////////////////////////////////////////////////////////
+//// STYLES
+////////////////////////////////////////////////////////
 
 const styles=StyleSheet.create({
 
