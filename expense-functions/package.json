@@ -2,13 +2,14 @@
   "name": "expense-functions",
   "version": "1.0.0",
   "description": "",
-  "main": "src/functions/validateClaim.js",
+  "main": "src/functions/index.js",
   "scripts": {
     "start": "func start",
     "test": "echo \"No tests yet...\""
   },
   "dependencies": {
     "@azure/functions": "^4.0.0",
+    "@azure/storage-blob": "^12.18.0",
     "firebase-admin": "^13.7.0",
     "proto-loader-gen-types": "^1.0.0"
   },

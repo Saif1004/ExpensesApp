@@ -14,6 +14,7 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   StyleSheet,
   TouchableOpacity,
   View
@@ -25,271 +26,226 @@ import { ThemedView } from "../../components/themed-view";
 import { useAuth } from "../context/AuthProvider";
 import { db } from "../firebase/firebaseConfig";
 
-type Claim = {
-  id: string;
-  amount: number;
-  merchant: string;
-  category: string;
-  userEmail: string;
-  status: "pending" | "approved" | "rejected";
-  suspicious?: boolean;
-  anomalous?: boolean;
-  anomalyScore?: number;
+type Claim={
+id:string;
+amount:number;
+merchant:string;
+category:string;
+userEmail:string;
+receiptUrl?:string;
 };
 
-export default function AdminScreen() {
+export default function AdminScreen(){
 
-  const { role } = useAuth();
+const {role}=useAuth();
 
-  const [claims, setClaims] = useState<Claim[]>([]);
-  const [loading, setLoading] = useState(true);
+const [claims,setClaims]=useState<Claim[]>([]);
+const [loading,setLoading]=useState(true);
 
-  useEffect(() => {
+useEffect(()=>{
 
-    if (role !== "admin") return;
+if(role!=="admin") return;
 
-    const q = query(
-      collection(db, "claims"),
-      where("status", "==", "pending"),
-      orderBy("createdAt", "desc")
-    );
+const q=query(
+collection(db,"claims"),
+where("status","==","pending"),
+orderBy("createdAt","desc")
+);
 
-    const unsub = onSnapshot(q, (snapshot) => {
+const unsub=onSnapshot(q,(snapshot)=>{
 
-      const data: Claim[] = snapshot.docs.map((docSnap) => ({
-        id: docSnap.id,
-        ...(docSnap.data() as Omit<Claim, "id">)
-      }));
+const data:Claim[]=snapshot.docs.map(docSnap=>({
+id:docSnap.id,
+...(docSnap.data() as Omit<Claim,"id">)
+}));
 
-      setClaims(data);
-      setLoading(false);
+setClaims(data);
+setLoading(false);
 
-    });
+});
 
-    return unsub;
+return unsub;
 
-  }, [role]);
+},[role]);
 
-  const updateStatus = async (
-    id: string,
-    status: "approved" | "rejected"
-  ) => {
+const updateStatus=async(id:string,status:"approved"|"rejected")=>{
 
-    await updateDoc(doc(db, "claims", id), {
-      status,
-      statusUpdatedAt: serverTimestamp()
-    });
+await updateDoc(doc(db,"claims",id),{
+status,
+statusUpdatedAt:serverTimestamp()
+});
 
-  };
+};
 
-  if (role !== "admin") {
+if(role!=="admin"){
 
-    return (
-      <ThemedView style={styles.container}>
-        <ThemedText style={styles.denied}>
-          Access Denied
-        </ThemedText>
-      </ThemedView>
-    );
-
-  }
-
-  if (loading) {
-
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#38BDF8" />
-      </View>
-    );
-
-  }
-
-  return (
-
-    <ThemedView style={styles.container}>
-
-      <ThemedText type="title" style={styles.title}>
-        Admin Panel
-      </ThemedText>
-
-      {claims.length === 0 ? (
-
-        <View style={styles.center}>
-          <ThemedText style={{ color: "#94A3B8" }}>
-            No pending claims
-          </ThemedText>
-        </View>
-
-      ) : (
-
-        <FlatList
-          data={claims}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-
-            <ThemedView
-              style={[
-                styles.card,
-                item.anomalous && styles.anomalyCard,
-                item.suspicious && styles.suspiciousCard
-              ]}
-            >
-
-              <ThemedText style={styles.amount}>
-                £{Number(item.amount).toFixed(2)}
-              </ThemedText>
-
-              <ThemedText style={styles.meta}>
-                {item.merchant} • {item.category}
-              </ThemedText>
-
-              <ThemedText style={styles.userEmail}>
-                {item.userEmail}
-              </ThemedText>
-
-              {item.suspicious && (
-                <ThemedText style={styles.suspiciousText}>
-                  ⚠ Multiple recent claims detected
-                </ThemedText>
-              )}
-
-              {item.anomalous && (
-                <ThemedText style={styles.anomalyText}>
-                  ⚠ Anomaly Score: {item.anomalyScore?.toFixed(2)}
-                </ThemedText>
-              )}
-
-              <View style={styles.buttonRow}>
-
-                <TouchableOpacity
-                  style={styles.approveBtn}
-                  onPress={() =>
-                    updateStatus(item.id, "approved")
-                  }
-                >
-                  <ThemedText style={styles.btnText}>
-                    Approve
-                  </ThemedText>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.rejectBtn}
-                  onPress={() =>
-                    updateStatus(item.id, "rejected")
-                  }
-                >
-                  <ThemedText style={styles.btnText}>
-                    Reject
-                  </ThemedText>
-                </TouchableOpacity>
-
-              </View>
-
-            </ThemedView>
-
-          )}
-        />
-
-      )}
-
-    </ThemedView>
-
-  );
+return(
+<ThemedView style={styles.container}>
+<ThemedText style={styles.denied}>
+Access Denied
+</ThemedText>
+</ThemedView>
+);
 
 }
 
-const styles = StyleSheet.create({
+if(loading){
 
-  container: {
-    flex: 1,
-    padding: 20,
-    backgroundColor: "#0F172A"
-  },
+return(
+<View style={styles.center}>
+<ActivityIndicator size="large" color="#38BDF8"/>
+</View>
+);
 
-  title: {
-    marginTop: 24,
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#F8FAFC"
-  },
+}
 
-  card: {
-    backgroundColor: "#1E293B",
-    padding: 16,
-    borderRadius: 14,
-    marginBottom: 14
-  },
+return(
 
-  anomalyCard: {
-    borderWidth: 2,
-    borderColor: "#F97316"
-  },
+<ThemedView style={styles.container}>
 
-  suspiciousCard: {
-    borderWidth: 2,
-    borderColor: "#FACC15"
-  },
+<ThemedText type="title" style={styles.title}>
+Admin Panel
+</ThemedText>
 
-  amount: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#F8FAFC"
-  },
+<FlatList
+data={claims}
+keyExtractor={(item)=>item.id}
+renderItem={({item})=>(
 
-  meta: {
-    marginTop: 4,
-    color: "#94A3B8"
-  },
+<ThemedView style={styles.card}>
 
-  userEmail: {
-    marginTop: 4,
-    color: "#64748B",
-    fontSize: 12
-  },
+<ThemedText style={styles.amount}>
+£{Number(item.amount).toFixed(2)}
+</ThemedText>
 
-  anomalyText: {
-    marginTop: 6,
-    color: "#F97316"
-  },
+<ThemedText style={styles.meta}>
+{item.merchant} • {item.category}
+</ThemedText>
 
-  suspiciousText: {
-    marginTop: 6,
-    color: "#FACC15"
-  },
+<ThemedText style={styles.userEmail}>
+{item.userEmail}
+</ThemedText>
 
-  buttonRow: {
-    flexDirection: "row",
-    marginTop: 12,
-    gap: 10
-  },
+{item.receiptUrl &&(
 
-  approveBtn: {
-    backgroundColor: "#16A34A",
-    padding: 10,
-    borderRadius: 10
-  },
+<Image
+source={{uri:item.receiptUrl}}
+style={{
+width:"100%",
+height:180,
+marginTop:10,
+borderRadius:10
+}}
+resizeMode="contain"
+/>
 
-  rejectBtn: {
-    backgroundColor: "#DC2626",
-    padding: 10,
-    borderRadius: 10
-  },
+)}
 
-  btnText: {
-    color: "#FFFFFF",
-    fontWeight: "600"
-  },
+<View style={styles.buttonRow}>
 
-  denied: {
-    marginTop: 40,
-    color: "#EF4444",
-    fontSize: 18
-  },
+<TouchableOpacity
+style={styles.approveBtn}
+onPress={()=>updateStatus(item.id,"approved")}
+>
+<ThemedText style={styles.btnText}>
+Approve
+</ThemedText>
+</TouchableOpacity>
 
-  center: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center"
-  }
+<TouchableOpacity
+style={styles.rejectBtn}
+onPress={()=>updateStatus(item.id,"rejected")}
+>
+<ThemedText style={styles.btnText}>
+Reject
+</ThemedText>
+</TouchableOpacity>
+
+</View>
+
+</ThemedView>
+
+)}
+/>
+
+</ThemedView>
+
+);
+
+}
+
+const styles=StyleSheet.create({
+
+container:{
+flex:1,
+padding:20,
+backgroundColor:"#0F172A"
+},
+
+title:{
+marginTop:24,
+fontSize:28,
+fontWeight:"bold",
+color:"#F8FAFC"
+},
+
+card:{
+backgroundColor:"#1E293B",
+padding:16,
+borderRadius:14,
+marginBottom:14
+},
+
+amount:{
+fontSize:18,
+fontWeight:"bold",
+color:"#F8FAFC"
+},
+
+meta:{
+marginTop:4,
+color:"#94A3B8"
+},
+
+userEmail:{
+marginTop:4,
+color:"#64748B",
+fontSize:12
+},
+
+buttonRow:{
+flexDirection:"row",
+marginTop:12,
+gap:10
+},
+
+approveBtn:{
+backgroundColor:"#16A34A",
+padding:10,
+borderRadius:10
+},
+
+rejectBtn:{
+backgroundColor:"#DC2626",
+padding:10,
+borderRadius:10
+},
+
+btnText:{
+color:"#fff",
+fontWeight:"600"
+},
+
+center:{
+flex:1,
+justifyContent:"center",
+alignItems:"center"
+},
+
+denied:{
+marginTop:40,
+color:"#EF4444",
+fontSize:18
+}
 
 });
