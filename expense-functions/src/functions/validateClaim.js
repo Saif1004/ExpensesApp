@@ -1,10 +1,6 @@
 const { app } = require("@azure/functions");
 const admin = require("firebase-admin");
 
-// =============================
-// Firebase Admin Initialization
-// =============================
-
 if (!admin.apps.length) {
   if (
     !process.env.FIREBASE_PROJECT_ID ||
@@ -25,10 +21,6 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-// =============================
-// Expense Validation Function
-// =============================
-
 app.http("validateClaim", {
   methods: ["POST"],
   authLevel: "anonymous",
@@ -41,15 +33,11 @@ app.http("validateClaim", {
         amount,
         category,
         purchaseDate,
-        hasReceipt,
+        receiptUrl,
         userId,
         merchant,
         userEmail
       } = body;
-
-      // =============================
-      // 1️⃣ Required Field Validation
-      // =============================
 
       if (
         amount === undefined ||
@@ -62,8 +50,8 @@ app.http("validateClaim", {
           status: 400,
           jsonBody: {
             valid: false,
-            reason: "Missing required fields.",
-          },
+            reason: "Missing required fields."
+          }
         };
       }
 
@@ -74,20 +62,26 @@ app.http("validateClaim", {
           status: 400,
           jsonBody: {
             valid: false,
-            reason: "Invalid amount.",
-          },
+            reason: "Invalid amount."
+          }
         };
       }
 
-      // =============================
-      // 2️⃣ Category Limits
-      // =============================
+      if (!merchant.trim()) {
+        return {
+          status: 400,
+          jsonBody: {
+            valid: false,
+            reason: "Merchant name required."
+          }
+        };
+      }
 
       const CATEGORY_LIMITS = {
         Meals: 50,
         Travel: 300,
         Office: 500,
-        Technology: 3000,
+        Technology: 3000
       };
 
       if (!CATEGORY_LIMITS.hasOwnProperty(category)) {
@@ -95,8 +89,8 @@ app.http("validateClaim", {
           status: 400,
           jsonBody: {
             valid: false,
-            reason: "Invalid category.",
-          },
+            reason: "Invalid category."
+          }
         };
       }
 
@@ -105,14 +99,10 @@ app.http("validateClaim", {
           status: 400,
           jsonBody: {
             valid: false,
-            reason: "Amount exceeds category limit.",
-          },
+            reason: "Amount exceeds category limit."
+          }
         };
       }
-
-      // =============================
-      // 3️⃣ Purchase Date Validation
-      // =============================
 
       const today = new Date();
       const expenseDate = new Date(purchaseDate);
@@ -122,8 +112,8 @@ app.http("validateClaim", {
           status: 400,
           jsonBody: {
             valid: false,
-            reason: "Invalid purchase date.",
-          },
+            reason: "Invalid purchase date."
+          }
         };
       }
 
@@ -132,14 +122,10 @@ app.http("validateClaim", {
           status: 400,
           jsonBody: {
             valid: false,
-            reason: "Future dates not allowed.",
-          },
+            reason: "Future dates not allowed."
+          }
         };
       }
-
-      // =============================
-      // 4️⃣ 30 Day Submission Window
-      // =============================
 
       const diffDays =
         (today.getTime() - expenseDate.getTime()) /
@@ -150,14 +136,10 @@ app.http("validateClaim", {
           status: 400,
           jsonBody: {
             valid: false,
-            reason: "Submission window expired.",
-          },
+            reason: "Submission window expired."
+          }
         };
       }
-
-      // =============================
-      // 5️⃣ Duplicate Expense Check
-      // =============================
 
       const duplicateQuery = await db
         .collection("claims")
@@ -171,14 +153,10 @@ app.http("validateClaim", {
           status: 400,
           jsonBody: {
             valid: false,
-            reason: "Duplicate expense detected.",
-          },
+            reason: "Duplicate expense detected."
+          }
         };
       }
-
-      // =============================
-      // 6️⃣ Suspicious Pattern Detection
-      // =============================
 
       const previousClaims = await db
         .collection("claims")
@@ -188,60 +166,57 @@ app.http("validateClaim", {
 
       const suspicious = previousClaims.size >= 5;
 
-      // =============================
-      // 7️⃣ AI Spending Anomaly Detection
-      // =============================
-
-      let anomalyScore = 0;
+      let anomalyScore = 1;
       let anomalous = false;
 
       if (!previousClaims.empty) {
-        const amounts = previousClaims.docs.map(
-          (doc) => doc.data().amount
-        );
+        const amounts = previousClaims.docs
+          .map(doc => doc.data().amount)
+          .filter(v => typeof v === "number");
 
-        const avg =
-          amounts.reduce((a, b) => a + b, 0) / amounts.length;
+        const avg = amounts.reduce((a, b) => a + b, 0) / amounts.length;
 
-        anomalyScore = numericAmount / avg;
+        if (avg > 0) {
+          anomalyScore = numericAmount / avg;
 
-        if (anomalyScore > 3) {
-          anomalous = true;
+          if (anomalyScore > 3) {
+            anomalous = true;
+          }
         }
       }
 
-      // =============================
-      // 8️⃣ Auto Approval Logic
-      // =============================
+      const hasReceipt = !!receiptUrl;
+
+      context.log("Receipt URL received:", receiptUrl);
 
       let status = "pending";
 
-      if (numericAmount <= 50 && hasReceipt === true && !suspicious) {
+      if (
+        numericAmount <= 50 &&
+        hasReceipt &&
+        !suspicious &&
+        !anomalous
+      ) {
         status = "approved";
       }
 
-      // =============================
-      // 9️⃣ Save Claim
-      // =============================
-
-      const claimRef = await db.collection("claims").add({
+      const claimData = {
         userId,
         userEmail,
-        merchant,
+        merchant: merchant.trim(),
         amount: numericAmount,
         category,
         purchaseDate,
-        hasReceipt: Boolean(hasReceipt),
+        hasReceipt,
+        receiptUrl: receiptUrl || null,
         status,
         suspicious,
-        anomalyScore,
         anomalous,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      });
+        anomalyScore,
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      };
 
-      // =============================
-      // ✅ Success
-      // =============================
+      const claimRef = await db.collection("claims").add(claimData);
 
       return {
         status: 200,
@@ -251,10 +226,9 @@ app.http("validateClaim", {
           status,
           suspicious,
           anomalous,
-          anomalyScore,
-        },
+          anomalyScore
+        }
       };
-
     } catch (error) {
       context.log("ERROR:", error);
 
@@ -262,9 +236,9 @@ app.http("validateClaim", {
         status: 500,
         jsonBody: {
           valid: false,
-          reason: "Internal server error.",
-        },
+          reason: "Internal server error."
+        }
       };
     }
-  },
+  }
 });

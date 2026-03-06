@@ -5,11 +5,9 @@ app.http("receiptOCR", {
   authLevel: "anonymous",
 
   handler: async (request, context) => {
-
     try {
 
-      const body = await request.json();
-      const image = body?.image;
+      const { image } = await request.json();
 
       if (!image) {
         return {
@@ -22,7 +20,7 @@ app.http("receiptOCR", {
       const key = process.env.AZURE_DOC_KEY;
 
       if (!endpoint || !key) {
-        context.log("Missing AZURE_DOC_ENDPOINT or AZURE_DOC_KEY");
+        context.log("OCR environment variables missing");
 
         return {
           status: 500,
@@ -30,12 +28,13 @@ app.http("receiptOCR", {
         };
       }
 
-      const cleanEndpoint = endpoint.replace(/\/$/, "");
-
       const analyzeUrl =
-        `${cleanEndpoint}/formrecognizer/documentModels/prebuilt-receipt:analyze?api-version=2023-07-31`;
+        `${endpoint.replace(/\/$/, "")}/formrecognizer/documentModels/prebuilt-receipt:analyze?api-version=2023-07-31`;
 
-      // STEP 1: Send receipt to Azure
+      //////////////////////////////////////////////////////////
+      // Send receipt to Azure
+      //////////////////////////////////////////////////////////
+
       const analyzeResponse = await fetch(analyzeUrl, {
         method: "POST",
         headers: {
@@ -48,10 +47,8 @@ app.http("receiptOCR", {
       });
 
       if (!analyzeResponse.ok) {
-
-        const text = await analyzeResponse.text();
-
-        context.log("Azure analyze failed:", text);
+        const errText = await analyzeResponse.text();
+        context.log("Azure analyze error:", errText);
 
         return {
           status: 500,
@@ -63,22 +60,21 @@ app.http("receiptOCR", {
         analyzeResponse.headers.get("operation-location");
 
       if (!operationLocation) {
-
-        context.log("No operation-location header returned");
-
         return {
           status: 500,
-          jsonBody: { error: "Azure OCR polling URL missing" }
+          jsonBody: { error: "OCR polling URL missing" }
         };
       }
 
-      // STEP 2: Poll until finished
+      //////////////////////////////////////////////////////////
+      // Poll Azure result
+      //////////////////////////////////////////////////////////
+
       let result;
 
       while (true) {
 
         const pollResponse = await fetch(operationLocation, {
-          method: "GET",
           headers: {
             "Ocp-Apim-Subscription-Key": key
           }
@@ -89,8 +85,7 @@ app.http("receiptOCR", {
         if (result.status === "succeeded") break;
 
         if (result.status === "failed") {
-
-          context.log("OCR processing failed:", result);
+          context.log("OCR failed:", result);
 
           return {
             status: 500,
@@ -101,41 +96,102 @@ app.http("receiptOCR", {
         await new Promise(r => setTimeout(r, 1500));
       }
 
-      // STEP 3: Parse result safely
-      const doc =
-        result?.analyzeResult?.documents?.[0];
+      //////////////////////////////////////////////////////////
+      // Extract Azure structured fields
+      //////////////////////////////////////////////////////////
 
-      if (!doc) {
+      const doc = result?.analyzeResult?.documents?.[0];
 
-        context.log("No receipt detected");
+      let merchant =
+        doc?.fields?.MerchantName?.valueString ?? "";
 
-        return {
-          jsonBody: {
-            merchant: "",
-            amount: null,
-            date: ""
-          }
-        };
+      let amount =
+        doc?.fields?.Total?.valueCurrency?.amount ?? null;
+
+      let date =
+        doc?.fields?.TransactionDate?.valueDate ?? "";
+
+      //////////////////////////////////////////////////////////
+      // Fallback: detect total manually if Azure misses it
+      //////////////////////////////////////////////////////////
+
+      if (!amount) {
+
+        const text = result?.analyzeResult?.content ?? "";
+
+        const prices =
+          text.match(/[0-9]+\.[0-9]{2}/g)
+          ?.map(Number)
+          ?.filter(v => !isNaN(v)) || [];
+
+        if (prices.length > 0) {
+          amount = Math.max(...prices);
+        }
+
       }
 
-      const merchant =
-        doc.fields?.MerchantName?.valueString ?? "";
+      //////////////////////////////////////////////////////////
+      // Category detection
+      //////////////////////////////////////////////////////////
 
-      const amount =
-        doc.fields?.Total?.valueCurrency?.amount ?? null;
+      let category = "Meals";
+      const m = merchant.toLowerCase();
 
-      const date =
-        doc.fields?.TransactionDate?.valueDate ?? "";
+      if (
+        m.includes("uber") ||
+        m.includes("taxi") ||
+        m.includes("train") ||
+        m.includes("bus") ||
+        m.includes("tfl")
+      ) {
+        category = "Travel";
+      }
+      else if (
+        m.includes("amazon") ||
+        m.includes("apple") ||
+        m.includes("currys") ||
+        m.includes("pc world")
+      ) {
+        category = "Technology";
+      }
+      else if (
+        m.includes("ryman") ||
+        m.includes("staples") ||
+        m.includes("office")
+      ) {
+        category = "Office";
+      }
+      else {
+        category = "Meals";
+      }
+
+      //////////////////////////////////////////////////////////
+      // Log OCR result
+      //////////////////////////////////////////////////////////
+
+      context.log("OCR RESULT:", {
+        merchant,
+        amount,
+        date,
+        category
+      });
+
+      //////////////////////////////////////////////////////////
+      // Return response
+      //////////////////////////////////////////////////////////
 
       return {
+        status: 200,
         jsonBody: {
           merchant,
           amount,
-          date
+          date,
+          category
         }
       };
 
-    } catch (error) {
+    }
+    catch (error) {
 
       context.log("OCR ERROR:", error);
 
