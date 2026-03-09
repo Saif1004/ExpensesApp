@@ -1,17 +1,20 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View
 } from "react-native";
 
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+
 import { ThemedText } from "../../components/themed-text";
-import { ThemedView } from "../../components/themed-view";
 import { useAuth } from "../context/AuthProvider";
 
 const CHATBOT_URL = process.env.EXPO_PUBLIC_CHATBOT_URL!;
@@ -32,6 +35,10 @@ const QUICK_QUESTIONS = [
 export default function ChatbotScreen() {
 
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
+  const flatListRef = useRef<FlatList>(null);
+
+  const [keyboardHeight,setKeyboardHeight] = useState(0);
 
   const [messages,setMessages] = useState<ChatMessage[]>([
     {
@@ -43,6 +50,33 @@ export default function ChatbotScreen() {
 
   const [input,setInput] = useState("");
   const [loading,setLoading] = useState(false);
+
+  /////////////////////////////////////////////////////////
+  // KEYBOARD LISTENERS
+  /////////////////////////////////////////////////////////
+
+  useEffect(()=>{
+
+    const show = Keyboard.addListener(
+      "keyboardDidShow",
+      (e)=> setKeyboardHeight(e.endCoordinates.height)
+    );
+
+    const hide = Keyboard.addListener(
+      "keyboardDidHide",
+      ()=> setKeyboardHeight(0)
+    );
+
+    return ()=>{
+      show.remove();
+      hide.remove();
+    };
+
+  },[]);
+
+  /////////////////////////////////////////////////////////
+  // SEND MESSAGE
+  /////////////////////////////////////////////////////////
 
   const sendMessage = async (preset?:string)=>{
 
@@ -57,6 +91,11 @@ export default function ChatbotScreen() {
 
     setMessages(prev=>[...prev,userMessage]);
     setInput("");
+
+    setTimeout(()=>{
+      flatListRef.current?.scrollToEnd({animated:true});
+    },100);
+
     setLoading(true);
 
     try{
@@ -82,6 +121,10 @@ export default function ChatbotScreen() {
 
       setMessages(prev=>[...prev,botMessage]);
 
+      setTimeout(()=>{
+        flatListRef.current?.scrollToEnd({animated:true});
+      },100);
+
     }catch{
 
       setMessages(prev=>[
@@ -94,96 +137,134 @@ export default function ChatbotScreen() {
       ]);
 
     }finally{
-
       setLoading(false);
-
     }
 
   };
 
+  /////////////////////////////////////////////////////////
+  // UI
+  /////////////////////////////////////////////////////////
+
   return(
 
-    <KeyboardAvoidingView
-      style={{flex:1,backgroundColor:"#0F172A"}}
-      behavior={Platform.OS==="ios"?"padding":undefined}
-    >
+    <SafeAreaView style={styles.safe}>
 
-      <ThemedView style={styles.container}>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
 
-        <ThemedText type="title" style={styles.title}>
-          Virtual Assistant
-        </ThemedText>
+        <KeyboardAvoidingView
+          style={{flex:1}}
+          behavior={Platform.OS==="ios" ? "padding" : undefined}
+        >
 
-        {/* Quick suggestions */}
+          <View style={styles.container}>
 
-        <View style={styles.quickRow}>
+            {/* TOP */}
 
-          {QUICK_QUESTIONS.map(q=>(
-            <TouchableOpacity
-              key={q}
-              style={styles.quickBtn}
-              onPress={()=>sendMessage(q)}
-            >
-              <ThemedText style={styles.quickText}>
-                {q}
+            <View style={{flex:1}}>
+
+              <ThemedText type="title" style={styles.title}>
+                Virtual Assistant
               </ThemedText>
-            </TouchableOpacity>
-          ))}
 
-        </View>
+              <View style={styles.quickRow}>
+                {QUICK_QUESTIONS.map(q=>(
+                  <TouchableOpacity
+                    key={q}
+                    style={styles.quickBtn}
+                    onPress={()=>sendMessage(q)}
+                  >
+                    <ThemedText style={styles.quickText}>
+                      {q}
+                    </ThemedText>
+                  </TouchableOpacity>
+                ))}
+              </View>
 
-        <FlatList
-          data={messages}
-          keyExtractor={(item)=>item.id}
-          contentContainerStyle={styles.chatList}
-          renderItem={({item})=>(
+              {/* CHAT */}
+
+              <FlatList
+                ref={flatListRef}
+                data={messages}
+                keyExtractor={(item)=>item.id}
+                style={{flex:1}}
+                contentContainerStyle={{paddingBottom:120}}
+                renderItem={({item})=>(
+                  <View
+                    style={[
+                      styles.messageBubble,
+                      item.sender==="user"
+                        ? styles.userBubble
+                        : styles.botBubble
+                    ]}
+                  >
+                    <ThemedText style={styles.messageText}>
+                      {item.text}
+                    </ThemedText>
+                  </View>
+                )}
+              />
+
+              {loading && (
+                <ActivityIndicator
+                  color="#38BDF8"
+                  style={{marginBottom:10}}
+                />
+              )}
+
+            </View>
+
+            {/* INPUT */}
+
             <View
               style={[
-                styles.messageBubble,
-                item.sender==="user"
-                  ? styles.userBubble
-                  : styles.botBubble
+                styles.inputContainer,
+                {
+                  bottom:
+                    keyboardHeight > 0
+                      ? keyboardHeight - insets.bottom
+                      : -insets.bottom - 10
+                }
               ]}
             >
-              <ThemedText style={styles.messageText}>
-                {item.text}
-              </ThemedText>
+
+              <TextInput
+                value={input}
+                onChangeText={setInput}
+                placeholder="Ask something..."
+                placeholderTextColor="#64748B"
+                style={styles.input}
+              />
+
+              <TouchableOpacity
+                style={styles.sendButton}
+                onPress={()=>sendMessage()}
+              >
+                <ThemedText style={styles.sendText}>
+                  Send
+                </ThemedText>
+              </TouchableOpacity>
+
             </View>
-          )}
-        />
 
-        {loading && (
-          <ActivityIndicator color="#38BDF8"/>
-        )}
+          </View>
 
-        <View style={styles.inputRow}>
+        </KeyboardAvoidingView>
 
-          <TextInput
-            value={input}
-            onChangeText={setInput}
-            placeholder="Ask something..."
-            placeholderTextColor="#64748B"
-            style={styles.input}
-          />
+      </TouchableWithoutFeedback>
 
-          <TouchableOpacity
-            style={styles.sendButton}
-            onPress={()=>sendMessage()}
-          >
-            <ThemedText style={styles.sendText}>
-              Send
-            </ThemedText>
-          </TouchableOpacity>
+    </SafeAreaView>
 
-        </View>
-
-      </ThemedView>
-
-    </KeyboardAvoidingView>
   );
+
 }
 
 const styles = StyleSheet.create({
+
+safe:{
+flex:1,
+backgroundColor:"#0F172A"
+},
 
 container:{
 flex:1,
@@ -192,11 +273,10 @@ backgroundColor:"#0F172A"
 },
 
 title:{
-marginTop:24,
-marginBottom:16,
 fontSize:28,
 fontWeight:"bold",
-color:"#F8FAFC"
+color:"#F8FAFC",
+marginBottom:16
 },
 
 quickRow:{
@@ -216,10 +296,6 @@ borderRadius:12
 quickText:{
 color:"#38BDF8",
 fontSize:12
-},
-
-chatList:{
-paddingBottom:12
 },
 
 messageBubble:{
@@ -243,11 +319,14 @@ messageText:{
 color:"#FFFFFF"
 },
 
-inputRow:{
+inputContainer:{
+position:"absolute",
+left:16,
+right:16,
 flexDirection:"row",
 alignItems:"center",
 gap:10,
-marginTop:8
+paddingBottom:12
 },
 
 input:{

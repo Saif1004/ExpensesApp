@@ -160,8 +160,6 @@ export default function HomeScreen() {
           £{monthlySpend.toFixed(2)}
         </ThemedText>
 
-        {/* Progress */}
-
         <View style={styles.progressBar}>
           <View
             style={[
@@ -235,7 +233,6 @@ export default function HomeScreen() {
       {recent.length === 0 ? (
 
         <View style={styles.emptyState}>
-
           <IconSymbol
             name="doc.text.fill"
             size={40}
@@ -245,7 +242,6 @@ export default function HomeScreen() {
           <ThemedText style={styles.emptyText}>
             No claims yet
           </ThemedText>
-
         </View>
 
       ) : (
@@ -254,7 +250,10 @@ export default function HomeScreen() {
           <TouchableOpacity
             key={claim.id}
             style={styles.activityCard}
-            onPress={()=>router.push("/claims")}
+
+            // 🔥 navigate to the exact claim
+            onPress={()=>router.push(`/claims/${claim.id}`)}
+
           >
 
             <View>

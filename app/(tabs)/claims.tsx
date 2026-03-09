@@ -21,6 +21,8 @@ import {
   View
 } from "react-native";
 
+import { router } from "expo-router";
+
 import { ThemedText } from "../../components/themed-text";
 import { ThemedView } from "../../components/themed-view";
 
@@ -40,81 +42,117 @@ type Claim = {
 };
 
 export default function ClaimsScreen() {
+
   const { user } = useAuth();
 
-  const [allClaims, setAllClaims] = useState<Claim[]>([]);
-  const [claims, setClaims] = useState<Claim[]>([]);
+  const [allClaims,setAllClaims] = useState<Claim[]>([]);
+  const [claims,setClaims] = useState<Claim[]>([]);
 
-  const [counts, setCounts] = useState({
-    pending: 0,
-    approved: 0,
-    rejected: 0
+  const [counts,setCounts] = useState({
+    pending:0,
+    approved:0,
+    rejected:0
   });
 
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [loading,setLoading] = useState(true);
+  const [refreshing,setRefreshing] = useState(false);
 
-  const [filter, setFilter] =
-    useState<"pending" | "approved" | "rejected">("pending");
+  const [filter,setFilter] =
+    useState<"pending"|"approved"|"rejected">("pending");
 
-  const [selectedClaim, setSelectedClaim] =
-    useState<Claim | null>(null);
-
-  const [viewReceipt, setViewReceipt] =
+  const [viewReceipt,setViewReceipt] =
     useState<string | null>(null);
 
-  useEffect(() => {
-    AsyncStorage.setItem(LAST_SEEN_KEY, Date.now().toString());
-  }, []);
+  /////////////////////////////////////////////////////////
+  // Reset badge
+  /////////////////////////////////////////////////////////
 
-  useEffect(() => {
-    if (!user) return;
+  useEffect(()=>{
+    AsyncStorage.setItem(LAST_SEEN_KEY,Date.now().toString());
+  },[]);
+
+  /////////////////////////////////////////////////////////
+  // Firestore
+  /////////////////////////////////////////////////////////
+
+  useEffect(()=>{
+
+    if(!user) return;
 
     const q = query(
-      collection(db, "claims"),
-      where("userId", "==", user.uid),
-      orderBy("createdAt", "desc")
+      collection(db,"claims"),
+      where("userId","==",user.uid),
+      orderBy("createdAt","desc")
     );
 
-    const unsub = onSnapshot(q, (snapshot) => {
-      const data: Claim[] = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...(doc.data() as Omit<Claim, "id">)
+    const unsub = onSnapshot(q,(snapshot)=>{
+
+      const data:Claim[] = snapshot.docs.map((doc)=>({
+        id:doc.id,
+        ...(doc.data() as Omit<Claim,"id">)
       }));
 
       setAllClaims(data);
 
-      const tempCounts = {
-        pending: 0,
-        approved: 0,
-        rejected: 0
+      const temp={
+        pending:0,
+        approved:0,
+        rejected:0
       };
 
-      data.forEach((c) => {
-        if (c.status in tempCounts) {
-          tempCounts[c.status]++;
-        }
+      data.forEach(c=>{
+        temp[c.status]++;
       });
 
-      setCounts(tempCounts);
+      setCounts(temp);
+
       setLoading(false);
       setRefreshing(false);
+
     });
 
     return unsub;
-  }, [user]);
 
-  useEffect(() => {
-    setClaims(allClaims.filter((c) => c.status === filter));
-  }, [filter, allClaims]);
+  },[user]);
 
-  const onRefresh = () => {
+  /////////////////////////////////////////////////////////
+  // Filter
+  /////////////////////////////////////////////////////////
+
+  useEffect(()=>{
+    setClaims(allClaims.filter(c=>c.status===filter));
+  },[filter,allClaims]);
+
+  /////////////////////////////////////////////////////////
+  // Pull refresh
+  /////////////////////////////////////////////////////////
+
+  const onRefresh=()=>{
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 600);
+    setTimeout(()=>setRefreshing(false),600);
   };
 
-  return (
+  /////////////////////////////////////////////////////////
+  // Badge style
+  /////////////////////////////////////////////////////////
+
+  const getStatusStyle=(status:string)=>{
+    switch(status){
+      case "approved": return styles.approved;
+      case "pending": return styles.pending;
+      case "rejected": return styles.rejected;
+      default: return styles.pending;
+    }
+  };
+
+  /////////////////////////////////////////////////////////
+  // UI
+  /////////////////////////////////////////////////////////
+
+  return(
+
     <ThemedView style={styles.container}>
+
       <ThemedText type="title" style={styles.title}>
         Claims
       </ThemedText>
@@ -122,6 +160,7 @@ export default function ClaimsScreen() {
       {/* Filters */}
 
       <View style={styles.filterRow}>
+
         {["pending","approved","rejected"].map((status)=>(
           <TouchableOpacity
             key={status}
@@ -131,6 +170,7 @@ export default function ClaimsScreen() {
               filter===status && styles.filterActive
             ]}
           >
+
             <ThemedText
               style={
                 filter===status
@@ -141,24 +181,35 @@ export default function ClaimsScreen() {
               {status.toUpperCase()} (
               {counts[status as keyof typeof counts]})
             </ThemedText>
+
           </TouchableOpacity>
         ))}
+
       </View>
 
+      {/* Content */}
+
       {loading ? (
+
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#38BDF8" />
+          <ActivityIndicator size="large" color="#38BDF8"/>
         </View>
-      ) : claims.length === 0 ? (
-        <ThemedView style={styles.card}>
+
+      ) : claims.length===0 ? (
+
+        <View style={styles.card}>
           <ThemedText style={{color:"#94A3B8"}}>
             No {filter} claims
           </ThemedText>
-        </ThemedView>
+        </View>
+
       ) : (
+
         <FlatList
           data={claims}
           keyExtractor={(item)=>item.id}
+          style={{flex:1}}
+          contentContainerStyle={{paddingBottom:40}}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -166,36 +217,26 @@ export default function ClaimsScreen() {
               tintColor="#38BDF8"
             />
           }
-          renderItem={({item}) => (
+          renderItem={({item})=>(
 
-            <ThemedView style={styles.claimCard}>
+            <TouchableOpacity
+              style={styles.claimCard}
+              onPress={()=>router.push(`/claims/${item.id}`)}
+            >
 
-              <TouchableOpacity
-                onPress={()=>setSelectedClaim(item)}
-              >
+              <ThemedText style={styles.amount}>
+                £{item.amount.toFixed(2)}
+              </ThemedText>
 
-                <ThemedText style={styles.amount}>
-                  £{item.amount.toFixed(2)}
-                </ThemedText>
+              <ThemedText style={styles.meta}>
+                {item.merchant} • {item.category}
+              </ThemedText>
 
-                <ThemedText style={styles.meta}>
-                  {item.merchant} • {item.category}
-                </ThemedText>
-
-                <ThemedText
-                  style={[
-                    styles.status,
-                    item.status==="pending" && styles.pending,
-                    item.status==="approved" && styles.approved,
-                    item.status==="rejected" && styles.rejected
-                  ]}
-                >
+              <View style={[styles.statusBadge,getStatusStyle(item.status)]}>
+                <ThemedText style={styles.statusText}>
                   {item.status.toUpperCase()}
                 </ThemedText>
-
-              </TouchableOpacity>
-
-              {/* RECEIPT PREVIEW */}
+              </View>
 
               {item.receiptUrl && (
                 <TouchableOpacity
@@ -208,52 +249,14 @@ export default function ClaimsScreen() {
                 </TouchableOpacity>
               )}
 
-            </ThemedView>
+            </TouchableOpacity>
 
           )}
         />
+
       )}
 
-      {/* CLAIM DETAILS MODAL */}
-
-      <Modal visible={!!selectedClaim} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-
-            {selectedClaim && (
-              <>
-                <ThemedText style={styles.modalTitle}>
-                  Claim Details
-                </ThemedText>
-
-                <ThemedText style={styles.modalAmount}>
-                  £{selectedClaim.amount.toFixed(2)}
-                </ThemedText>
-
-                <ThemedText style={styles.modalText}>
-                  Merchant: {selectedClaim.merchant}
-                </ThemedText>
-
-                <ThemedText style={styles.modalText}>
-                  Category: {selectedClaim.category}
-                </ThemedText>
-
-                <TouchableOpacity
-                  style={styles.closeBtn}
-                  onPress={()=>setSelectedClaim(null)}
-                >
-                  <ThemedText style={{color:"#fff"}}>
-                    Close
-                  </ThemedText>
-                </TouchableOpacity>
-              </>
-            )}
-
-          </View>
-        </View>
-      </Modal>
-
-      {/* FULLSCREEN RECEIPT VIEW */}
+      {/* Receipt modal */}
 
       <Modal visible={!!viewReceipt} transparent animationType="fade">
 
@@ -281,21 +284,21 @@ export default function ClaimsScreen() {
       </Modal>
 
     </ThemedView>
+
   );
 }
 
 const styles = StyleSheet.create({
 
 container:{
+flex:1,
 backgroundColor:"#0F172A",
-padding:20,
-flex:1
+padding:20
 },
 
 title:{
-fontSize:32,
+fontSize:30,
 fontWeight:"bold",
-marginTop:24,
 color:"#F8FAFC"
 },
 
@@ -327,7 +330,7 @@ fontSize:12
 },
 
 card:{
-backgroundColor:"rgba(30,41,59,0.95)",
+backgroundColor:"#1E293B",
 padding:18,
 borderRadius:14
 },
@@ -336,7 +339,9 @@ claimCard:{
 backgroundColor:"#1E293B",
 padding:16,
 borderRadius:14,
-marginBottom:14
+marginBottom:14,
+borderWidth:1,
+borderColor:"#334155"
 },
 
 amount:{
@@ -350,14 +355,23 @@ marginTop:4,
 color:"#94A3B8"
 },
 
-status:{
-marginTop:8,
-fontWeight:"700"
+statusBadge:{
+marginTop:10,
+alignSelf:"flex-start",
+paddingHorizontal:12,
+paddingVertical:6,
+borderRadius:8
 },
 
-pending:{color:"#FACC15"},
-approved:{color:"#22C55E"},
-rejected:{color:"#EF4444"},
+statusText:{
+color:"#fff",
+fontSize:12,
+fontWeight:"600"
+},
+
+pending:{backgroundColor:"#FACC15"},
+approved:{backgroundColor:"#22C55E"},
+rejected:{backgroundColor:"#EF4444"},
 
 receiptPreview:{
 width:"100%",
@@ -370,38 +384,6 @@ center:{
 flex:1,
 justifyContent:"center",
 alignItems:"center"
-},
-
-modalOverlay:{
-flex:1,
-backgroundColor:"rgba(0,0,0,0.6)",
-justifyContent:"center",
-padding:20
-},
-
-modalContent:{
-backgroundColor:"#1E293B",
-padding:20,
-borderRadius:16
-},
-
-modalTitle:{
-fontSize:18,
-fontWeight:"bold",
-marginBottom:12,
-color:"#F8FAFC"
-},
-
-modalAmount:{
-fontSize:22,
-fontWeight:"bold",
-color:"#38BDF8",
-marginBottom:12
-},
-
-modalText:{
-marginBottom:8,
-color:"#E2E8F0"
 },
 
 imageModalOverlay:{

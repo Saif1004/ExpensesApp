@@ -118,6 +118,13 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
+      name="claims/[id]"
+      options={{
+        href: null
+      }}
+      />
+
+      <Tabs.Screen
         name="claims"
         options={{
           title: "Claims",
