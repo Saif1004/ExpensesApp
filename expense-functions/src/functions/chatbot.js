@@ -43,36 +43,44 @@ app.http("chatbot", {
       }
 
       ////////////////////////////////////////////////////
-      // Fetch user's claims
+      // Fetch user's claims from Firestore
       ////////////////////////////////////////////////////
 
-      let claimsContext = "No user claim data available.";
+      let claimsContext = "No claim data available.";
 
       if (userId) {
 
         const snapshot = await db
           .collection("claims")
-          .where("userId","==",userId)
-          .orderBy("createdAt","desc")
-          .limit(10)
+          .where("userId", "==", userId)
+          .limit(20)
           .get();
 
-        const claims = snapshot.docs.map(d => d.data());
+        const claims = snapshot.docs.map(doc => doc.data());
 
         const pending =
-          claims.filter(c => c.status==="pending").length;
+          claims.filter(c => c.status === "pending").length;
 
         const approved =
-          claims.filter(c => c.status==="approved").length;
+          claims.filter(c => c.status === "approved").length;
 
         const rejected =
-          claims.filter(c => c.status==="rejected").length;
+          claims.filter(c => c.status === "rejected").length;
 
         const totalSpend =
-          claims.reduce((sum,c)=>sum+(c.amount||0),0);
+          claims.reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
+
+        const categories = {};
+
+        claims.forEach(c => {
+          if (!categories[c.category]) {
+            categories[c.category] = 0;
+          }
+          categories[c.category]++;
+        });
 
         claimsContext = `
-User claim summary:
+User claim summary
 
 Pending claims: ${pending}
 Approved claims: ${approved}
@@ -80,8 +88,13 @@ Rejected claims: ${rejected}
 
 Total recent spending: £${totalSpend}
 
+Category breakdown:
+${Object.entries(categories)
+  .map(([k,v]) => `${k}: ${v}`)
+  .join("\n")}
+
 Recent claims:
-${claims.map(c =>
+${claims.slice(0,5).map(c =>
 `${c.merchant} £${c.amount} (${c.category}) - ${c.status}`
 ).join("\n")}
 `;
@@ -96,65 +109,69 @@ ${claims.map(c =>
 
         model: process.env.AZURE_OPENAI_DEPLOYMENT,
 
-        messages:[
+        messages: [
+
           {
-            role:"system",
-            content:`
-You are an AI assistant for an expense management app.
+            role: "system",
+            content: `
+You are a helpful assistant for an expense management mobile app.
 
 You help users with:
-- submitting claims
-- explaining claim results
-- expense categories
-- receipt scanning
-- company policy
+• submitting expense claims
+• receipt scanning
+• claim approvals
+• company expense policies
+• understanding their spending
 
-Company policy:
+Company expense policy:
 
-Meals limit £50
-Technology limit £500
+Meals limit: £50
+Technology limit: £500
 Travel allowed
 Office supplies allowed
 Claims older than 30 days rejected
 Duplicate claims rejected
 
-You will also receive a summary of the user's claims.
-Use it to answer questions about their spending.
-Be concise and helpful.
+Be concise, helpful and friendly.
+Never invent policy rules.
 `
           },
 
           {
-            role:"system",
-            content:claimsContext
+            role: "system",
+            content: claimsContext
           },
 
           {
-            role:"user",
-            content:message
+            role: "user",
+            content: message
           }
+
         ],
 
-        temperature:0.3,
-        max_tokens:200
+        temperature: 0.3,
+        max_tokens: 200
+
       });
 
       const reply =
-        response.choices?.[0]?.message?.content
-        || "Sorry, I couldn't answer that.";
+        response?.choices?.[0]?.message?.content ||
+        "Sorry, I couldn't answer that.";
 
       return {
-        status:200,
-        jsonBody:{ reply }
+        status: 200,
+        jsonBody: { reply }
       };
 
     } catch (error) {
 
-      context.log("CHATBOT ERROR:",error);
+      context.log("CHATBOT ERROR:", error);
 
       return {
-        status:500,
-        jsonBody:{ error:"Chatbot failed" }
+        status: 500,
+        jsonBody: {
+          error: "Chatbot failed"
+        }
       };
     }
   }

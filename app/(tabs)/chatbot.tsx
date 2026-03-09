@@ -1,13 +1,13 @@
 import { useState } from "react";
 import {
-    ActivityIndicator,
-    FlatList,
-    KeyboardAvoidingView,
-    Platform,
-    StyleSheet,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  View
 } from "react-native";
 
 import { ThemedText } from "../../components/themed-text";
@@ -22,96 +22,125 @@ type ChatMessage = {
   sender: "user" | "bot";
 };
 
+const QUICK_QUESTIONS = [
+  "What is the meal limit?",
+  "Why was my claim rejected?",
+  "How do I scan a receipt?",
+  "How much have I spent recently?"
+];
+
 export default function ChatbotScreen() {
 
   const { user } = useAuth();
 
-  const [messages, setMessages] = useState<ChatMessage[]>([
+  const [messages,setMessages] = useState<ChatMessage[]>([
     {
-      id: "1",
-      text: "Hi! I'm your expense assistant. Ask me about claims, receipts, or policy.",
-      sender: "bot"
+      id:"1",
+      text:"Hi! I'm your expense assistant. Ask me about claims, receipts, or policy.",
+      sender:"bot"
     }
   ]);
 
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [input,setInput] = useState("");
+  const [loading,setLoading] = useState(false);
 
-  const sendMessage = async () => {
+  const sendMessage = async (preset?:string)=>{
 
-    const trimmed = input.trim();
-    if (!trimmed || loading) return;
+    const text = preset || input.trim();
+    if(!text || loading) return;
 
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      text: trimmed,
-      sender: "user"
+    const userMessage:ChatMessage = {
+      id:Date.now().toString(),
+      text,
+      sender:"user"
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    setMessages(prev=>[...prev,userMessage]);
     setInput("");
     setLoading(true);
 
-    try {
+    try{
 
-      const response = await fetch(CHATBOT_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
+      const response = await fetch(CHATBOT_URL,{
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json"
         },
-        body: JSON.stringify({
-          message: trimmed,
-          userId: user?.uid
+        body:JSON.stringify({
+          message:text,
+          userId:user?.uid
         })
       });
 
       const data = await response.json();
 
-      const botMessage: ChatMessage = {
-        id: `${Date.now()}-bot`,
-        text: data?.reply || "Sorry, I couldn't help with that.",
-        sender: "bot"
+      const botMessage:ChatMessage = {
+        id:`${Date.now()}bot`,
+        text:data?.reply || "Sorry, I couldn't help.",
+        sender:"bot"
       };
 
-      setMessages(prev => [...prev, botMessage]);
+      setMessages(prev=>[...prev,botMessage]);
 
-    } catch {
+    }catch{
 
-      const botMessage: ChatMessage = {
-        id: `${Date.now()}-bot`,
-        text: "Sorry, the chatbot is unavailable right now.",
-        sender: "bot"
-      };
+      setMessages(prev=>[
+        ...prev,
+        {
+          id:`${Date.now()}bot`,
+          text:"Chatbot unavailable right now.",
+          sender:"bot"
+        }
+      ]);
 
-      setMessages(prev => [...prev, botMessage]);
-
-    } finally {
+    }finally{
 
       setLoading(false);
 
     }
+
   };
 
-  return (
+  return(
+
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: "#0F172A" }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      style={{flex:1,backgroundColor:"#0F172A"}}
+      behavior={Platform.OS==="ios"?"padding":undefined}
     >
+
       <ThemedView style={styles.container}>
 
         <ThemedText type="title" style={styles.title}>
           Virtual Assistant
         </ThemedText>
 
+        {/* Quick suggestions */}
+
+        <View style={styles.quickRow}>
+
+          {QUICK_QUESTIONS.map(q=>(
+            <TouchableOpacity
+              key={q}
+              style={styles.quickBtn}
+              onPress={()=>sendMessage(q)}
+            >
+              <ThemedText style={styles.quickText}>
+                {q}
+              </ThemedText>
+            </TouchableOpacity>
+          ))}
+
+        </View>
+
         <FlatList
           data={messages}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item)=>item.id}
           contentContainerStyle={styles.chatList}
-          renderItem={({ item }) => (
+          renderItem={({item})=>(
             <View
               style={[
                 styles.messageBubble,
-                item.sender === "user"
+                item.sender==="user"
                   ? styles.userBubble
                   : styles.botBubble
               ]}
@@ -124,9 +153,7 @@ export default function ChatbotScreen() {
         />
 
         {loading && (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator color="#38BDF8" />
-          </View>
+          <ActivityIndicator color="#38BDF8"/>
         )}
 
         <View style={styles.inputRow}>
@@ -141,7 +168,7 @@ export default function ChatbotScreen() {
 
           <TouchableOpacity
             style={styles.sendButton}
-            onPress={sendMessage}
+            onPress={()=>sendMessage()}
           >
             <ThemedText style={styles.sendText}>
               Send
@@ -151,81 +178,97 @@ export default function ChatbotScreen() {
         </View>
 
       </ThemedView>
+
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
 
-  container:{
-    flex:1,
-    padding:16,
-    backgroundColor:"#0F172A"
-  },
+container:{
+flex:1,
+padding:16,
+backgroundColor:"#0F172A"
+},
 
-  title:{
-    marginTop:24,
-    marginBottom:16,
-    fontSize:28,
-    fontWeight:"bold",
-    color:"#F8FAFC"
-  },
+title:{
+marginTop:24,
+marginBottom:16,
+fontSize:28,
+fontWeight:"bold",
+color:"#F8FAFC"
+},
 
-  chatList:{
-    paddingBottom:12
-  },
+quickRow:{
+flexDirection:"row",
+flexWrap:"wrap",
+gap:8,
+marginBottom:12
+},
 
-  messageBubble:{
-    padding:12,
-    borderRadius:14,
-    marginBottom:10,
-    maxWidth:"80%"
-  },
+quickBtn:{
+backgroundColor:"#1E293B",
+paddingHorizontal:12,
+paddingVertical:8,
+borderRadius:12
+},
 
-  userBubble:{
-    alignSelf:"flex-end",
-    backgroundColor:"#2563EB"
-  },
+quickText:{
+color:"#38BDF8",
+fontSize:12
+},
 
-  botBubble:{
-    alignSelf:"flex-start",
-    backgroundColor:"#1E293B"
-  },
+chatList:{
+paddingBottom:12
+},
 
-  messageText:{
-    color:"#FFFFFF"
-  },
+messageBubble:{
+padding:12,
+borderRadius:14,
+marginBottom:10,
+maxWidth:"80%"
+},
 
-  loadingRow:{
-    paddingVertical:8
-  },
+userBubble:{
+alignSelf:"flex-end",
+backgroundColor:"#2563EB"
+},
 
-  inputRow:{
-    flexDirection:"row",
-    alignItems:"center",
-    gap:10,
-    marginTop:8
-  },
+botBubble:{
+alignSelf:"flex-start",
+backgroundColor:"#1E293B"
+},
 
-  input:{
-    flex:1,
-    backgroundColor:"#1E293B",
-    color:"#F8FAFC",
-    borderRadius:12,
-    paddingHorizontal:12,
-    paddingVertical:12
-  },
+messageText:{
+color:"#FFFFFF"
+},
 
-  sendButton:{
-    backgroundColor:"#2563EB",
-    paddingHorizontal:16,
-    paddingVertical:12,
-    borderRadius:12
-  },
+inputRow:{
+flexDirection:"row",
+alignItems:"center",
+gap:10,
+marginTop:8
+},
 
-  sendText:{
-    color:"#FFFFFF",
-    fontWeight:"600"
-  }
+input:{
+flex:1,
+backgroundColor:"#1E293B",
+color:"#F8FAFC",
+borderRadius:12,
+paddingHorizontal:12,
+paddingVertical:12
+},
+
+sendButton:{
+backgroundColor:"#2563EB",
+paddingHorizontal:16,
+paddingVertical:12,
+borderRadius:12
+},
+
+sendText:{
+color:"#FFFFFF",
+fontWeight:"600"
+}
 
 });

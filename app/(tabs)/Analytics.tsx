@@ -26,6 +26,8 @@ import { db } from "../firebase/firebaseConfig";
 
 const screenWidth = Dimensions.get("window").width;
 
+const AI_URL = process.env.EXPO_PUBLIC_ANALYTICS_AI_URL!;
+
 type Category = "Meals" | "Travel" | "Technology" | "Office";
 
 type Claim = {
@@ -47,6 +49,8 @@ export default function AnalyticsScreen() {
   const { user, role } = useAuth();
 
   const [loading, setLoading] = useState(true);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiInsight, setAiInsight] = useState("");
 
   const [stats, setStats] = useState({
     total: 0,
@@ -108,11 +112,10 @@ export default function AnalyticsScreen() {
       });
 
       const total = claims.length;
-
       const avgValue =
         total > 0 ? totalAmount / total : 0;
 
-      setStats({
+      const newStats = {
         total,
         approved,
         pending,
@@ -120,15 +123,46 @@ export default function AnalyticsScreen() {
         suspicious,
         avgValue,
         categories
-      });
+      };
 
+      setStats(newStats);
       setLoading(false);
+
+      generateAIInsights(newStats);
 
     });
 
     return unsub;
 
   }, [user, role]);
+
+  async function generateAIInsights(data:any){
+
+    try{
+
+      setAiLoading(true);
+
+      const res = await fetch(AI_URL,{
+        method:"POST",
+        headers:{ "Content-Type":"application/json"},
+        body: JSON.stringify({ stats:data })
+      });
+
+      const result = await res.json();
+
+      setAiInsight(result?.insight || "");
+
+    }catch{
+
+      setAiInsight("");
+
+    }finally{
+
+      setAiLoading(false);
+
+    }
+
+  }
 
   const approvalRate =
     stats.total > 0
@@ -150,14 +184,6 @@ export default function AnalyticsScreen() {
     propsForBackgroundLines: {
       stroke: "#334155",
       strokeDasharray: ""
-    },
-
-    propsForLabels: {
-      fontSize: 12
-    },
-
-    style: {
-      borderRadius: 16
     }
   };
 
@@ -198,6 +224,24 @@ export default function AnalyticsScreen() {
       <ThemedText type="title" style={styles.title}>
         Analytics Dashboard
       </ThemedText>
+
+      {/* AI INSIGHTS */}
+
+      <View style={styles.aiCard}>
+
+        <ThemedText style={styles.aiTitle}>
+          AI Insights
+        </ThemedText>
+
+        {aiLoading ? (
+          <ActivityIndicator color="#38BDF8"/>
+        ) : (
+          <ThemedText style={styles.aiText}>
+            {aiInsight || "No insights available yet."}
+          </ThemedText>
+        )}
+
+      </View>
 
       {loading ? (
         <View style={styles.center}>
@@ -256,16 +300,16 @@ export default function AnalyticsScreen() {
 
           <BarChart
             data={{
-              labels: ["Approved", "Pending", "Rejected"],
-              datasets: [{
-                data: [
+              labels:["Approved","Pending","Rejected"],
+              datasets:[{
+                data:[
                   stats.approved,
                   stats.pending,
                   stats.rejected
                 ]
               }]
             }}
-            width={screenWidth - 40}
+            width={screenWidth-40}
             height={220}
             chartConfig={chartConfig}
             fromZero
@@ -281,7 +325,7 @@ export default function AnalyticsScreen() {
 
           <PieChart
             data={categoryData}
-            width={screenWidth - 40}
+            width={screenWidth-40}
             height={220}
             chartConfig={chartConfig}
             accessor="population"
@@ -298,68 +342,86 @@ export default function AnalyticsScreen() {
 
 const styles = StyleSheet.create({
 
-  container:{
-    flex:1,
-    padding:20,
-    backgroundColor:"#0F172A"
-  },
+container:{
+flex:1,
+padding:20,
+backgroundColor:"#0F172A"
+},
 
-  title:{
-    marginTop:24,
-    fontSize:28,
-    fontWeight:"bold",
-    color:"#F8FAFC"
-  },
+title:{
+marginTop:24,
+fontSize:28,
+fontWeight:"bold",
+color:"#F8FAFC"
+},
 
-  grid:{
-    flexDirection:"row",
-    flexWrap:"wrap",
-    gap:14,
-    marginTop:20
-  },
+aiCard:{
+backgroundColor:"#1E293B",
+padding:16,
+borderRadius:14,
+marginTop:16
+},
 
-  card:{
-    width:"47%",
-    backgroundColor:"#1E293B",
-    padding:18,
-    borderRadius:14
-  },
+aiTitle:{
+color:"#38BDF8",
+fontWeight:"600",
+marginBottom:6
+},
 
-  label:{
-    color:"#94A3B8",
-    fontSize:12
-  },
+aiText:{
+color:"#E2E8F0",
+lineHeight:20
+},
 
-  value:{
-    marginTop:6,
-    fontSize:22,
-    fontWeight:"bold",
-    color:"#F8FAFC"
-  },
+grid:{
+flexDirection:"row",
+flexWrap:"wrap",
+gap:14,
+marginTop:20
+},
 
-  warning:{
-    marginTop:6,
-    fontSize:22,
-    fontWeight:"bold",
-    color:"#F97316"
-  },
+card:{
+width:"47%",
+backgroundColor:"#1E293B",
+padding:18,
+borderRadius:14
+},
 
-  chartTitle:{
-    marginTop:26,
-    marginBottom:10,
-    fontSize:16,
-    fontWeight:"600",
-    color:"#E2E8F0"
-  },
+label:{
+color:"#94A3B8",
+fontSize:12
+},
 
-  chart:{
-    borderRadius:16
-  },
+value:{
+marginTop:6,
+fontSize:22,
+fontWeight:"bold",
+color:"#F8FAFC"
+},
 
-  center:{
-    flex:1,
-    justifyContent:"center",
-    alignItems:"center"
-  }
+warning:{
+marginTop:6,
+fontSize:22,
+fontWeight:"bold",
+color:"#F97316"
+},
+
+chartTitle:{
+marginTop:26,
+marginBottom:10,
+fontSize:16,
+fontWeight:"600",
+color:"#E2E8F0"
+},
+
+chart:{
+borderRadius:16
+},
+
+center:{
+flex:1,
+justifyContent:"center",
+alignItems:"center"
+}
 
 });
