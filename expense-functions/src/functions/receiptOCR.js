@@ -17,23 +17,68 @@ const client = new OpenAI({
 async function classifyExpense(merchant, receiptText, items) {
 
   const prompt = `
-Classify this expense into ONE category only.
+You are an expense classification system for a company expense platform.
 
-Categories:
+Your task is to classify an expense into ONE of the following categories:
+
 Meals
 Travel
 Technology
 Office
 
-Merchant: ${merchant}
+Classification rules:
+
+Meals
+- Restaurants
+- Cafes
+- Coffee shops
+- Food purchases
+- Takeaways
+- Grocery food items
+
+Travel
+- Taxi / Uber / Bolt
+- Train / Bus / Metro
+- Flights
+- Hotels
+- Fuel / Petrol
+- Parking / tolls
+- Public transport tickets
+
+Technology
+- Electronics
+- Computer equipment
+- Software
+- Online technology retailers
+- Chargers, cables, accessories
+- Phones, laptops, tablets
+
+Office
+- Stationery
+- Paper
+- Printer supplies
+- Office equipment
+- Work materials
+
+If unsure, use the **merchant name and items** to infer the category.
+
+Expense information:
+
+Merchant:
+${merchant}
 
 Items:
 ${items.join(", ")}
 
-Receipt text:
+Full receipt text:
 ${receiptText}
 
-Return ONLY the category name.
+Return ONLY ONE word from this list:
+
+Meals
+Travel
+Technology
+Office
 `;
 
   const response = await client.chat.completions.create({
