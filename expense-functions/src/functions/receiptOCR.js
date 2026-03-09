@@ -1,11 +1,69 @@
 const { app } = require("@azure/functions");
+const OpenAI = require("openai");
+
+//////////////////////////////////////////////////////////
+// OpenAI client (CORRECT AZURE CONFIG)
+//////////////////////////////////////////////////////////
+
+const client = new OpenAI({
+  apiKey: process.env.AZURE_OPENAI_KEY,
+  baseURL: `${process.env.AZURE_OPENAI_ENDPOINT}/openai/v1`
+});
+
+//////////////////////////////////////////////////////////
+// AI CATEGORY CLASSIFIER
+//////////////////////////////////////////////////////////
+
+async function classifyExpense(merchant, receiptText, items) {
+
+  const prompt = `
+Classify this expense into ONE category only.
+
+Categories:
+Meals
+Travel
+Technology
+Office
+
+Merchant: ${merchant}
+
+Items:
+${items.join(", ")}
+
+Receipt text:
+${receiptText}
+
+Return ONLY the category name.
+`;
+
+  const response = await client.chat.completions.create({
+    model: process.env.AZURE_OPENAI_DEPLOYMENT,
+    messages: [
+      { role: "system", content: "You classify business expenses." },
+      { role: "user", content: prompt }
+    ],
+    temperature: 0,
+    max_tokens: 10
+  });
+
+  return response.choices[0].message.content.trim();
+}
+
+//////////////////////////////////////////////////////////
+// OCR FUNCTION
+//////////////////////////////////////////////////////////
 
 app.http("receiptOCR", {
   methods: ["POST"],
   authLevel: "anonymous",
 
   handler: async (request, context) => {
+
     try {
+
+      //////////////////////////////////////////////////////////
+      // REQUEST BODY
+      //////////////////////////////////////////////////////////
 
       const { image } = await request.json();
 
@@ -16,23 +74,18 @@ app.http("receiptOCR", {
         };
       }
 
+      //////////////////////////////////////////////////////////
+      // OCR CREDENTIALS
+      //////////////////////////////////////////////////////////
+
       const endpoint = process.env.AZURE_DOC_ENDPOINT;
       const key = process.env.AZURE_DOC_KEY;
-
-      if (!endpoint || !key) {
-        context.log("OCR environment variables missing");
-
-        return {
-          status: 500,
-          jsonBody: { error: "OCR environment variables missing" }
-        };
-      }
 
       const analyzeUrl =
         `${endpoint.replace(/\/$/, "")}/formrecognizer/documentModels/prebuilt-receipt:analyze?api-version=2023-07-31`;
 
       //////////////////////////////////////////////////////////
-      // Send receipt to Azure
+      // SEND IMAGE TO OCR
       //////////////////////////////////////////////////////////
 
       const analyzeResponse = await fetch(analyzeUrl, {
@@ -47,6 +100,7 @@ app.http("receiptOCR", {
       });
 
       if (!analyzeResponse.ok) {
+
         const errText = await analyzeResponse.text();
         context.log("Azure analyze error:", errText);
 
@@ -59,15 +113,8 @@ app.http("receiptOCR", {
       const operationLocation =
         analyzeResponse.headers.get("operation-location");
 
-      if (!operationLocation) {
-        return {
-          status: 500,
-          jsonBody: { error: "OCR polling URL missing" }
-        };
-      }
-
       //////////////////////////////////////////////////////////
-      // Poll Azure result
+      // POLL OCR RESULT
       //////////////////////////////////////////////////////////
 
       let result;
@@ -85,6 +132,7 @@ app.http("receiptOCR", {
         if (result.status === "succeeded") break;
 
         if (result.status === "failed") {
+
           context.log("OCR failed:", result);
 
           return {
@@ -97,7 +145,7 @@ app.http("receiptOCR", {
       }
 
       //////////////////////////////////////////////////////////
-      // Extract Azure structured fields
+      // EXTRACT FIELDS
       //////////////////////////////////////////////////////////
 
       const doc = result?.analyzeResult?.documents?.[0];
@@ -112,7 +160,22 @@ app.http("receiptOCR", {
         doc?.fields?.TransactionDate?.valueDate ?? "";
 
       //////////////////////////////////////////////////////////
-      // Fallback: detect total manually if Azure misses it
+      // EXTRACT ITEMS
+      //////////////////////////////////////////////////////////
+
+      let items = [];
+
+      if (doc?.fields?.Items?.valueArray) {
+
+        items = doc.fields.Items.valueArray
+          .map(i => i?.valueObject?.Description?.valueString)
+          .filter(Boolean)
+          .map(v => v.toLowerCase());
+
+      }
+
+      //////////////////////////////////////////////////////////
+      // FALLBACK AMOUNT DETECTION
       //////////////////////////////////////////////////////////
 
       if (!amount) {
@@ -131,53 +194,55 @@ app.http("receiptOCR", {
       }
 
       //////////////////////////////////////////////////////////
-      // Category detection
+      // AI CATEGORY CLASSIFICATION
       //////////////////////////////////////////////////////////
 
       let category = "Meals";
-      const m = merchant.toLowerCase();
 
-      if (
-        m.includes("uber") ||
-        m.includes("taxi") ||
-        m.includes("train") ||
-        m.includes("bus") ||
-        m.includes("tfl")
-      ) {
-        category = "Travel";
-      }
-      else if (
-        m.includes("amazon") ||
-        m.includes("apple") ||
-        m.includes("currys") ||
-        m.includes("pc world")
-      ) {
-        category = "Technology";
-      }
-      else if (
-        m.includes("ryman") ||
-        m.includes("staples") ||
-        m.includes("office")
-      ) {
-        category = "Office";
-      }
-      else {
-        category = "Meals";
+      try {
+
+        const receiptText =
+          result?.analyzeResult?.content || "";
+
+        const aiCategory = await classifyExpense(
+          merchant,
+          receiptText,
+          items
+        );
+
+        context.log("AI CATEGORY RAW:", aiCategory);
+
+        const clean = aiCategory
+          .toLowerCase()
+          .replace(".", "")
+          .trim();
+
+        if (clean.includes("travel")) category = "Travel";
+        else if (clean.includes("technology")) category = "Technology";
+        else if (clean.includes("office")) category = "Office";
+        else if (clean.includes("meal") || clean.includes("food"))
+          category = "Meals";
+
+      } catch (err) {
+
+        context.log("AI classification failed:", err);
+
       }
 
       //////////////////////////////////////////////////////////
-      // Log OCR result
+      // LOG RESULT
       //////////////////////////////////////////////////////////
 
       context.log("OCR RESULT:", {
         merchant,
         amount,
         date,
+        items,
         category
       });
 
       //////////////////////////////////////////////////////////
-      // Return response
+      // RETURN RESPONSE
       //////////////////////////////////////////////////////////
 
       return {
@@ -190,8 +255,7 @@ app.http("receiptOCR", {
         }
       };
 
-    }
-    catch (error) {
+    } catch (error) {
 
       context.log("OCR ERROR:", error);
 
@@ -203,5 +267,6 @@ app.http("receiptOCR", {
       };
 
     }
+
   }
 });

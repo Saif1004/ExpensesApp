@@ -1,5 +1,4 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
 import {
   collection,
   onSnapshot,
@@ -14,6 +13,7 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   Modal,
   RefreshControl,
   StyleSheet,
@@ -36,6 +36,7 @@ type Claim = {
   category: string;
   status: "pending" | "approved" | "rejected";
   createdAt: Timestamp;
+  receiptUrl?: string;
 };
 
 export default function ClaimsScreen() {
@@ -59,12 +60,13 @@ export default function ClaimsScreen() {
   const [selectedClaim, setSelectedClaim] =
     useState<Claim | null>(null);
 
-  // Mark screen opened
+  const [viewReceipt, setViewReceipt] =
+    useState<string | null>(null);
+
   useEffect(() => {
     AsyncStorage.setItem(LAST_SEEN_KEY, Date.now().toString());
   }, []);
 
-  // Firestore listener
   useEffect(() => {
     if (!user) return;
 
@@ -102,7 +104,6 @@ export default function ClaimsScreen() {
     return unsub;
   }, [user]);
 
-  // Filter
   useEffect(() => {
     setClaims(allClaims.filter((c) => c.status === filter));
   }, [filter, allClaims]);
@@ -119,21 +120,20 @@ export default function ClaimsScreen() {
       </ThemedText>
 
       {/* Filters */}
+
       <View style={styles.filterRow}>
-        {["pending", "approved", "rejected"].map((status) => (
+        {["pending","approved","rejected"].map((status)=>(
           <TouchableOpacity
             key={status}
-            onPress={() =>
-              setFilter(status as any)
-            }
+            onPress={()=>setFilter(status as any)}
             style={[
               styles.filterBtn,
-              filter === status && styles.filterActive
+              filter===status && styles.filterActive
             ]}
           >
             <ThemedText
               style={
-                filter === status
+                filter===status
                   ? styles.filterTextActive
                   : styles.filterText
               }
@@ -151,14 +151,14 @@ export default function ClaimsScreen() {
         </View>
       ) : claims.length === 0 ? (
         <ThemedView style={styles.card}>
-          <ThemedText style={{ color: "#94A3B8" }}>
+          <ThemedText style={{color:"#94A3B8"}}>
             No {filter} claims
           </ThemedText>
         </ThemedView>
       ) : (
         <FlatList
           data={claims}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item)=>item.id}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -166,11 +166,14 @@ export default function ClaimsScreen() {
               tintColor="#38BDF8"
             />
           }
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              onPress={() => setSelectedClaim(item)}
-            >
-              <ThemedView style={styles.claimCard}>
+          renderItem={({item}) => (
+
+            <ThemedView style={styles.claimCard}>
+
+              <TouchableOpacity
+                onPress={()=>setSelectedClaim(item)}
+              >
+
                 <ThemedText style={styles.amount}>
                   £{item.amount.toFixed(2)}
                 </ThemedText>
@@ -182,30 +185,41 @@ export default function ClaimsScreen() {
                 <ThemedText
                   style={[
                     styles.status,
-                    item.status === "pending" &&
-                      styles.pending,
-                    item.status === "approved" &&
-                      styles.approved,
-                    item.status === "rejected" &&
-                      styles.rejected
+                    item.status==="pending" && styles.pending,
+                    item.status==="approved" && styles.approved,
+                    item.status==="rejected" && styles.rejected
                   ]}
                 >
                   {item.status.toUpperCase()}
                 </ThemedText>
-              </ThemedView>
-            </TouchableOpacity>
+
+              </TouchableOpacity>
+
+              {/* RECEIPT PREVIEW */}
+
+              {item.receiptUrl && (
+                <TouchableOpacity
+                  onPress={()=>setViewReceipt(item.receiptUrl!)}
+                >
+                  <Image
+                    source={{uri:item.receiptUrl}}
+                    style={styles.receiptPreview}
+                  />
+                </TouchableOpacity>
+              )}
+
+            </ThemedView>
+
           )}
         />
       )}
 
-      {/* Modal */}
-      <Modal
-        visible={!!selectedClaim}
-        transparent
-        animationType="slide"
-      >
+      {/* CLAIM DETAILS MODAL */}
+
+      <Modal visible={!!selectedClaim} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
+
             {selectedClaim && (
               <>
                 <ThemedText style={styles.modalTitle}>
@@ -226,138 +240,189 @@ export default function ClaimsScreen() {
 
                 <TouchableOpacity
                   style={styles.closeBtn}
-                  onPress={() => setSelectedClaim(null)}
+                  onPress={()=>setSelectedClaim(null)}
                 >
-                  <ThemedText style={{ color: "#fff" }}>
+                  <ThemedText style={{color:"#fff"}}>
                     Close
                   </ThemedText>
                 </TouchableOpacity>
               </>
             )}
+
           </View>
         </View>
       </Modal>
+
+      {/* FULLSCREEN RECEIPT VIEW */}
+
+      <Modal visible={!!viewReceipt} transparent animationType="fade">
+
+        <View style={styles.imageModalOverlay}>
+
+          {viewReceipt && (
+            <Image
+              source={{uri:viewReceipt}}
+              style={styles.fullImage}
+              resizeMode="contain"
+            />
+          )}
+
+          <TouchableOpacity
+            style={styles.closeBtn}
+            onPress={()=>setViewReceipt(null)}
+          >
+            <ThemedText style={{color:"#fff"}}>
+              Close
+            </ThemedText>
+          </TouchableOpacity>
+
+        </View>
+
+      </Modal>
+
     </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: "#0F172A",
-    padding: 20,
-    flex: 1
-  },
 
-  title: {
-    fontSize: 32,
-    fontWeight: "bold",
-    marginTop: 24,
-    color: "#F8FAFC"
-  },
+container:{
+backgroundColor:"#0F172A",
+padding:20,
+flex:1
+},
 
-  filterRow: {
-    flexDirection: "row",
-    marginVertical: 16,
-    gap: 10
-  },
+title:{
+fontSize:32,
+fontWeight:"bold",
+marginTop:24,
+color:"#F8FAFC"
+},
 
-  filterBtn: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    backgroundColor: "#1E293B"
-  },
+filterRow:{
+flexDirection:"row",
+marginVertical:16,
+gap:10
+},
 
-  filterActive: {
-    backgroundColor: "#2563EB"
-  },
+filterBtn:{
+paddingVertical:6,
+paddingHorizontal:12,
+borderRadius:20,
+backgroundColor:"#1E293B"
+},
 
-  filterText: {
-    color: "#94A3B8",
-    fontSize: 12
-  },
+filterActive:{
+backgroundColor:"#2563EB"
+},
 
-  filterTextActive: {
-    color: "#FFFFFF",
-    fontSize: 12
-  },
+filterText:{
+color:"#94A3B8",
+fontSize:12
+},
 
-  card: {
-    backgroundColor: "rgba(30,41,59,0.95)",
-    padding: 18,
-    borderRadius: 14
-  },
+filterTextActive:{
+color:"#FFFFFF",
+fontSize:12
+},
 
-  claimCard: {
-    backgroundColor: "#1E293B",
-    padding: 16,
-    borderRadius: 14,
-    marginBottom: 14
-  },
+card:{
+backgroundColor:"rgba(30,41,59,0.95)",
+padding:18,
+borderRadius:14
+},
 
-  amount: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#F8FAFC"
-  },
+claimCard:{
+backgroundColor:"#1E293B",
+padding:16,
+borderRadius:14,
+marginBottom:14
+},
 
-  meta: {
-    marginTop: 4,
-    color: "#94A3B8"
-  },
+amount:{
+fontSize:18,
+fontWeight:"bold",
+color:"#F8FAFC"
+},
 
-  status: {
-    marginTop: 8,
-    fontWeight: "700"
-  },
+meta:{
+marginTop:4,
+color:"#94A3B8"
+},
 
-  pending: { color: "#FACC15" },
-  approved: { color: "#22C55E" },
-  rejected: { color: "#EF4444" },
+status:{
+marginTop:8,
+fontWeight:"700"
+},
 
-  center: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center"
-  },
+pending:{color:"#FACC15"},
+approved:{color:"#22C55E"},
+rejected:{color:"#EF4444"},
 
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "center",
-    padding: 20
-  },
+receiptPreview:{
+width:"100%",
+height:120,
+borderRadius:10,
+marginTop:10
+},
 
-  modalContent: {
-    backgroundColor: "#1E293B",
-    padding: 20,
-    borderRadius: 16
-  },
+center:{
+flex:1,
+justifyContent:"center",
+alignItems:"center"
+},
 
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 12,
-    color: "#F8FAFC"
-  },
+modalOverlay:{
+flex:1,
+backgroundColor:"rgba(0,0,0,0.6)",
+justifyContent:"center",
+padding:20
+},
 
-  modalAmount: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: "#38BDF8",
-    marginBottom: 12
-  },
+modalContent:{
+backgroundColor:"#1E293B",
+padding:20,
+borderRadius:16
+},
 
-  modalText: {
-    marginBottom: 8,
-    color: "#E2E8F0"
-  },
+modalTitle:{
+fontSize:18,
+fontWeight:"bold",
+marginBottom:12,
+color:"#F8FAFC"
+},
 
-  closeBtn: {
-    marginTop: 16,
-    backgroundColor: "#2563EB",
-    padding: 12,
-    borderRadius: 12,
-    alignItems: "center"
-  }
+modalAmount:{
+fontSize:22,
+fontWeight:"bold",
+color:"#38BDF8",
+marginBottom:12
+},
+
+modalText:{
+marginBottom:8,
+color:"#E2E8F0"
+},
+
+imageModalOverlay:{
+flex:1,
+backgroundColor:"rgba(0,0,0,0.95)",
+justifyContent:"center",
+alignItems:"center",
+padding:20
+},
+
+fullImage:{
+width:"100%",
+height:"80%"
+},
+
+closeBtn:{
+marginTop:16,
+backgroundColor:"#2563EB",
+padding:12,
+borderRadius:12,
+alignItems:"center"
+}
+
 });
