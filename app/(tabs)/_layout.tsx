@@ -12,6 +12,7 @@ import { IconSymbol } from "../../components/ui/icon-symbol";
 import { useAuth } from "../context/AuthProvider";
 import { db } from "../firebase/firebaseConfig";
 
+
 const LAST_SEEN_KEY = "claims_last_seen";
 
 export default function TabLayout() {

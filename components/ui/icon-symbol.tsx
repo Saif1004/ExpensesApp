@@ -1,33 +1,41 @@
-// Fallback for using MaterialIcons on Android and web.
-
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { SymbolViewProps, SymbolWeight } from 'expo-symbols';
 import { ComponentProps } from 'react';
-import { OpaqueColorValue, type StyleProp, type TextStyle } from 'react-native';
+import { OpaqueColorValue, StyleProp, TextStyle } from 'react-native';
 
-type IconMapping = Record<SymbolViewProps['name'], ComponentProps<typeof MaterialIcons>['name']>;
+type IconMapping =
+  Record<SymbolViewProps['name'], ComponentProps<typeof MaterialIcons>['name']>;
+
 type IconSymbolName = keyof typeof MAPPING;
 
 /**
- * Add your SF Symbols to Material Icons mappings here.
- * - see Material Icons in the [Icons Directory](https://icons.expo.fyi).
- * - see SF Symbols in the [SF Symbols](https://developer.apple.com/sf-symbols/) app.
+ * SF Symbol → Material Icon mapping
  */
 const MAPPING = {
+  // Navigation
   'house.fill': 'home',
-  'chart.bar.xaxis': 'show-chart',
   'doc.text.fill': 'description',
   'person.crop.circle.fill': 'account-circle',
   'plus.circle.fill': 'add-circle',
+
+  // Charts / analytics
+  'chart.bar.xaxis': 'show-chart',
+
+  // Messaging / actions
   'paperplane.fill': 'send',
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
+
+  // NEW icons (fix for Android)
+  'shield.fill': 'shield',
+  'questionmark.circle.fill': 'help',
 } as IconMapping;
 
 /**
- * An icon component that uses native SF Symbols on iOS, and Material Icons on Android and web.
- * This ensures a consistent look across platforms, and optimal resource usage.
- * Icon `name`s are based on SF Symbols and require manual mapping to Material Icons.
+ * Cross-platform icon component
+ *
+ * iOS → SF Symbols
+ * Android / Web → Material Icons
  */
 export function IconSymbol({
   name,
@@ -41,5 +49,15 @@ export function IconSymbol({
   style?: StyleProp<TextStyle>;
   weight?: SymbolWeight;
 }) {
-  return <MaterialIcons color={color} size={size} name={MAPPING[name]} style={style} />;
+
+  const mappedIcon = MAPPING[name] ?? 'help';
+
+  return (
+    <MaterialIcons
+      name={mappedIcon}
+      size={size}
+      color={color}
+      style={style}
+    />
+  );
 }

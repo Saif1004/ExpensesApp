@@ -100,7 +100,7 @@ export default function ChatbotScreen() {
       <ThemedView style={styles.container}>
 
         <ThemedText type="title" style={styles.title}>
-          Help Assistant
+          Virtual Assistant
         </ThemedText>
 
         <FlatList
