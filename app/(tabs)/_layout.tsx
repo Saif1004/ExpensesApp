@@ -176,6 +176,15 @@ export default function TabLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="chatbot"
+        options={{
+          title: "Help",
+          tabBarIcon: ({ color }) => (
+            <IconSymbol name="questionmark.circle.fill" size={22} color={color} />
+          ),
+        }}
+      />
     </Tabs>
   );
 }
