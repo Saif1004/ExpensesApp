@@ -7,8 +7,12 @@ import {
 } from "firebase/auth";
 
 import {
+  collection,
   doc,
-  getDoc
+  getDoc,
+  getDocs,
+  query,
+  where
 } from "firebase/firestore";
 
 import { useState } from "react";
@@ -22,7 +26,6 @@ import {
 } from "react-native";
 
 import tw from "twrnc";
-
 import { auth, db } from "./firebase/firebaseConfig";
 
 export default function SignIn() {
@@ -43,7 +46,6 @@ export default function SignIn() {
 
       const normalized = username.trim().toLowerCase();
 
-      // usernames/{username}
       const usernameDoc = await getDoc(doc(db,"usernames",normalized));
 
       if(!usernameDoc.exists()){
@@ -52,7 +54,6 @@ export default function SignIn() {
 
       const { uid } = usernameDoc.data();
 
-      // users/{uid}
       const userDoc = await getDoc(doc(db,"users",uid));
 
       if(!userDoc.exists()){
@@ -67,6 +68,29 @@ export default function SignIn() {
       return null;
 
     }
+
+  };
+
+  //////////////////////////////////////////////////////
+  // CHECK MEMBERSHIP
+  //////////////////////////////////////////////////////
+
+  const checkMembership = async (uid:string) => {
+
+    const q = query(
+      collection(db,"memberships"),
+      where("userId","==",uid)
+    );
+
+    const snap = await getDocs(q);
+
+    if(snap.empty){
+      return { status:"none" };
+    }
+
+    const membership = snap.docs[0].data();
+
+    return membership;
 
   };
 
@@ -107,7 +131,33 @@ export default function SignIn() {
 
       }
 
-      await signInWithEmailAndPassword(auth,email,password);
+      ////////////////////////////////////
+      // AUTH LOGIN
+      ////////////////////////////////////
+
+      const cred = await signInWithEmailAndPassword(auth,email,password);
+
+      const uid = cred.user.uid;
+
+      ////////////////////////////////////
+      // MEMBERSHIP CHECK
+      ////////////////////////////////////
+
+      const membership = await checkMembership(uid);
+
+      if(membership.status === "pending"){
+        Alert.alert("Awaiting Approval","Your admin has not approved your account yet.");
+        return;
+      }
+
+      if(membership.status === "none"){
+        Alert.alert("No Organisation","You are not assigned to an organisation.");
+        return;
+      }
+
+      ////////////////////////////////////
+      // SUCCESS
+      ////////////////////////////////////
 
       router.replace("/(tabs)/home");
 
@@ -241,11 +291,9 @@ export default function SignIn() {
           {/* FORGOT PASSWORD */}
 
           <TouchableOpacity onPress={forgotPassword}>
-
             <Text style={tw`text-blue-400 text-xs mb-4`}>
               Forgot password?
             </Text>
-
           </TouchableOpacity>
 
           {/* SIGN IN BUTTON */}
@@ -266,7 +314,9 @@ export default function SignIn() {
 
             {loading
               ? <ActivityIndicator color="#fff"/>
-              : <Text style={tw`text-white text-base font-semibold`}>Sign In</Text>
+              : <Text style={tw`text-white text-base font-semibold`}>
+                  Sign In
+                </Text>
             }
 
           </TouchableOpacity>
@@ -276,11 +326,9 @@ export default function SignIn() {
           <TouchableOpacity
             onPress={()=>router.push("/sign-up")}
           >
-
             <Text style={tw`text-slate-400 text-center text-xs mt-2`}>
               Don't have an account? Sign Up
             </Text>
-
           </TouchableOpacity>
 
         </View>
