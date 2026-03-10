@@ -77,20 +77,30 @@ export default function SignIn() {
 
   const checkMembership = async (uid:string) => {
 
-    const q = query(
-      collection(db,"memberships"),
-      where("userId","==",uid)
-    );
+    try{
 
-    const snap = await getDocs(q);
+      const q = query(
+        collection(db,"memberships"),
+        where("userId","==",uid)
+      );
 
-    if(snap.empty){
-      return { status:"none" };
+      const snap = await getDocs(q);
+
+      if(snap.empty){
+        return { status:"none" };
+      }
+
+      const membership = snap.docs[0].data();
+
+      return membership;
+
     }
+    catch(err){
 
-    const membership = snap.docs[0].data();
+      console.log("Membership error:",err);
+      return { status:"none" };
 
-    return membership;
+    }
 
   };
 
@@ -111,9 +121,9 @@ export default function SignIn() {
 
       let email = identifier.trim();
 
-      ////////////////////////////////////
+      ////////////////////////////////////////////////////
       // USERNAME LOGIN
-      ////////////////////////////////////
+      ////////////////////////////////////////////////////
 
       if(!identifier.includes("@")){
 
@@ -131,46 +141,54 @@ export default function SignIn() {
 
       }
 
-      ////////////////////////////////////
-      // AUTH LOGIN
-      ////////////////////////////////////
+      ////////////////////////////////////////////////////
+      // FIREBASE LOGIN
+      ////////////////////////////////////////////////////
 
       const cred = await signInWithEmailAndPassword(auth,email,password);
 
       const uid = cred.user.uid;
 
-      ////////////////////////////////////
+      ////////////////////////////////////////////////////
       // MEMBERSHIP CHECK
-      ////////////////////////////////////
+      ////////////////////////////////////////////////////
 
       const membership = await checkMembership(uid);
 
-      if(membership.status === "pending"){
-        Alert.alert("Awaiting Approval","Your admin has not approved your account yet.");
+      if(membership?.status === "pending"){
+        Alert.alert(
+          "Awaiting Approval",
+          "Your admin has not approved your account yet."
+        );
         return;
       }
 
-      if(membership.status === "none"){
-        Alert.alert("No Organisation","You are not assigned to an organisation.");
+      if(membership?.status === "none"){
+        Alert.alert(
+          "No Organisation",
+          "You are not assigned to an organisation."
+        );
         return;
       }
 
-      ////////////////////////////////////
+      ////////////////////////////////////////////////////
       // SUCCESS
-      ////////////////////////////////////
+      ////////////////////////////////////////////////////
 
       router.replace("/(tabs)/home");
 
-    }catch(err){
+    }
+    catch(err:any){
 
-      console.log(err);
+      console.log("SIGNIN ERROR:",err);
 
       Alert.alert(
         "Sign in failed",
-        "Incorrect email/username or password"
+        err?.message || "Login error"
       );
 
-    }finally{
+    }
+    finally{
 
       setLoading(false);
 
@@ -201,7 +219,8 @@ export default function SignIn() {
         "Check your email for reset instructions."
       );
 
-    }catch(err:any){
+    }
+    catch(err:any){
 
       Alert.alert("Error",err.message);
 
@@ -234,8 +253,6 @@ export default function SignIn() {
             Sign In
           </Text>
 
-          {/* EMAIL OR USERNAME */}
-
           <View style={tw`mb-4`}>
 
             <Text style={tw`text-slate-300 text-xs mb-1`}>
@@ -260,8 +277,6 @@ export default function SignIn() {
             />
 
           </View>
-
-          {/* PASSWORD */}
 
           <View style={tw`mb-4`}>
 
@@ -288,15 +303,11 @@ export default function SignIn() {
 
           </View>
 
-          {/* FORGOT PASSWORD */}
-
           <TouchableOpacity onPress={forgotPassword}>
             <Text style={tw`text-blue-400 text-xs mb-4`}>
               Forgot password?
             </Text>
           </TouchableOpacity>
-
-          {/* SIGN IN BUTTON */}
 
           <TouchableOpacity
             style={[
@@ -321,14 +332,14 @@ export default function SignIn() {
 
           </TouchableOpacity>
 
-          {/* SIGN UP */}
-
           <TouchableOpacity
             onPress={()=>router.push("/sign-up")}
           >
+
             <Text style={tw`text-slate-400 text-center text-xs mt-2`}>
               Don't have an account? Sign Up
             </Text>
+
           </TouchableOpacity>
 
         </View>

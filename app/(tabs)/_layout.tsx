@@ -185,7 +185,7 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="admin-users"
+        name="AdminUsers"
         options={{
           title: "Users",
           href: isAdmin ? undefined : null, // 🔥 hides for employees
