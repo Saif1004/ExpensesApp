@@ -44,13 +44,22 @@ export default function ProfileScreen() {
 
     const loadUser = async () => {
 
-      if(!user) return;
+      try{
 
-      const docRef = doc(db,"users",user.uid);
-      const snap = await getDoc(docRef);
+        if(!user){
+          setLoading(false);
+          return;
+        }
 
-      if(snap.exists()){
-        setUsername(snap.data().username);
+        const docRef = doc(db,"users",user.uid);
+        const snap = await getDoc(docRef);
+
+        if(snap.exists()){
+          setUsername(snap.data().username);
+        }
+
+      }catch(err){
+        console.log("User load error:",err);
       }
 
       setLoading(false);
@@ -69,20 +78,32 @@ export default function ProfileScreen() {
 
     if(!user?.email) return;
 
-    try{
+    Alert.alert(
+      "Reset Password",
+      "Send password reset email?",
+      [
+        {text:"Cancel",style:"cancel"},
+        {
+          text:"Send",
+          onPress:async ()=>{
 
-      await sendPasswordResetEmail(auth,user.email);
+            try{
 
-      Alert.alert(
-        "Password Reset",
-        "Check your email to reset your password."
-      );
+              await sendPasswordResetEmail(auth,user.email);
 
-    }catch{
+              Alert.alert(
+                "Password Reset",
+                "Check your email to reset your password."
+              );
 
-      Alert.alert("Error","Could not send reset email");
+            }catch{
+              Alert.alert("Error","Could not send reset email");
+            }
 
-    }
+          }
+        }
+      ]
+    );
 
   };
 
@@ -110,7 +131,7 @@ export default function ProfileScreen() {
 
               await deleteUser(user);
 
-              router.replace("/home");
+              router.replace("/");
 
             }catch{
 
@@ -144,7 +165,7 @@ export default function ProfileScreen() {
 
       await signOut(auth);
 
-      router.replace("/home");
+      router.replace("/");
 
     }catch{
 
@@ -159,7 +180,7 @@ export default function ProfileScreen() {
   };
 
   //////////////////////////////////////////////////////
-  // UI
+  // LOADING STATE
   //////////////////////////////////////////////////////
 
   if(loading){
@@ -169,6 +190,10 @@ export default function ProfileScreen() {
       </View>
     );
   }
+
+  //////////////////////////////////////////////////////
+  // UI
+  //////////////////////////////////////////////////////
 
   return (
 
@@ -185,13 +210,13 @@ export default function ProfileScreen() {
         <View style={styles.avatar}>
 
           <ThemedText style={styles.avatarText}>
-            {username?.charAt(0)?.toUpperCase()}
+            {username?.charAt(0)?.toUpperCase() || "U"}
           </ThemedText>
 
         </View>
 
         <ThemedText style={styles.name}>
-          {username}
+          {username || "User"}
         </ThemedText>
 
         <ThemedText style={styles.email}>
@@ -200,11 +225,14 @@ export default function ProfileScreen() {
 
       </View>
 
-      {/* SECURITY */}
+      {/* ACCOUNT CARD */}
 
       <ThemedView style={styles.card}>
 
-        <TouchableOpacity onPress={resetPassword}>
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={resetPassword}
+        >
           <ThemedText style={styles.actionText}>
             Reset Password
           </ThemedText>
@@ -253,90 +281,98 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
 
 container:{
-padding:20,
-backgroundColor:"#0F172A",
-minHeight:"100%"
+  padding:20,
+  backgroundColor:"#0F172A",
+  minHeight:"100%"
 },
 
 title:{
-fontSize:32,
-fontWeight:"bold",
-color:"#F8FAFC",
-marginTop:24
+  fontSize:32,
+  fontWeight:"bold",
+  color:"#F8FAFC",
+  marginTop:24,
+  marginBottom:10
 },
 
 avatarContainer:{
-alignItems:"center",
-marginBottom:20
+  alignItems:"center",
+  marginBottom:30
 },
 
 avatar:{
-width:70,
-height:70,
-borderRadius:35,
-backgroundColor:"#2563EB",
-justifyContent:"center",
-alignItems:"center",
-marginBottom:10
+  width:80,
+  height:80,
+  borderRadius:40,
+  backgroundColor:"#2563EB",
+  justifyContent:"center",
+  alignItems:"center",
+  marginBottom:10
 },
 
 avatarText:{
-color:"#FFF",
-fontSize:26,
-fontWeight:"bold"
+  color:"#FFF",
+  fontSize:30,
+  fontWeight:"bold"
 },
 
 name:{
-color:"#F8FAFC",
-fontSize:18,
-fontWeight:"600"
+  color:"#F8FAFC",
+  fontSize:20,
+  fontWeight:"600"
 },
 
 email:{
-color:"#94A3B8"
+  color:"#94A3B8",
+  marginTop:4
 },
 
 card:{
-backgroundColor:"rgba(30,41,59,0.95)",
-padding:16,
-borderRadius:14,
-marginBottom:20
+  backgroundColor:"rgba(30,41,59,0.95)",
+  padding:16,
+  borderRadius:14,
+  marginBottom:20
+},
+
+actionButton:{
+  paddingVertical:8
 },
 
 actionText:{
-color:"#38BDF8"
+  color:"#38BDF8",
+  fontSize:16
 },
 
 deleteButton:{
-marginTop:10,
-backgroundColor:"#DC2626",
-padding:10,
-borderRadius:10,
-alignItems:"center"
+  marginTop:14,
+  backgroundColor:"#DC2626",
+  padding:12,
+  borderRadius:10,
+  alignItems:"center"
 },
 
 deleteText:{
-color:"#FFF"
+  color:"#FFF",
+  fontWeight:"600"
 },
 
 logoutButton:{
-backgroundColor:"#EF4444",
-paddingVertical:12,
-borderRadius:12,
-alignItems:"center"
+  backgroundColor:"#EF4444",
+  paddingVertical:14,
+  borderRadius:12,
+  alignItems:"center"
 },
 
 logoutText:{
-color:"#FFFFFF",
-fontSize:16,
-fontWeight:"600"
+  color:"#FFFFFF",
+  fontSize:16,
+  fontWeight:"600"
 },
 
 loading:{
-flex:1,
-justifyContent:"center",
-alignItems:"center",
-backgroundColor:"#0F172A"
+  flex:1,
+  justifyContent:"center",
+  alignItems:"center",
+  backgroundColor:"#0F172A"
 }
 
 });
