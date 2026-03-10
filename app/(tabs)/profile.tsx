@@ -76,36 +76,41 @@ export default function ProfileScreen() {
 
   const resetPassword = async () => {
 
-    if(!user?.email) return;
+  if(!user || !user.email){
+    Alert.alert("Error","No email associated with this account.");
+    return;
+  }
 
-    Alert.alert(
-      "Reset Password",
-      "Send password reset email?",
-      [
-        {text:"Cancel",style:"cancel"},
-        {
-          text:"Send",
-          onPress:async ()=>{
+  const email = user.email;
 
-            try{
+  Alert.alert(
+    "Reset Password",
+    "Send password reset email?",
+    [
+      {text:"Cancel",style:"cancel"},
+      {
+        text:"Send",
+        onPress:async ()=>{
 
-              await sendPasswordResetEmail(auth,user.email);
+          try{
 
-              Alert.alert(
-                "Password Reset",
-                "Check your email to reset your password."
-              );
+            await sendPasswordResetEmail(auth,email);
 
-            }catch{
-              Alert.alert("Error","Could not send reset email");
-            }
+            Alert.alert(
+              "Password Reset",
+              "Check your email to reset your password."
+            );
 
+          }catch{
+            Alert.alert("Error","Could not send reset email");
           }
-        }
-      ]
-    );
 
-  };
+        }
+      }
+    ]
+  );
+
+};
 
   //////////////////////////////////////////////////////
   // DELETE ACCOUNT
