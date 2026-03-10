@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   StyleSheet,
-  TextInput,
   TouchableOpacity,
   View
 } from "react-native";
@@ -10,13 +10,17 @@ import {
 import {
   deleteUser,
   sendPasswordResetEmail,
-  signOut,
-  updateProfile
+  signOut
 } from "firebase/auth";
+
+import {
+  doc,
+  getDoc
+} from "firebase/firestore";
 
 import { useRouter } from "expo-router";
 
-import { auth } from "../../app/firebase/firebaseConfig";
+import { auth, db } from "../../app/firebase/firebaseConfig";
 
 import { ThemedText } from "../../components/themed-text";
 import { ThemedView } from "../../components/themed-view";
@@ -25,42 +29,37 @@ export default function ProfileScreen() {
 
   const router = useRouter();
 
-  const [user,setUser] = useState(auth.currentUser);
-  const [name,setName] = useState(auth.currentUser?.displayName || "");
+  const [username,setUsername] = useState("");
+  const [loading,setLoading] = useState(true);
+  const [loggingOut,setLoggingOut] = useState(false);
+  const [deleting,setDeleting] = useState(false);
+
+  const user = auth.currentUser;
 
   //////////////////////////////////////////////////////
-  // REFRESH USER AFTER PROFILE UPDATE
+  // LOAD USER DATA
   //////////////////////////////////////////////////////
 
   useEffect(()=>{
-    setUser(auth.currentUser);
+
+    const loadUser = async () => {
+
+      if(!user) return;
+
+      const docRef = doc(db,"users",user.uid);
+      const snap = await getDoc(docRef);
+
+      if(snap.exists()){
+        setUsername(snap.data().username);
+      }
+
+      setLoading(false);
+
+    };
+
+    loadUser();
+
   },[]);
-
-  //////////////////////////////////////////////////////
-  // SAVE PROFILE
-  //////////////////////////////////////////////////////
-
-  const saveProfile = async () => {
-
-    if(!auth.currentUser) return;
-
-    try{
-
-      await updateProfile(auth.currentUser,{
-        displayName:name
-      });
-
-      setUser(auth.currentUser);
-
-      Alert.alert("Success","Profile updated");
-
-    }catch{
-
-      Alert.alert("Error","Could not update profile");
-
-    }
-
-  };
 
   //////////////////////////////////////////////////////
   // RESET PASSWORD
@@ -68,11 +67,11 @@ export default function ProfileScreen() {
 
   const resetPassword = async () => {
 
-    if(!auth.currentUser?.email) return;
+    if(!user?.email) return;
 
     try{
 
-      await sendPasswordResetEmail(auth,auth.currentUser.email);
+      await sendPasswordResetEmail(auth,user.email);
 
       Alert.alert(
         "Password Reset",
@@ -91,9 +90,9 @@ export default function ProfileScreen() {
   // DELETE ACCOUNT
   //////////////////////////////////////////////////////
 
-  const removeAccount = async () => {
+  const removeAccount = () => {
 
-    if(!auth.currentUser) return;
+    if(!user) return;
 
     Alert.alert(
       "Delete Account",
@@ -107,7 +106,9 @@ export default function ProfileScreen() {
 
             try{
 
-              await deleteUser(auth.currentUser!);
+              setDeleting(true);
+
+              await deleteUser(user);
 
               router.replace("/home");
 
@@ -117,6 +118,10 @@ export default function ProfileScreen() {
                 "Error",
                 "You may need to log in again before deleting your account."
               );
+
+            }finally{
+
+              setDeleting(false);
 
             }
 
@@ -135,6 +140,8 @@ export default function ProfileScreen() {
 
     try{
 
+      setLoggingOut(true);
+
       await signOut(auth);
 
       router.replace("/home");
@@ -143,6 +150,10 @@ export default function ProfileScreen() {
 
       Alert.alert("Error","Could not log out");
 
+    }finally{
+
+      setLoggingOut(false);
+
     }
 
   };
@@ -150,6 +161,14 @@ export default function ProfileScreen() {
   //////////////////////////////////////////////////////
   // UI
   //////////////////////////////////////////////////////
+
+  if(loading){
+    return(
+      <View style={styles.loading}>
+        <ActivityIndicator size="large" color="#3B82F6"/>
+      </View>
+    );
+  }
 
   return (
 
@@ -166,14 +185,13 @@ export default function ProfileScreen() {
         <View style={styles.avatar}>
 
           <ThemedText style={styles.avatarText}>
-            {user?.displayName?.charAt(0)?.toUpperCase() ||
-             user?.email?.charAt(0)?.toUpperCase()}
+            {username?.charAt(0)?.toUpperCase()}
           </ThemedText>
 
         </View>
 
         <ThemedText style={styles.name}>
-          {user?.displayName || "User"}
+          {username}
         </ThemedText>
 
         <ThemedText style={styles.email}>
@@ -182,34 +200,7 @@ export default function ProfileScreen() {
 
       </View>
 
-      {/* PROFILE CARD */}
-
-      <ThemedView style={styles.card}>
-
-        <ThemedText style={styles.cardTitle}>
-          Display Name
-        </ThemedText>
-
-        <TextInput
-          value={name}
-          onChangeText={setName}
-          placeholder="Your name"
-          placeholderTextColor="#64748B"
-          style={styles.input}
-        />
-
-        <TouchableOpacity
-          style={styles.saveButton}
-          onPress={saveProfile}
-        >
-          <ThemedText style={styles.saveText}>
-            Save Profile
-          </ThemedText>
-        </TouchableOpacity>
-
-      </ThemedView>
-
-      {/* SECURITY CARD */}
+      {/* SECURITY */}
 
       <ThemedView style={styles.card}>
 
@@ -222,10 +213,14 @@ export default function ProfileScreen() {
         <TouchableOpacity
           style={styles.deleteButton}
           onPress={removeAccount}
+          disabled={deleting}
         >
-          <ThemedText style={styles.deleteText}>
-            Delete Account
-          </ThemedText>
+
+          {deleting
+            ? <ActivityIndicator color="#fff"/>
+            : <ThemedText style={styles.deleteText}>Delete Account</ThemedText>
+          }
+
         </TouchableOpacity>
 
       </ThemedView>
@@ -235,11 +230,13 @@ export default function ProfileScreen() {
       <TouchableOpacity
         style={styles.logoutButton}
         onPress={logout}
+        disabled={loggingOut}
       >
 
-        <ThemedText style={styles.logoutText}>
-          Log Out
-        </ThemedText>
+        {loggingOut
+          ? <ActivityIndicator color="#fff"/>
+          : <ThemedText style={styles.logoutText}>Log Out</ThemedText>
+        }
 
       </TouchableOpacity>
 
@@ -248,6 +245,10 @@ export default function ProfileScreen() {
   );
 
 }
+
+//////////////////////////////////////////////////////
+// STYLES
+//////////////////////////////////////////////////////
 
 const styles = StyleSheet.create({
 
@@ -302,31 +303,6 @@ borderRadius:14,
 marginBottom:20
 },
 
-cardTitle:{
-color:"#E2E8F0",
-marginBottom:8
-},
-
-input:{
-backgroundColor:"#1E293B",
-borderRadius:10,
-padding:12,
-color:"#FFF",
-marginBottom:10
-},
-
-saveButton:{
-backgroundColor:"#2563EB",
-padding:10,
-borderRadius:10,
-alignItems:"center"
-},
-
-saveText:{
-color:"#FFF",
-fontWeight:"600"
-},
-
 actionText:{
 color:"#38BDF8"
 },
@@ -354,6 +330,13 @@ logoutText:{
 color:"#FFFFFF",
 fontSize:16,
 fontWeight:"600"
+},
+
+loading:{
+flex:1,
+justifyContent:"center",
+alignItems:"center",
+backgroundColor:"#0F172A"
 }
 
 });

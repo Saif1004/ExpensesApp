@@ -185,6 +185,16 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="admin-users"
+        options={{
+          title: "Users",
+          href: isAdmin ? undefined : null, // 🔥 hides for employees
+          tabBarIcon: ({ color }) => (
+            <IconSymbol name="shield.fill" size={22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="chatbot"
         options={{
           title: "Help",

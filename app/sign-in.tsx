@@ -1,19 +1,19 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+
 import {
   sendPasswordResetEmail,
   signInWithEmailAndPassword
 } from "firebase/auth";
 
 import {
-  collection,
-  getDocs,
-  query,
-  where
+  doc,
+  getDoc
 } from "firebase/firestore";
 
 import { useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Text,
   TextInput,
@@ -31,25 +31,42 @@ export default function SignIn() {
 
   const [identifier,setIdentifier] = useState("");
   const [password,setPassword] = useState("");
+  const [loading,setLoading] = useState(false);
 
   //////////////////////////////////////////////////////
-  // FIND EMAIL FROM DISPLAY NAME
+  // FIND EMAIL FROM USERNAME
   //////////////////////////////////////////////////////
 
-  const findEmailFromDisplayName = async (name:string) => {
+  const findEmailFromUsername = async (username:string) => {
 
-    const q = query(
-      collection(db,"users"),
-      where("displayName","==",name)
-    );
+    try{
 
-    const snap = await getDocs(q);
+      const normalized = username.trim().toLowerCase();
 
-    if(!snap.empty){
-      return snap.docs[0].data().email;
+      // usernames/{username}
+      const usernameDoc = await getDoc(doc(db,"usernames",normalized));
+
+      if(!usernameDoc.exists()){
+        return null;
+      }
+
+      const { uid } = usernameDoc.data();
+
+      // users/{uid}
+      const userDoc = await getDoc(doc(db,"users",uid));
+
+      if(!userDoc.exists()){
+        return null;
+      }
+
+      return userDoc.data().email;
+
+    }catch(err){
+
+      console.log("Username lookup error:",err);
+      return null;
+
     }
-
-    return null;
 
   };
 
@@ -60,21 +77,29 @@ export default function SignIn() {
   const handleSignIn = async () => {
 
     if(!identifier || !password){
-      Alert.alert("Missing details","Enter email/name and password");
+      Alert.alert("Missing details","Enter email or username and password");
       return;
     }
 
     try{
 
+      setLoading(true);
+
       let email = identifier.trim();
 
-      // If user typed display name instead of email
+      ////////////////////////////////////
+      // USERNAME LOGIN
+      ////////////////////////////////////
+
       if(!identifier.includes("@")){
 
-        const foundEmail = await findEmailFromDisplayName(identifier);
+        const normalized = identifier.trim().toLowerCase();
+
+        const foundEmail = await findEmailFromUsername(normalized);
 
         if(!foundEmail){
-          Alert.alert("User not found","No account with that display name");
+          setLoading(false);
+          Alert.alert("User not found","No account with that username");
           return;
         }
 
@@ -84,9 +109,20 @@ export default function SignIn() {
 
       await signInWithEmailAndPassword(auth,email,password);
 
-    }catch(err:any){
+      router.replace("/(tabs)/home");
 
-      Alert.alert("Sign in failed",err.message);
+    }catch(err){
+
+      console.log(err);
+
+      Alert.alert(
+        "Sign in failed",
+        "Incorrect email/username or password"
+      );
+
+    }finally{
+
+      setLoading(false);
 
     }
 
@@ -108,7 +144,7 @@ export default function SignIn() {
 
     try{
 
-      await sendPasswordResetEmail(auth,identifier);
+      await sendPasswordResetEmail(auth,identifier.trim());
 
       Alert.alert(
         "Password Reset",
@@ -148,18 +184,18 @@ export default function SignIn() {
             Sign In
           </Text>
 
-          {/* EMAIL OR NAME */}
+          {/* EMAIL OR USERNAME */}
 
           <View style={tw`mb-4`}>
 
             <Text style={tw`text-slate-300 text-xs mb-1`}>
-              Email or Display Name
+              Email or Username
             </Text>
 
             <TextInput
               value={identifier}
               onChangeText={setIdentifier}
-              placeholder="you@email.com or username"
+              placeholder="email or username"
               placeholderTextColor="#64748B"
               autoCapitalize="none"
               style={[
@@ -225,15 +261,17 @@ export default function SignIn() {
               tw`bg-blue-500`
             ]}
             onPress={handleSignIn}
+            disabled={loading}
           >
 
-            <Text style={tw`text-white text-base font-semibold`}>
-              Sign In
-            </Text>
+            {loading
+              ? <ActivityIndicator color="#fff"/>
+              : <Text style={tw`text-white text-base font-semibold`}>Sign In</Text>
+            }
 
           </TouchableOpacity>
 
-          {/* SIGN UP NAVIGATION */}
+          {/* SIGN UP */}
 
           <TouchableOpacity
             onPress={()=>router.push("/sign-up")}
