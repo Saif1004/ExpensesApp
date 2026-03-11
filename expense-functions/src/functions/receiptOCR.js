@@ -2,19 +2,31 @@ const { app } = require("@azure/functions");
 const OpenAI = require("openai");
 
 //////////////////////////////////////////////////////////
-// OpenAI client (CORRECT AZURE CONFIG)
+// SAFE OPENAI CLIENT
 //////////////////////////////////////////////////////////
 
-const client = new OpenAI({
-  apiKey: process.env.AZURE_OPENAI_KEY,
-  baseURL: `${process.env.AZURE_OPENAI_ENDPOINT}/openai/v1`
-});
+function getOpenAIClient() {
+
+  const key = process.env.AZURE_OPENAI_KEY;
+  const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
+
+  if (!key || !endpoint) {
+    throw new Error("Azure OpenAI credentials not configured");
+  }
+
+  return new OpenAI({
+    apiKey: key,
+    baseURL: `${endpoint}/openai/v1`
+  });
+}
 
 //////////////////////////////////////////////////////////
 // AI CATEGORY CLASSIFIER
 //////////////////////////////////////////////////////////
 
 async function classifyExpense(merchant, receiptText, items) {
+
+  const client = getOpenAIClient();
 
   const prompt = `
 You are an expense classification system for a company expense platform.
@@ -60,7 +72,7 @@ Office
 - Office equipment
 - Work materials
 
-If unsure, use the **merchant name and items** to infer the category.
+If unsure, use the merchant name and items to infer the category.
 
 Expense information:
 
@@ -95,7 +107,7 @@ Office
 }
 
 //////////////////////////////////////////////////////////
-// OCR FUNCTION
+// RECEIPT OCR FUNCTION
 //////////////////////////////////////////////////////////
 
 app.http("receiptOCR", {
@@ -120,11 +132,15 @@ app.http("receiptOCR", {
       }
 
       //////////////////////////////////////////////////////////
-      // OCR CREDENTIALS
+      // DOCUMENT INTELLIGENCE CONFIG
       //////////////////////////////////////////////////////////
 
       const endpoint = process.env.AZURE_DOC_ENDPOINT;
       const key = process.env.AZURE_DOC_KEY;
+
+      if (!endpoint || !key) {
+        throw new Error("Azure Document Intelligence credentials missing");
+      }
 
       const analyzeUrl =
         `${endpoint.replace(/\/$/, "")}/formrecognizer/documentModels/prebuilt-receipt:analyze?api-version=2023-07-31`;
@@ -164,7 +180,7 @@ app.http("receiptOCR", {
 
       let result;
 
-      while (true) {
+      for (let i = 0; i < 20; i++) {
 
         const pollResponse = await fetch(operationLocation, {
           headers: {
@@ -287,7 +303,7 @@ app.http("receiptOCR", {
       });
 
       //////////////////////////////////////////////////////////
-      // RETURN RESPONSE
+      // RESPONSE
       //////////////////////////////////////////////////////////
 
       return {

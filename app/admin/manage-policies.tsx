@@ -13,7 +13,6 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
-    addDoc,
     collection,
     deleteDoc,
     doc,
@@ -27,13 +26,23 @@ import { useAuth } from "../context/AuthProvider";
 import { auth, db } from "../firebase/firebaseConfig";
 
 //////////////////////////////////////////////////////
+// CONFIG
+//////////////////////////////////////////////////////
+
+const AI_POLICY_URL = process.env.EXPO_PUBLIC_AI_POLICY_URL!;
+
+//////////////////////////////////////////////////////
 // TYPES
 //////////////////////////////////////////////////////
 
 type Policy = {
   id: string;
-  title: string;
+  type?: string;
+  value?: number;
+  category?: string | null;
   orgId: string;
+  displayText?: string;
+  originalText?: string;
 };
 
 //////////////////////////////////////////////////////
@@ -48,6 +57,7 @@ export default function ManagePolicies(){
   const [policies,setPolicies] = useState<Policy[]>([]);
   const [title,setTitle] = useState("");
   const [loading,setLoading] = useState(true);
+  const [creating,setCreating] = useState(false);
   const [orgId,setOrgId] = useState<string | null>(null);
 
 //////////////////////////////////////////////////////
@@ -105,13 +115,15 @@ const loadPolicies = async()=>{
 
       list.push({
         id: docSnap.id,
-        title: data.title,
-        orgId: data.orgId
+        type: data.type,
+        value: data.value,
+        category: data.category,
+        orgId: data.orgId,
+        displayText: data.displayText,
+        originalText: data.originalText
       });
 
     });
-
-    list.sort((a,b)=>a.title.localeCompare(b.title));
 
     setPolicies(list);
 
@@ -141,17 +153,36 @@ const addPolicy = async()=>{
 
   try{
 
-    await addDoc(collection(db,"policies"),{
-      title:title.trim(),
-      orgId
+    setCreating(true);
+
+    const res = await fetch(AI_POLICY_URL,{
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({
+        text:title.trim(),
+        orgId
+      })
     });
 
+    const data = await res.json();
+
+    if(!res.ok){
+      Alert.alert("AI Error",data?.error || "Policy parsing failed");
+      return;
+    }
+
     setTitle("");
-    loadPolicies();
+    await loadPolicies();
 
   }catch(err){
-    console.log("Add policy error:",err);
-    Alert.alert("Error","Could not add policy.");
+
+    console.log("AI policy error:",err);
+    Alert.alert("Error","Could not create policy.");
+
+  }finally{
+
+    setCreating(false);
+
   }
 
 };
@@ -160,7 +191,7 @@ const addPolicy = async()=>{
 // REMOVE POLICY
 //////////////////////////////////////////////////////
 
-const confirmDelete = (id:string) => {
+const confirmDelete = (id:string)=>{
 
   Alert.alert(
     "Remove Policy",
@@ -191,10 +222,40 @@ const removePolicy = async(id:string)=>{
 
     Alert.alert(
       "Delete failed",
-      "You may not have permission to delete policies."
+      "You may not have permission."
     );
 
   }
+
+};
+
+//////////////////////////////////////////////////////
+// POLICY DISPLAY
+//////////////////////////////////////////////////////
+
+const formatPolicy = (policy:Policy)=>{
+
+  if(policy.displayText){
+    return policy.displayText;
+  }
+
+  if(policy.originalText){
+    return policy.originalText;
+  }
+
+  if(policy.type === "receipt_required"){
+    return `📄 Receipt required above £${policy.value}`;
+  }
+
+  if(policy.type === "category_limit"){
+    return `💰 ${policy.category} limit £${policy.value}`;
+  }
+
+  if(policy.type === "submission_window"){
+    return `📅 Claims must be submitted within ${policy.value} days`;
+  }
+
+  return "Company expense policy";
 
 };
 
@@ -233,7 +294,7 @@ return(
 </View>
 
 <TextInput
-placeholder="New policy"
+placeholder="Enter Here"
 placeholderTextColor="#94A3B8"
 value={title}
 onChangeText={setTitle}
@@ -243,8 +304,13 @@ style={styles.input}
 <TouchableOpacity
 style={styles.addBtn}
 onPress={addPolicy}
+disabled={creating}
 >
-<Text style={styles.btnText}>Add Policy</Text>
+
+<Text style={styles.btnText}>
+{creating ? "Creating..." : "Add Policy"}
+</Text>
+
 </TouchableOpacity>
 
 {policies.length === 0 ? (
@@ -263,7 +329,7 @@ renderItem={({item,index})=>(
 <View style={styles.policyCard}>
 
 <Text style={styles.policyText}>
-{index+1}. {item.title}
+{index+1}. {formatPolicy(item)}
 </Text>
 
 <TouchableOpacity
