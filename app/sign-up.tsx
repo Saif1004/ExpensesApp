@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 
 import {
   createUserWithEmailAndPassword,
+  signOut,
   updateProfile
 } from "firebase/auth";
 
@@ -168,12 +169,22 @@ return;
 const orgId=snap.docs[0].id;
 
 await setDoc(doc(collection(db,"memberships")),{
-userId:uid,
-orgId,
-role:"employee",
-status:"pending",
-createdAt:serverTimestamp()
+  userId: uid,
+  orgId,
+  role:"employee",
+  status:"pending",
+  createdAt: serverTimestamp()
 });
+
+// immediately sign them out
+await signOut(auth);
+
+Alert.alert(
+  "Account Created",
+  "Your account is pending admin approval."
+);
+
+router.replace("/sign-in");
 
 }
 

@@ -19,9 +19,11 @@ import {
   View
 } from "react-native";
 
+import { SafeAreaView } from "react-native-safe-area-context";
+
 import { auth, db } from "../firebase/firebaseConfig";
 
-type PendingUser = {
+type UserItem = {
   id: string;
   userId: string;
   displayName?: string;
@@ -32,8 +34,12 @@ type PendingUser = {
 
 export default function AdminUsers() {
 
-  const [users,setUsers] = useState<PendingUser[]>([]);
+  const [users,setUsers] = useState<UserItem[]>([]);
   const [loading,setLoading] = useState(true);
+
+  const [tab,setTab] = useState<"pending"|"approved"|"rejected">("pending");
+
+  const [pendingCount,setPendingCount] = useState(0);
 
   //////////////////////////////////////////////////////
   // LOAD USERS
@@ -52,7 +58,7 @@ export default function AdminUsers() {
       }
 
       //////////////////////////////////////////////////////
-      // FIND ADMIN MEMBERSHIP
+      // ADMIN MEMBERSHIP
       //////////////////////////////////////////////////////
 
       const membershipQuery = query(
@@ -72,18 +78,18 @@ export default function AdminUsers() {
       const orgId = adminMembership.orgId;
 
       //////////////////////////////////////////////////////
-      // GET PENDING MEMBERS
+      // QUERY MEMBERS BY STATUS
       //////////////////////////////////////////////////////
 
       const q = query(
         collection(db,"memberships"),
         where("orgId","==",orgId),
-        where("status","==","pending")
+        where("status","==",tab)
       );
 
       const snap = await getDocs(q);
 
-      const list:PendingUser[] = [];
+      const list:UserItem[] = [];
 
       for(const docSnap of snap.docs){
 
@@ -108,12 +114,22 @@ export default function AdminUsers() {
 
       setUsers(list);
 
-    }catch(error){
+      //////////////////////////////////////////////////////
+      // UPDATE BADGE COUNT
+      //////////////////////////////////////////////////////
+
+      if(tab === "pending"){
+        setPendingCount(list.length);
+      }
+
+    }
+    catch(error){
 
       console.log("LOAD USERS ERROR:",error);
-      Alert.alert("Error","Could not load pending users.");
+      Alert.alert("Error","Could not load users.");
 
-    }finally{
+    }
+    finally{
 
       setLoading(false);
 
@@ -121,12 +137,55 @@ export default function AdminUsers() {
 
   };
 
+  //////////////////////////////////////////////////////
+  // LOAD BADGE COUNT
+  //////////////////////////////////////////////////////
+
+  const loadPendingCount = async () => {
+
+    try{
+
+      if(!auth.currentUser) return;
+
+      const membershipQuery = query(
+        collection(db,"memberships"),
+        where("userId","==",auth.currentUser.uid)
+      );
+
+      const membershipSnap = await getDocs(membershipQuery);
+
+      if(membershipSnap.empty) return;
+
+      const orgId = membershipSnap.docs[0].data().orgId;
+
+      const q = query(
+        collection(db,"memberships"),
+        where("orgId","==",orgId),
+        where("status","==","pending")
+      );
+
+      const snap = await getDocs(q);
+
+      setPendingCount(snap.size);
+
+    }catch(err){
+
+      console.log("COUNT ERROR:",err);
+
+    }
+
+  };
+
   useEffect(()=>{
-    loadUsers();
+    loadPendingCount();
   },[]);
 
+  useEffect(()=>{
+    loadUsers();
+  },[tab]);
+
   //////////////////////////////////////////////////////
-  // APPROVE USER
+  // APPROVE
   //////////////////////////////////////////////////////
 
   const approveUser = async (membershipId:string) => {
@@ -139,8 +198,10 @@ export default function AdminUsers() {
       );
 
       loadUsers();
+      loadPendingCount();
 
-    }catch(error){
+    }
+    catch(error){
 
       console.log("APPROVE ERROR:",error);
       Alert.alert("Error","Could not approve user.");
@@ -150,7 +211,7 @@ export default function AdminUsers() {
   };
 
   //////////////////////////////////////////////////////
-  // REJECT USER
+  // REJECT
   //////////////////////////////////////////////////////
 
   const rejectUser = async (membershipId:string) => {
@@ -163,8 +224,10 @@ export default function AdminUsers() {
       );
 
       loadUsers();
+      loadPendingCount();
 
-    }catch(error){
+    }
+    catch(error){
 
       console.log("REJECT ERROR:",error);
       Alert.alert("Error","Could not reject user.");
@@ -174,16 +237,67 @@ export default function AdminUsers() {
   };
 
   //////////////////////////////////////////////////////
+  // TAB BUTTON
+  //////////////////////////////////////////////////////
+
+  const TabButton = (name:"pending"|"approved"|"rejected",label:string) => (
+
+    <TouchableOpacity
+      style={[
+        styles.tab,
+        tab === name && styles.tabActive
+      ]}
+      onPress={()=>{
+
+        setTab(name);
+
+        if(name === "pending"){
+          setPendingCount(0);
+        }
+
+      }}
+    >
+
+      <Text style={[
+        styles.tabText,
+        tab === name && styles.tabTextActive
+      ]}>
+        {label}
+      </Text>
+
+      {name === "pending" && pendingCount > 0 && (
+
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>
+            {pendingCount}
+          </Text>
+        </View>
+
+      )}
+
+    </TouchableOpacity>
+
+  );
+
+  //////////////////////////////////////////////////////
   // UI
   //////////////////////////////////////////////////////
 
   return(
 
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
 
       <Text style={styles.title}>
         Admin Panel
       </Text>
+
+      <View style={styles.tabs}>
+
+        {TabButton("pending","Pending")}
+        {TabButton("approved","Approved")}
+        {TabButton("rejected","Rejected")}
+
+      </View>
 
       {loading ? (
 
@@ -196,7 +310,7 @@ export default function AdminUsers() {
           {users.length===0 ? (
 
             <Text style={styles.empty}>
-              No pending users
+              No {tab} users
             </Text>
 
           ):(
@@ -217,27 +331,31 @@ export default function AdminUsers() {
                   Role: {user.role}
                 </Text>
 
-                <View style={styles.buttons}>
+                {tab === "pending" && (
 
-                  <TouchableOpacity
-                    style={styles.approve}
-                    onPress={()=>approveUser(user.id)}
-                  >
-                    <Text style={styles.approveText}>
-                      Approve
-                    </Text>
-                  </TouchableOpacity>
+                  <View style={styles.buttons}>
 
-                  <TouchableOpacity
-                    style={styles.reject}
-                    onPress={()=>rejectUser(user.id)}
-                  >
-                    <Text style={styles.rejectText}>
-                      Reject
-                    </Text>
-                  </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.approve}
+                      onPress={()=>approveUser(user.id)}
+                    >
+                      <Text style={styles.approveText}>
+                        Approve
+                      </Text>
+                    </TouchableOpacity>
 
-                </View>
+                    <TouchableOpacity
+                      style={styles.reject}
+                      onPress={()=>rejectUser(user.id)}
+                    >
+                      <Text style={styles.rejectText}>
+                        Reject
+                      </Text>
+                    </TouchableOpacity>
+
+                  </View>
+
+                )}
 
               </View>
 
@@ -249,7 +367,7 @@ export default function AdminUsers() {
 
       )}
 
-    </View>
+    </SafeAreaView>
 
   );
 
@@ -267,7 +385,50 @@ const styles = StyleSheet.create({
     color:"#F8FAFC",
     fontSize:26,
     fontWeight:"bold",
-    marginBottom:20
+    marginBottom:16
+  },
+
+  tabs:{
+    flexDirection:"row",
+    marginBottom:20,
+    gap:10
+  },
+
+  tab:{
+    flex:1,
+    padding:10,
+    borderRadius:10,
+    backgroundColor:"#1E293B",
+    alignItems:"center",
+    flexDirection:"row",
+    justifyContent:"center",
+    gap:6
+  },
+
+  tabActive:{
+    backgroundColor:"#2563EB"
+  },
+
+  tabText:{
+    color:"#94A3B8",
+    fontWeight:"600"
+  },
+
+  tabTextActive:{
+    color:"#fff"
+  },
+
+  badge:{
+    backgroundColor:"#DC2626",
+    borderRadius:10,
+    paddingHorizontal:6,
+    paddingVertical:2
+  },
+
+  badgeText:{
+    color:"#fff",
+    fontSize:10,
+    fontWeight:"700"
   },
 
   card:{

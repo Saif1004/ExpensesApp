@@ -6,203 +6,330 @@ import {
   query,
   where,
 } from "firebase/firestore";
+
 import { useEffect, useState } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
 import { IconSymbol } from "../../components/ui/icon-symbol";
 import { useAuth } from "../context/AuthProvider";
 import { db } from "../firebase/firebaseConfig";
 
-
-const LAST_SEEN_KEY = "claims_last_seen";
+const LAST_SEEN_CLAIMS = "claims_last_seen";
 
 export default function TabLayout() {
+
   const insets = useSafeAreaInsets();
   const { role, authLoaded, user } = useAuth();
-  const [notificationCount, setNotificationCount] = useState(0);
 
-  useEffect(() => {
-    if (!user) return;
+  const [claimsBadge,setClaimsBadge] = useState(0);
+  const [usersBadge,setUsersBadge] = useState(0);
+  const [adminBadge,setAdminBadge] = useState(0);
 
-    let unsubscribe: any;
+  const isAdmin = role === "admin";
 
-    const setupListener = async () => {
-      const lastSeen = await AsyncStorage.getItem(LAST_SEEN_KEY);
+  //////////////////////////////////////////////////////
+  // CLAIMS BADGE
+  //////////////////////////////////////////////////////
+
+  useEffect(()=>{
+
+    if(!user) return;
+
+    let unsubscribe:any;
+
+    const setupListener = async() => {
+
+      const lastSeen = await AsyncStorage.getItem(LAST_SEEN_CLAIMS);
       const lastSeenTime = lastSeen ? Number(lastSeen) : 0;
 
-      // ✅ QUERY-SAFE LISTENER (CRITICAL FIX)
       const q = query(
-        collection(db, "claims"),
-        where("userId", "==", user.uid)
+        collection(db,"claims"),
+        where("userId","==",user.uid)
       );
 
-      unsubscribe = onSnapshot(
-        q,
-        (snapshot) => {
-          let count = 0;
+      unsubscribe = onSnapshot(q,(snapshot)=>{
 
-          snapshot.docs.forEach((doc) => {
-            const data = doc.data();
+        let count = 0;
 
-            const created =
-              data.createdAt?.seconds
-                ? data.createdAt.seconds * 1000
-                : 0;
+        snapshot.docs.forEach((doc)=>{
 
-            const updated =
-              data.statusUpdatedAt?.seconds
-                ? data.statusUpdatedAt.seconds * 1000
-                : 0;
+          const data = doc.data();
 
-            const latestTime = Math.max(created, updated);
+          const created =
+            data.createdAt?.seconds
+              ? data.createdAt.seconds * 1000
+              : 0;
 
-            if (latestTime > lastSeenTime) {
-              count++;
-            }
-          });
+          const updated =
+            data.statusUpdatedAt?.seconds
+              ? data.statusUpdatedAt.seconds * 1000
+              : 0;
 
-          setNotificationCount(count);
-        },
-        (error) => {
-          console.log("TAB LISTENER ERROR:", error);
-        }
-      );
+          const latest = Math.max(created,updated);
+
+          if(latest > lastSeenTime){
+            count++;
+          }
+
+        });
+
+        setClaimsBadge(count);
+
+      });
+
     };
 
     setupListener();
 
-    return () => {
-      if (unsubscribe) unsubscribe();
-    };
-  }, [user]);
+    return ()=> unsubscribe && unsubscribe();
 
-  if (!authLoaded) return null;
+  },[user]);
 
-  const isAdmin = role === "admin";
+  //////////////////////////////////////////////////////
+  // USERS BADGE (pending employees)
+  //////////////////////////////////////////////////////
+
+  useEffect(()=>{
+
+    if(!user || !isAdmin) return;
+
+    const q = query(
+      collection(db,"memberships"),
+      where("status","==","pending")
+    );
+
+    const unsubscribe = onSnapshot(q,(snap)=>{
+      setUsersBadge(snap.size);
+    });
+
+    return unsubscribe;
+
+  },[user,isAdmin]);
+
+  //////////////////////////////////////////////////////
+  // ADMIN BADGE (pending claims needing approval)
+  //////////////////////////////////////////////////////
+
+  useEffect(()=>{
+
+    if(!user || !isAdmin) return;
+
+    const q = query(
+      collection(db,"claims"),
+      where("status","==","pending")
+    );
+
+    const unsubscribe = onSnapshot(q,(snap)=>{
+      setAdminBadge(snap.size);
+    });
+
+    return unsubscribe;
+
+  },[user,isAdmin]);
+
+  //////////////////////////////////////////////////////
+  // CLEAR CLAIMS BADGE
+  //////////////////////////////////////////////////////
+
+  const clearClaimsBadge = async()=>{
+
+    await AsyncStorage.setItem(
+      LAST_SEEN_CLAIMS,
+      Date.now().toString()
+    );
+
+    setClaimsBadge(0);
+
+  };
+
+  //////////////////////////////////////////////////////
+  // CLEAR USERS BADGE
+  //////////////////////////////////////////////////////
+
+  const clearUsersBadge = ()=>{
+
+    setUsersBadge(0);
+
+  };
+
+  //////////////////////////////////////////////////////
+  // CLEAR ADMIN BADGE
+  //////////////////////////////////////////////////////
+
+  const clearAdminBadge = ()=>{
+
+    setAdminBadge(0);
+
+  };
+
+  if(!authLoaded) return null;
+
+  //////////////////////////////////////////////////////
+  // TABS
+  //////////////////////////////////////////////////////
 
   return (
+
     <Tabs
       screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: "#FFFFFF",
-        tabBarInactiveTintColor: "#64748B",
-        tabBarShowLabel: true,
-        tabBarStyle: {
-          backgroundColor: "#0F172A",
-          borderTopColor: "#1E293B",
-          height: 72 + insets.bottom,
-          paddingBottom: insets.bottom + 12,
-          paddingTop: 10,
+        headerShown:false,
+        tabBarActiveTintColor:"#FFFFFF",
+        tabBarInactiveTintColor:"#64748B",
+        tabBarShowLabel:true,
+
+        tabBarStyle:{
+          backgroundColor:"#0F172A",
+          borderTopColor:"#1E293B",
+          height:72 + insets.bottom,
+          paddingBottom:insets.bottom + 12,
+          paddingTop:10,
         },
-        tabBarItemStyle: {
-          justifyContent: "center",
-          alignItems: "center",
+
+        tabBarItemStyle:{
+          justifyContent:"center",
+          alignItems:"center",
         },
-        tabBarIconStyle: { transform: [{ translateY: 0 }] },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          lineHeight: 18,
-          paddingTop: 8,
-          paddingBottom: 14,
-          includeFontPadding: true,
-        },
+
+        tabBarLabelStyle:{
+          fontSize:12,
+          paddingTop:8,
+          paddingBottom:14
+        }
       }}
     >
+
+      {/* HOME */}
+
       <Tabs.Screen
         name="home"
         options={{
-          title: "Home",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol name="house.fill" size={22} color={color} />
-          ),
+          title:"Home",
+          tabBarIcon:({color})=>(
+            <IconSymbol name="house.fill" size={22} color={color}/>
+          )
         }}
       />
 
+      {/* CLAIM DETAILS HIDDEN */}
+
       <Tabs.Screen
-      name="claims/[id]"
-      options={{
-        href: null
-      }}
+        name="claims/[id]"
+        options={{ href:null }}
       />
+
+      {/* CLAIMS */}
 
       <Tabs.Screen
         name="claims"
+        listeners={{
+          tabPress: clearClaimsBadge
+        }}
         options={{
-          title: "Claims",
-          tabBarBadge:
-            notificationCount > 0 ? notificationCount : undefined,
-          tabBarIcon: ({ color }) => (
-            <IconSymbol name="doc.text.fill" size={22} color={color} />
-          ),
+          title:"Claims",
+          tabBarBadge: claimsBadge > 0 ? claimsBadge : undefined,
+          tabBarIcon:({color})=>(
+            <IconSymbol name="doc.text.fill" size={22} color={color}/>
+          )
         }}
       />
+
+      {/* PROFILE */}
 
       <Tabs.Screen
         name="profile"
         options={{
-          title: "Profile",
-          tabBarIcon: ({ color }) => (
+          title:"Profile",
+          tabBarIcon:({color})=>(
             <IconSymbol
               name="person.crop.circle.fill"
               size={22}
               color={color}
             />
-          ),
+          )
         }}
       />
+
+      {/* ADD */}
 
       <Tabs.Screen
         name="add-expense"
         options={{
-          title: "Add",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol name="plus.circle.fill" size={26} color={color} />
-          ),
+          title:"Add",
+          tabBarIcon:({color})=>(
+            <IconSymbol name="plus.circle.fill" size={26} color={color}/>
+          )
         }}
       />
+
+      {/* ANALYTICS */}
 
       <Tabs.Screen
         name="Analytics"
         options={{
-          title: "Analytics",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol
-              name="chart.bar.xaxis"
-              size={22}
-              color={color}
-            />
-          ),
+          title:"Analytics",
+          tabBarIcon:({color})=>(
+            <IconSymbol name="chart.bar.xaxis" size={22} color={color}/>
+          )
         }}
       />
 
+      {/* ADMIN */}
+
       <Tabs.Screen
         name="admin"
+        listeners={{
+          tabPress: clearAdminBadge
+        }}
         options={{
-          title: "Admin",
-          href: isAdmin ? undefined : null, // 🔥 hides for employees
-          tabBarIcon: ({ color }) => (
-            <IconSymbol name="shield.fill" size={22} color={color} />
-          ),
+          title:"Admin",
+          href:isAdmin ? undefined : null,
+          tabBarBadge: adminBadge > 0 ? adminBadge : undefined,
+          tabBarIcon:({color})=>(
+            <IconSymbol name="shield.lefthalf.fill" size={22} color={color}/>
+          )
         }}
       />
+
+      {/* USERS APPROVAL */}
+
       <Tabs.Screen
         name="AdminUsers"
+        listeners={{
+          tabPress: clearUsersBadge
+        }}
         options={{
-          title: "Users",
-          href: isAdmin ? undefined : null, // 🔥 hides for employees
-          tabBarIcon: ({ color }) => (
-            <IconSymbol name="shield.fill" size={22} color={color} />
-          ),
+          title:"Users",
+          href:isAdmin ? undefined : null,
+          tabBarBadge: usersBadge > 0 ? usersBadge : undefined,
+
+          // ⭐ better icon for approvals
+          tabBarIcon:({color})=>(
+            <IconSymbol
+              name="person.badge.clock.fill"
+              size={22}
+              color={color}
+            />
+          )
         }}
       />
+
+      {/* HELP */}
+
       <Tabs.Screen
         name="chatbot"
         options={{
-          title: "Help",
-          tabBarIcon: ({ color }) => (
-            <IconSymbol name="questionmark.circle.fill" size={22} color={color} />
-          ),
+          title:"Help",
+          tabBarIcon:({color})=>(
+            <IconSymbol
+              name="questionmark.circle.fill"
+              size={22}
+              color={color}
+            />
+          )
         }}
       />
+
     </Tabs>
+
   );
 }
