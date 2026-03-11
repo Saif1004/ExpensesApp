@@ -1,5 +1,6 @@
 import { useRouter, useSegments } from "expo-router";
 import { onAuthStateChanged, User } from "firebase/auth";
+
 import {
   collection,
   getDocs,
@@ -17,12 +18,20 @@ import React, {
 
 import { auth, db } from "../firebase/firebaseConfig";
 
+//////////////////////////////////////////////////////
+// TYPES
+//////////////////////////////////////////////////////
+
 type AuthContextType = {
   user: User | null;
   role: "admin" | "employee" | null;
   status: "approved" | "pending" | "none" | null;
   authLoaded: boolean;
 };
+
+//////////////////////////////////////////////////////
+// CONTEXT
+//////////////////////////////////////////////////////
 
 export const AuthContext = createContext<AuthContextType>({
   user: null,
@@ -34,6 +43,10 @@ export const AuthContext = createContext<AuthContextType>({
 export function useAuth() {
   return useContext(AuthContext);
 }
+
+//////////////////////////////////////////////////////
+// PROVIDER
+//////////////////////////////////////////////////////
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
 
@@ -51,7 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loadMembership = async(uid:string) => {
 
-    try {
+    try{
 
       const q = query(
         collection(db,"memberships"),
@@ -61,9 +74,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const snap = await getDocs(q);
 
       if(snap.empty){
+
         setRole("employee");
         setStatus("none");
+
         return;
+
       }
 
       const membership = snap.docs[0].data();
@@ -71,7 +87,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setRole(membership.role ?? "employee");
       setStatus(membership.status ?? "none");
 
-    } catch(err){
+    }
+    catch(err){
 
       console.log("Membership load error:",err);
 
@@ -88,7 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(()=>{
 
-    const unsub = onAuthStateChanged(auth, async(firebaseUser)=>{
+    const unsubscribe = onAuthStateChanged(auth, async(firebaseUser)=>{
 
       if(firebaseUser){
 
@@ -109,7 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     });
 
-    return unsub;
+    return unsubscribe;
 
   },[]);
 
@@ -135,10 +152,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       return;
+
     }
 
     //////////////////////////////////////////////////////
-    // BLOCK PENDING USERS
+    // PENDING USERS BLOCK
     //////////////////////////////////////////////////////
 
     if(status === "pending"){
@@ -148,6 +166,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       return;
+
     }
 
     //////////////////////////////////////////////////////
@@ -155,7 +174,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     //////////////////////////////////////////////////////
 
     if(user && inAuth){
+
       router.replace("/(tabs)/home");
+
     }
 
   },[user,status,authLoaded,segments]);
@@ -165,19 +186,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   //////////////////////////////////////////////////////
 
   const value = useMemo(()=>({
+
     user,
     role,
     status,
     authLoaded
+
   }),[user,role,status,authLoaded]);
 
   if(!authLoaded) return null;
 
   return (
+
     <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
+
   );
+
 }
 
 export default AuthProvider;

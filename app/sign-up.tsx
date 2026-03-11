@@ -13,8 +13,8 @@ import {
   getDocs,
   query,
   serverTimestamp,
-  setDoc,
-  where
+  where,
+  writeBatch
 } from "firebase/firestore";
 
 import { useState } from "react";
@@ -37,7 +37,6 @@ const [username,setUsername] = useState("");
 const [email,setEmail] = useState("");
 const [password,setPassword] = useState("");
 const [confirmPassword,setConfirmPassword] = useState("");
-const [role,setRole] = useState("employee");
 const [organisation,setOrganisation] = useState("");
 
 //////////////////////////////////////////////////////
@@ -60,15 +59,16 @@ return !snap.empty;
 // SIGN UP
 //////////////////////////////////////////////////////
 
-const handleSignUp=async()=>{
+const handleSignUp = async () => {
 
 try{
 
 const trimmedUsername=username.trim();
 const normalizedUsername=trimmedUsername.toLowerCase();
 const trimmedEmail=email.trim();
+const trimmedOrg=organisation.trim();
 
-if(!trimmedUsername||!trimmedEmail||!password||!confirmPassword){
+if(!trimmedUsername||!trimmedEmail||!password||!confirmPassword||!trimmedOrg){
 Alert.alert("Missing details");
 return;
 }
@@ -84,7 +84,7 @@ return;
 }
 
 ////////////////////////////////////////////////////
-//// CREATE AUTH USER
+// CREATE AUTH USER
 ////////////////////////////////////////////////////
 
 const cred=await createUserWithEmailAndPassword(
@@ -100,10 +100,26 @@ displayName:trimmedUsername
 });
 
 ////////////////////////////////////////////////////
-//// CREATE USER PROFILE
+// CHECK IF ORGANISATION EXISTS
 ////////////////////////////////////////////////////
 
-await setDoc(doc(db,"users",uid),{
+const orgQuery=query(
+collection(db,"organisations"),
+where("name","==",trimmedOrg)
+);
+
+const orgSnap=await getDocs(orgQuery);
+
+////////////////////////////////////////////////////
+// START BATCH
+////////////////////////////////////////////////////
+
+const batch=writeBatch(db);
+
+const userRef=doc(db,"users",uid);
+const usernameRef=doc(db,"usernames",normalizedUsername);
+
+batch.set(userRef,{
 uid,
 email:trimmedEmail,
 username:normalizedUsername,
@@ -111,34 +127,26 @@ displayName:trimmedUsername,
 createdAt:serverTimestamp()
 });
 
-////////////////////////////////////////////////////
-//// USERNAME LOOKUP
-////////////////////////////////////////////////////
-
-await setDoc(doc(db,"usernames",normalizedUsername),{
+batch.set(usernameRef,{
 uid
 });
 
 ////////////////////////////////////////////////////
-//// ADMIN CREATES ORGANISATION
+// NEW ORGANISATION → ADMIN
 ////////////////////////////////////////////////////
 
-if(role==="admin"){
-
-if(!organisation){
-Alert.alert("Enter organisation name");
-return;
-}
+if(orgSnap.empty){
 
 const orgRef=doc(collection(db,"organisations"));
+const membershipRef=doc(collection(db,"memberships"));
 
-await setDoc(orgRef,{
-name:organisation,
+batch.set(orgRef,{
+name:trimmedOrg,
 ownerId:uid,
 createdAt:serverTimestamp()
 });
 
-await setDoc(doc(collection(db,"memberships")),{
+batch.set(membershipRef,{
 userId:uid,
 orgId:orgRef.id,
 role:"admin",
@@ -146,49 +154,40 @@ status:"approved",
 createdAt:serverTimestamp()
 });
 
-}
+await batch.commit();
 
-////////////////////////////////////////////////////
-//// EMPLOYEE REQUEST
-////////////////////////////////////////////////////
-
-if(role==="employee"){
-
-const q=query(
-collection(db,"organisations"),
-where("name","==",organisation)
-);
-
-const snap=await getDocs(q);
-
-if(snap.empty){
-Alert.alert("Organisation not found");
-return;
-}
-
-const orgId=snap.docs[0].id;
-
-await setDoc(doc(collection(db,"memberships")),{
-  userId: uid,
-  orgId,
-  role:"employee",
-  status:"pending",
-  createdAt: serverTimestamp()
-});
-
-// immediately sign them out
-await signOut(auth);
-
-Alert.alert(
-  "Account Created",
-  "Your account is pending admin approval."
-);
+Alert.alert("Organisation created. You are the admin.");
 
 router.replace("/sign-in");
 
+return;
+
 }
 
-Alert.alert("Account created");
+////////////////////////////////////////////////////
+// EXISTING ORGANISATION → EMPLOYEE
+////////////////////////////////////////////////////
+
+const orgId=orgSnap.docs[0].id;
+
+const membershipRef=doc(collection(db,"memberships"));
+
+batch.set(membershipRef,{
+userId:uid,
+orgId,
+role:"employee",
+status:"pending",
+createdAt:serverTimestamp()
+});
+
+await batch.commit();
+
+await signOut(auth);
+
+Alert.alert(
+"Account Created",
+"Your account is pending admin approval."
+);
 
 router.replace("/sign-in");
 
@@ -220,34 +219,6 @@ backgroundColor:"rgba(31,41,55,0.9)"
 <Text style={tw`text-slate-100 text-2xl font-bold mb-4`}>
 Create Account
 </Text>
-
-<View style={tw`flex-row mb-4`}>
-
-<TouchableOpacity
-style={[
-tw`flex-1 py-2 rounded-l-full items-center`,
-role==="employee"?tw`bg-blue-500`:tw`bg-slate-700`
-]}
-onPress={()=>setRole("employee")}
->
-<Text style={tw`text-white text-xs font-semibold`}>
-Employee
-</Text>
-</TouchableOpacity>
-
-<TouchableOpacity
-style={[
-tw`flex-1 py-2 rounded-r-full items-center`,
-role==="admin"?tw`bg-blue-500`:tw`bg-slate-700`
-]}
-onPress={()=>setRole("admin")}
->
-<Text style={tw`text-white text-xs font-semibold`}>
-Admin
-</Text>
-</TouchableOpacity>
-
-</View>
 
 <TextInput
 value={organisation}
