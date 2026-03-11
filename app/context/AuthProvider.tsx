@@ -1,13 +1,20 @@
 import { useRouter, useSegments } from "expo-router";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  query,
+  where
+} from "firebase/firestore";
+
 import React, {
   createContext,
   useContext,
   useEffect,
   useMemo,
-  useState,
+  useState
 } from "react";
+
 import { auth, db } from "../firebase/firebaseConfig";
 
 type AuthContextType = {
@@ -19,7 +26,7 @@ type AuthContextType = {
 export const AuthContext = createContext<AuthContextType>({
   user: null,
   role: null,
-  authLoaded: false,
+  authLoaded: false
 });
 
 export function useAuth() {
@@ -27,6 +34,7 @@ export function useAuth() {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<"admin" | "employee" | null>(null);
   const [authLoaded, setAuthLoaded] = useState(false);
@@ -34,55 +42,117 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const segments = useSegments();
 
-  // 🔥 Auth + Role Fetch
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+  //////////////////////////////////////////////////////
+  // LOAD USER ROLE FROM MEMBERSHIP
+  //////////////////////////////////////////////////////
+
+  const loadRole = async (uid: string) => {
+
+    try {
+
+      const q = query(
+        collection(db,"memberships"),
+        where("userId","==",uid)
+      );
+
+      const snap = await getDocs(q);
+
+      if(!snap.empty){
+
+        const membership = snap.docs[0].data();
+
+        setRole(membership.role ?? "employee");
+
+      } else {
+
+        setRole("employee");
+
+      }
+
+    } catch(err){
+
+      console.log("Role fetch error:",err);
+      setRole("employee");
+
+    }
+
+  };
+
+  //////////////////////////////////////////////////////
+  // AUTH LISTENER
+  //////////////////////////////////////////////////////
+
+  useEffect(()=>{
+
+    const unsub = onAuthStateChanged(auth, async(firebaseUser)=>{
+
       setUser(firebaseUser);
 
-      if (firebaseUser) {
-        try {
-          const snap = await getDoc(doc(db, "users", firebaseUser.uid));
-          if (snap.exists()) {
-            setRole(snap.data().role ?? "employee");
-          } else {
-            setRole("employee");
-          }
-        } catch {
-          setRole("employee");
-        }
+      if(firebaseUser){
+
+        await loadRole(firebaseUser.uid);
+
       } else {
+
         setRole(null);
+
       }
 
       setAuthLoaded(true);
+
     });
 
     return unsub;
-  }, []);
 
-  // 🔥 Route Protection
-  useEffect(() => {
-    if (!authLoaded) return;
+  },[]);
+
+  //////////////////////////////////////////////////////
+  // ROUTE PROTECTION
+  //////////////////////////////////////////////////////
+
+  useEffect(()=>{
+
+    if(!authLoaded) return;
 
     const inTabs = segments[0] === "(tabs)";
-    const inAuthScreens =
-      segments[0] === "sign-in" || segments[0] === "sign-up";
+    const inAuth = segments[0] === "sign-in" || segments[0] === "sign-up";
 
-    if (user) {
-      if (!inTabs) router.replace("/(tabs)/home");
+    if(user){
+
+      if(inAuth){
+        router.replace("/(tabs)/home");
+      }
+
     } else {
-      if (inTabs) router.replace("/home");
-    }
-  }, [user, authLoaded, segments, router]);
 
-  const value = useMemo(
-    () => ({ user, role, authLoaded }),
-    [user, role, authLoaded]
+      if(inTabs){
+        router.replace("/sign-in");
+      }
+
+    }
+
+  },[user,authLoaded,segments]);
+
+  //////////////////////////////////////////////////////
+  // CONTEXT VALUE
+  //////////////////////////////////////////////////////
+
+  const value = useMemo(()=>({
+
+    user,
+    role,
+    authLoaded
+
+  }),[user,role,authLoaded]);
+
+  if(!authLoaded) return null;
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
   );
 
-  if (!authLoaded) return null;
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export default AuthProvider;
