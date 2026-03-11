@@ -25,9 +25,12 @@ import { auth, db } from "../../app/firebase/firebaseConfig";
 import { ThemedText } from "../../components/themed-text";
 import { ThemedView } from "../../components/themed-view";
 
+import { useAuth } from "../context/AuthProvider";
+
 export default function ProfileScreen() {
 
   const router = useRouter();
+  const { role } = useAuth();
 
   const [username,setUsername] = useState("");
   const [loading,setLoading] = useState(true);
@@ -76,41 +79,27 @@ export default function ProfileScreen() {
 
   const resetPassword = async () => {
 
-  if(!user || !user.email){
-    Alert.alert("Error","No email associated with this account.");
-    return;
-  }
+    if(!user || !user.email){
+      Alert.alert("Error","No email associated with this account.");
+      return;
+    }
 
-  const email = user.email;
+    try{
 
-  Alert.alert(
-    "Reset Password",
-    "Send password reset email?",
-    [
-      {text:"Cancel",style:"cancel"},
-      {
-        text:"Send",
-        onPress:async ()=>{
+      await sendPasswordResetEmail(auth,user.email);
 
-          try{
+      Alert.alert(
+        "Password Reset",
+        "Check your email to reset your password."
+      );
 
-            await sendPasswordResetEmail(auth,email);
+    }catch{
 
-            Alert.alert(
-              "Password Reset",
-              "Check your email to reset your password."
-            );
+      Alert.alert("Error","Could not send reset email");
 
-          }catch{
-            Alert.alert("Error","Could not send reset email");
-          }
+    }
 
-        }
-      }
-    ]
-  );
-
-};
+  };
 
   //////////////////////////////////////////////////////
   // DELETE ACCOUNT
@@ -133,9 +122,7 @@ export default function ProfileScreen() {
             try{
 
               setDeleting(true);
-
               await deleteUser(user);
-
               router.replace("/");
 
             }catch{
@@ -208,16 +195,12 @@ export default function ProfileScreen() {
         Profile
       </ThemedText>
 
-      {/* AVATAR */}
-
       <View style={styles.avatarContainer}>
 
         <View style={styles.avatar}>
-
           <ThemedText style={styles.avatarText}>
             {username?.charAt(0)?.toUpperCase() || "U"}
           </ThemedText>
-
         </View>
 
         <ThemedText style={styles.name}>
@@ -230,7 +213,35 @@ export default function ProfileScreen() {
 
       </View>
 
-      {/* ACCOUNT CARD */}
+      {/* ADMIN TOOLS */}
+
+      {role === "admin" && (
+
+        <ThemedView style={styles.card}>
+
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={()=>router.push("../admin/manage-policies")}
+          >
+            <ThemedText style={styles.actionText}>
+              Manage Policies
+            </ThemedText>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={()=>router.push("../admin/manage-employees")}
+          >
+            <ThemedText style={styles.actionText}>
+              Manage Employees
+            </ThemedText>
+          </TouchableOpacity>
+
+        </ThemedView>
+
+      )}
+
+      {/* ACCOUNT */}
 
       <ThemedView style={styles.card}>
 
@@ -248,29 +259,23 @@ export default function ProfileScreen() {
           onPress={removeAccount}
           disabled={deleting}
         >
-
           {deleting
             ? <ActivityIndicator color="#fff"/>
             : <ThemedText style={styles.deleteText}>Delete Account</ThemedText>
           }
-
         </TouchableOpacity>
 
       </ThemedView>
-
-      {/* LOGOUT */}
 
       <TouchableOpacity
         style={styles.logoutButton}
         onPress={logout}
         disabled={loggingOut}
       >
-
         {loggingOut
           ? <ActivityIndicator color="#fff"/>
           : <ThemedText style={styles.logoutText}>Log Out</ThemedText>
         }
-
       </TouchableOpacity>
 
     </ThemedView>
@@ -278,10 +283,6 @@ export default function ProfileScreen() {
   );
 
 }
-
-//////////////////////////////////////////////////////
-// STYLES
-//////////////////////////////////////////////////////
 
 const styles = StyleSheet.create({
 
