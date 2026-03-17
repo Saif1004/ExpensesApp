@@ -27,11 +27,13 @@ import {
 } from "react-native";
 
 import tw from "twrnc";
+import { useAuth } from "./context/AuthProvider"; // 🔥 IMPORTANT
 import { auth, db } from "./firebase/firebaseConfig";
 
 export default function SignUp(){
 
 const router = useRouter();
+const { refreshMembership } = useAuth(); // 🔥 KEY FIX
 
 const [username,setUsername] = useState("");
 const [email,setEmail] = useState("");
@@ -65,8 +67,11 @@ try{
 
 const trimmedUsername=username.trim();
 const normalizedUsername=trimmedUsername.toLowerCase();
+
 const trimmedEmail=email.trim();
+
 const trimmedOrg=organisation.trim();
+const normalizedOrg=trimmedOrg.toLowerCase(); // 🔥 FIX
 
 if(!trimmedUsername||!trimmedEmail||!password||!confirmPassword||!trimmedOrg){
 Alert.alert("Missing details");
@@ -100,12 +105,12 @@ displayName:trimmedUsername
 });
 
 ////////////////////////////////////////////////////
-// CHECK IF ORGANISATION EXISTS
+// CHECK ORG (CASE INSENSITIVE)
 ////////////////////////////////////////////////////
 
 const orgQuery=query(
 collection(db,"organisations"),
-where("name","==",trimmedOrg)
+where("nameLower","==",normalizedOrg) // 🔥 FIX
 );
 
 const orgSnap=await getDocs(orgQuery);
@@ -132,7 +137,7 @@ uid
 });
 
 ////////////////////////////////////////////////////
-// NEW ORGANISATION → ADMIN
+// NEW ORG → ADMIN
 ////////////////////////////////////////////////////
 
 if(orgSnap.empty){
@@ -142,6 +147,7 @@ const membershipRef=doc(collection(db,"memberships"));
 
 batch.set(orgRef,{
 name:trimmedOrg,
+nameLower:normalizedOrg, // 🔥 FIX
 ownerId:uid,
 createdAt:serverTimestamp()
 });
@@ -156,16 +162,20 @@ createdAt:serverTimestamp()
 
 await batch.commit();
 
+// 🔥 CRITICAL FIX (no logout needed anymore)
+await refreshMembership();
+
 Alert.alert("Organisation created. You are the admin.");
 
-router.replace("/sign-in");
+// 🔥 GO STRAIGHT TO APP
+router.replace("/(tabs)/home");
 
 return;
 
 }
 
 ////////////////////////////////////////////////////
-// EXISTING ORGANISATION → EMPLOYEE
+// EXISTING ORG → EMPLOYEE
 ////////////////////////////////////////////////////
 
 const orgId=orgSnap.docs[0].id;
@@ -182,6 +192,7 @@ createdAt:serverTimestamp()
 
 await batch.commit();
 
+// employee must logout (pending approval)
 await signOut(auth);
 
 Alert.alert(

@@ -27,12 +27,22 @@ type Claim = {
 
 export default function HomeScreen() {
 
-  const { user } = useAuth();
+  const { user, refreshMembership } = useAuth(); // 🔥 ADDED
 
   const [monthlySpend,setMonthlySpend] = useState(0);
   const [pending,setPending] = useState(0);
   const [approved,setApproved] = useState(0);
   const [recent,setRecent] = useState<Claim[]>([]);
+
+  /////////////////////////////////////////////////////////
+  // 🔥 FORCE REFRESH ROLE ON LOAD
+  /////////////////////////////////////////////////////////
+
+  useEffect(()=>{
+    if(user){
+      refreshMembership(); // 🔥 THIS FIXES YOUR ISSUE
+    }
+  },[user]);
 
   /////////////////////////////////////////////////////////
   // Greeting
@@ -250,10 +260,7 @@ export default function HomeScreen() {
           <TouchableOpacity
             key={claim.id}
             style={styles.activityCard}
-
-            // 🔥 navigate to the exact claim
             onPress={()=>router.push(`/claims/${claim.id}`)}
-
           >
 
             <View>

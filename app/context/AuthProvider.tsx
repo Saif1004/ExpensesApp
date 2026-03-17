@@ -27,6 +27,7 @@ type AuthContextType = {
   role: "admin" | "employee" | null;
   status: "approved" | "pending" | "none" | null;
   authLoaded: boolean;
+  refreshMembership: () => Promise<void>;
 };
 
 //////////////////////////////////////////////////////
@@ -37,7 +38,8 @@ export const AuthContext = createContext<AuthContextType>({
   user: null,
   role: null,
   status: null,
-  authLoaded: false
+  authLoaded: false,
+  refreshMembership: async () => {}
 });
 
 export function useAuth() {
@@ -100,6 +102,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   //////////////////////////////////////////////////////
+  // REFRESH MEMBERSHIP
+  //////////////////////////////////////////////////////
+
+  const refreshMembership = async () => {
+    if(user){
+      await loadMembership(user.uid);
+    }
+  };
+
+  //////////////////////////////////////////////////////
   // AUTH LISTENER
   //////////////////////////////////////////////////////
 
@@ -136,14 +148,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(()=>{
 
-    if(!authLoaded) return;
+    if(!authLoaded || (user && role === null)) return;
 
     const inTabs = segments[0] === "(tabs)";
     const inAuth = segments[0] === "sign-in" || segments[0] === "sign-up";
-
-    //////////////////////////////////////////////////////
-    // NOT LOGGED IN
-    //////////////////////////////////////////////////////
 
     if(!user){
 
@@ -155,10 +163,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     }
 
-    //////////////////////////////////////////////////////
-    // PENDING USERS BLOCK
-    //////////////////////////////////////////////////////
-
     if(status === "pending"){
 
       if(inTabs){
@@ -169,17 +173,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     }
 
-    //////////////////////////////////////////////////////
-    // APPROVED USERS
-    //////////////////////////////////////////////////////
-
     if(user && inAuth){
 
       router.replace("/(tabs)/home");
 
     }
 
-  },[user,status,authLoaded,segments]);
+  },[user,status,authLoaded,role,segments]);
 
   //////////////////////////////////////////////////////
   // CONTEXT VALUE
@@ -190,11 +190,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     role,
     status,
-    authLoaded
+    authLoaded,
+    refreshMembership
 
   }),[user,role,status,authLoaded]);
 
-  if(!authLoaded) return null;
+  //////////////////////////////////////////////////////
+  // BLOCK UNTIL ROLE READY
+  //////////////////////////////////////////////////////
+
+const roleLoaded = role !== null || !user;
+
+if(!authLoaded || !roleLoaded){
+  return null;
+}
 
   return (
 
