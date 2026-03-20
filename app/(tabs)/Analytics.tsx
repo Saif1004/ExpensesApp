@@ -12,6 +12,7 @@ import {
   Dimensions,
   ScrollView,
   StyleSheet,
+  TouchableOpacity,
   View
 } from "react-native";
 
@@ -128,7 +129,7 @@ export default function AnalyticsScreen() {
       setStats(newStats);
       setLoading(false);
 
-      generateAIInsights(newStats);
+      // ❌ REMOVED AUTO AI CALL
 
     });
 
@@ -241,6 +242,21 @@ export default function AnalyticsScreen() {
           </ThemedText>
         )}
 
+        {/* 🔥 BUTTON ADDED */}
+        <TouchableOpacity
+          onPress={()=>generateAIInsights(stats)}
+          style={{
+            backgroundColor:"#2563EB",
+            padding:12,
+            borderRadius:10,
+            marginTop:10
+          }}
+        >
+          <ThemedText style={{color:"#FFF",textAlign:"center"}}>
+            Generate AI Insight
+          </ThemedText>
+        </TouchableOpacity>
+
       </View>
 
       {loading ? (
@@ -249,8 +265,6 @@ export default function AnalyticsScreen() {
         </View>
       ) : (
         <>
-
-          {/* KPI CARDS */}
 
           <View style={styles.grid}>
 
@@ -292,32 +306,32 @@ export default function AnalyticsScreen() {
 
           </View>
 
-          {/* STATUS CHART */}
-
           <ThemedText style={styles.chartTitle}>
             Claim Status
           </ThemedText>
 
           <BarChart
             data={{
-              labels:["Approved","Pending","Rejected"],
-              datasets:[{
-                data:[
-                  stats.approved,
-                  stats.pending,
-                  stats.rejected
-                ]
-              }]
+              labels: ["Approved", "Pending", "Rejected"],
+              datasets: [
+                {
+                  data: [
+                    stats.approved,
+                    stats.pending,
+                    stats.rejected
+                  ]
+                }
+              ]
             }}
-            width={screenWidth-40}
+            width={screenWidth - 40}
             height={220}
             chartConfig={chartConfig}
             fromZero
             showValuesOnTopOfBars
+            yAxisLabel=""
+            yAxisSuffix=""
             style={styles.chart}
           />
-
-          {/* CATEGORY CHART */}
 
           <ThemedText style={styles.chartTitle}>
             Claims by Category

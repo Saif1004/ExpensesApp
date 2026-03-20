@@ -2,28 +2,20 @@ const { app } = require("@azure/functions");
 const OpenAI = require("openai");
 const admin = require("firebase-admin");
 
-////////////////////////////////////////////////////
-// Firebase initialization
-////////////////////////////////////////////////////
-
 if (!admin.apps.length) {
   admin.initializeApp();
 }
 
 const db = admin.firestore();
 
-////////////////////////////////////////////////////
-// OpenAI client
-////////////////////////////////////////////////////
-
 const client = new OpenAI({
   apiKey: process.env.AZURE_OPENAI_KEY,
   baseURL: `${process.env.AZURE_OPENAI_ENDPOINT}/openai/v1`
 });
 
-////////////////////////////////////////////////////
-// Chatbot function
-////////////////////////////////////////////////////
+const MAX_CREDITS = 100;
+const COOLDOWN = 2000;
+const MAX_REQUESTS_PER_MINUTE = 20;
 
 app.http("chatbot", {
   methods: ["POST"],
@@ -33,146 +25,128 @@ app.http("chatbot", {
 
     try {
 
-      const { message, userId } = await request.json();
+      const authHeader = request.headers.get("authorization");
 
-      if (!message) {
+      if (!authHeader) {
+        return { status:401, jsonBody:{success:false,error:"Unauthorized"} };
+      }
+
+      const token = authHeader.split("Bearer ")[1];
+      const decoded = await admin.auth().verifyIdToken(token);
+      const userId = decoded.uid;
+
+      const { message, history=[] } = await request.json();
+
+      const userRef = db.collection("users").doc(userId);
+
+      if(message==="__getCredits__"){
+        const snap = await userRef.get();
         return {
-          status: 400,
-          jsonBody: { error: "Message required" }
+          status:200,
+          jsonBody:{
+            success:true,
+            remaining:snap.data()?.aiCredits ?? MAX_CREDITS
+          }
         };
       }
 
       ////////////////////////////////////////////////////
-      // Fetch user's claims from Firestore
+      // CLAIM DATA (FULL)
       ////////////////////////////////////////////////////
 
-      let claimsContext = "No claim data available.";
+      const snapshot = await db
+        .collection("claims")
+        .where("userId","==",userId)
+        .get();
 
-      if (userId) {
+      const claims = snapshot.docs.map(d=>d.data());
 
-        const snapshot = await db
-          .collection("claims")
-          .where("userId", "==", userId)
-          .limit(20)
-          .get();
+      let claimsContext = "User has no claims.";
 
-        const claims = snapshot.docs.map(doc => doc.data());
+      if(claims.length){
 
-        const pending =
-          claims.filter(c => c.status === "pending").length;
+        const total = claims.reduce((s,c)=>s+(Number(c.amount)||0),0);
 
-        const approved =
-          claims.filter(c => c.status === "approved").length;
+        const approved = claims.filter(c=>c.status==="approved").length;
+        const pending = claims.filter(c=>c.status==="pending").length;
+        const rejected = claims.filter(c=>c.status==="rejected").length;
 
-        const rejected =
-          claims.filter(c => c.status === "rejected").length;
-
-        const totalSpend =
-          claims.reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
-
-        const categories = {};
-
-        claims.forEach(c => {
-          if (!categories[c.category]) {
-            categories[c.category] = 0;
-          }
-          categories[c.category]++;
-        });
+        const recent = claims.slice(0,5)
+          .map(c=>`${c.category} £${c.amount} (${c.status})`)
+          .join("\n");
 
         claimsContext = `
-User claim summary
+USER CLAIM DATA:
 
-Pending claims: ${pending}
-Approved claims: ${approved}
-Rejected claims: ${rejected}
+Total Spend: £${total}
+Approved: ${approved}
+Pending: ${pending}
+Rejected: ${rejected}
 
-Total recent spending: £${totalSpend}
-
-Category breakdown:
-${Object.entries(categories)
-  .map(([k,v]) => `${k}: ${v}`)
-  .join("\n")}
-
-Recent claims:
-${claims.slice(0,5).map(c =>
-`${c.merchant} £${c.amount} (${c.category}) - ${c.status}`
-).join("\n")}
+Recent Claims:
+${recent}
 `;
       }
 
       ////////////////////////////////////////////////////
-      // OpenAI request
+      // AI CALL
       ////////////////////////////////////////////////////
 
-      const response =
-        await client.chat.completions.create({
-
-        model: process.env.AZURE_OPENAI_DEPLOYMENT,
-
-        messages: [
-
+      const aiRes = await client.chat.completions.create({
+        model:process.env.AZURE_OPENAI_DEPLOYMENT,
+        messages:[
           {
-            role: "system",
-            content: `
-You are a helpful assistant for an expense management mobile app.
+            role:"system",
+            content:`
+You are a smart expense assistant.
 
-You help users with:
-• submitting expense claims
-• receipt scanning
-• claim approvals
-• company expense policies
-• understanding their spending
+IMPORTANT:
+- You DO have access to the user's financial data below
+- NEVER say you don't have access
+- ALWAYS use the data when answering
 
-Company expense policy:
-
-Meals limit: £50
-Technology limit: £500
-Travel allowed
-Office supplies allowed
-Claims older than 30 days rejected
-Duplicate claims rejected
-
-Be concise, helpful and friendly.
-Never invent policy rules.
+Policy:
+Meals £50
+Tech £500
 `
           },
-
-          {
-            role: "system",
-            content: claimsContext
-          },
-
-          {
-            role: "user",
-            content: message
-          }
-
+          { role:"system", content:claimsContext },
+          ...history.map(m=>({
+            role:m.sender==="user"?"user":"assistant",
+            content:m.text
+          })),
+          { role:"user", content:message }
         ],
-
-        temperature: 0.3,
-        max_tokens: 200
-
+        temperature:0.3,
+        max_tokens:200
       });
 
-      const reply =
-        response?.choices?.[0]?.message?.content ||
-        "Sorry, I couldn't answer that.";
+      const reply = aiRes.choices[0].message.content;
+
+      await userRef.update({
+        aiCredits: admin.firestore.FieldValue.increment(-1)
+      });
+
+      const snap = await userRef.get();
 
       return {
-        status: 200,
-        jsonBody: { reply }
+        status:200,
+        jsonBody:{
+          success:true,
+          reply,
+          remaining:snap.data().aiCredits
+        }
       };
 
-    } catch (error) {
-
-      context.log("CHATBOT ERROR:", error);
-
+    } catch (err) {
       return {
-        status: 500,
-        jsonBody: {
-          error: "Chatbot failed"
+        status:200,
+        jsonBody:{
+          success:false,
+          error:err.message
         }
       };
     }
+
   }
 });

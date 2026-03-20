@@ -149,6 +149,7 @@ batch.set(orgRef,{
 name:trimmedOrg,
 nameLower:normalizedOrg, // 🔥 FIX
 ownerId:uid,
+aiUsage: 0,
 createdAt:serverTimestamp()
 });
 

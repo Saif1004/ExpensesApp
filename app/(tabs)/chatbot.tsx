@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  Alert,
   Animated,
   FlatList,
   Keyboard,
@@ -37,6 +38,9 @@ export default function ChatbotScreen() {
   const flatListRef = useRef<FlatList>(null);
 
   const [botTyping,setBotTyping] = useState(false);
+  const [sending,setSending] = useState(false);
+
+  const lastMessageRef = useRef<string>("");
 
   const [messages,setMessages] = useState<ChatMessage[]>([
     {
@@ -47,19 +51,43 @@ export default function ChatbotScreen() {
   ]);
 
   const [input,setInput] = useState("");
+  const [remainingAI,setRemainingAI] = useState<number | null>(null);
 
   /////////////////////////////////////////////////////////
-  // AUTO SCROLL
+  // LOAD CREDITS
   /////////////////////////////////////////////////////////
 
-  useEffect(()=>{
-    const timer=setTimeout(()=>{
-      flatListRef.current?.scrollToEnd({animated:true});
-    },120);
+  useEffect(() => {
 
-    return ()=>clearTimeout(timer);
+    const loadCredits = async () => {
 
-  },[messages,botTyping]);
+      if (!user) return;
+
+      try {
+
+        const token = await user.getIdToken();
+
+        const res = await fetch(CHATBOT_URL,{
+          method:"POST",
+          headers:{
+            "Content-Type":"application/json",
+            "Authorization":`Bearer ${token}`
+          },
+          body:JSON.stringify({ message:"__getCredits__" })
+        });
+
+        const data = await res.json();
+
+        if(data.remaining !== undefined){
+          setRemainingAI(data.remaining);
+        }
+
+      } catch {}
+    };
+
+    loadCredits();
+
+  },[user]);
 
   /////////////////////////////////////////////////////////
   // SEND MESSAGE
@@ -67,8 +95,15 @@ export default function ChatbotScreen() {
 
   const sendMessage = async (preset?:string)=>{
 
+    if(sending || !user) return;
+
     const text = preset || input.trim();
     if(!text) return;
+
+    if(text === lastMessageRef.current) return;
+
+    lastMessageRef.current = text;
+    setSending(true);
 
     const userMessage:ChatMessage={
       id:Date.now().toString(),
@@ -76,37 +111,48 @@ export default function ChatbotScreen() {
       sender:"user"
     };
 
-    setMessages(prev=>[...prev,userMessage]);
+    const updatedMessages = [...messages,userMessage];
+
+    setMessages(updatedMessages);
     setInput("");
     setBotTyping(true);
 
     try{
 
+      const token = await user.getIdToken();
+
       const response = await fetch(CHATBOT_URL,{
         method:"POST",
         headers:{
-          "Content-Type":"application/json"
+          "Content-Type":"application/json",
+          "Authorization":`Bearer ${token}`
         },
         body:JSON.stringify({
           message:text,
-          userId:user?.uid
+          history: updatedMessages.slice(-10)
         })
       });
 
       const data=await response.json();
 
+      if(!data.success){
+        Alert.alert("Error",data.error || "Something went wrong");
+        return;
+      }
+
+      if(data.remaining !== undefined){
+        setRemainingAI(data.remaining);
+      }
+
       const botMessage:ChatMessage={
         id:`${Date.now()}bot`,
-        text:data?.reply || "Sorry, I couldn't help.",
+        text:data.reply,
         sender:"bot"
       };
 
-      setBotTyping(false);
       setMessages(prev=>[...prev,botMessage]);
 
     }catch{
-
-      setBotTyping(false);
 
       setMessages(prev=>[
         ...prev,
@@ -117,6 +163,9 @@ export default function ChatbotScreen() {
         }
       ]);
 
+    }finally{
+      setBotTyping(false);
+      setSending(false);
     }
 
   };
@@ -155,14 +204,6 @@ export default function ChatbotScreen() {
   };
 
   /////////////////////////////////////////////////////////
-  // RENDER CHAT ITEM
-  /////////////////////////////////////////////////////////
-
-  const renderItem = ({item}:{item:ChatMessage})=>{
-    return <MessageBubble item={item}/>;
-  };
-
-  /////////////////////////////////////////////////////////
   // UI
   /////////////////////////////////////////////////////////
 
@@ -170,15 +211,11 @@ export default function ChatbotScreen() {
 
     <SafeAreaView style={styles.safe}>
 
-      <TouchableWithoutFeedback
-        onPress={Keyboard.dismiss}
-        accessible={false}
-      >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
 
         <KeyboardAvoidingView
           style={{flex:1}}
           behavior={Platform.OS==="ios"?"padding":"height"}
-          keyboardVerticalOffset={90}
         >
 
           <View style={styles.container}>
@@ -187,7 +224,19 @@ export default function ChatbotScreen() {
               Virtual Assistant
             </ThemedText>
 
-            {/* QUICK QUESTIONS */}
+            {remainingAI !== null && (
+              <ThemedText style={{
+                textAlign:"center",
+                marginBottom:8,
+                fontSize:12,
+                color:
+                  remainingAI > 30 ? "#22C55E"
+                  : remainingAI > 10 ? "#F59E0B"
+                  : "#EF4444"
+              }}>
+                AI Credits: {remainingAI} / 100
+              </ThemedText>
+            )}
 
             <View style={styles.quickRow}>
               {QUICK_QUESTIONS.map(q=>(
@@ -195,6 +244,7 @@ export default function ChatbotScreen() {
                   key={q}
                   style={styles.quickBtn}
                   onPress={()=>sendMessage(q)}
+                  disabled={sending}
                 >
                   <ThemedText style={styles.quickText}>
                     {q}
@@ -203,22 +253,19 @@ export default function ChatbotScreen() {
               ))}
             </View>
 
-            {/* CHAT */}
-
             <FlatList
               ref={flatListRef}
               data={messages}
               keyExtractor={(item)=>item.id}
-              renderItem={renderItem}
+              renderItem={({item})=><MessageBubble item={item}/>}
               style={{flex:1}}
-              keyboardShouldPersistTaps="handled"
-              keyboardDismissMode="on-drag"
-              maintainVisibleContentPosition={{
-                minIndexForVisible:0
-              }}
               contentContainerStyle={{
-                paddingBottom:140
+                flexGrow:1,
+                paddingBottom:120
               }}
+              keyboardShouldPersistTaps="always"
+              showsVerticalScrollIndicator={false}
+              onContentSizeChange={()=>flatListRef.current?.scrollToEnd({animated:true})}
               ListFooterComponent={
                 botTyping ? (
                   <View style={[styles.messageBubble,styles.botBubble]}>
@@ -229,8 +276,6 @@ export default function ChatbotScreen() {
                 ) : null
               }
             />
-
-            {/* INPUT BAR */}
 
             <View style={styles.inputContainer}>
 
@@ -244,8 +289,12 @@ export default function ChatbotScreen() {
               />
 
               <TouchableOpacity
-                style={styles.sendButton}
+                style={[
+                  styles.sendButton,
+                  sending && {opacity:0.5}
+                ]}
                 onPress={()=>sendMessage()}
+                disabled={sending}
               >
                 <ThemedText style={styles.sendText}>
                   Send
@@ -267,93 +316,18 @@ export default function ChatbotScreen() {
 }
 
 const styles=StyleSheet.create({
-
-safe:{
-flex:1,
-backgroundColor:"#0F172A"
-},
-
-container:{
-flex:1,
-padding:16,
-backgroundColor:"#0F172A"
-},
-
-title:{
-fontSize:28,
-fontWeight:"bold",
-color:"#F8FAFC",
-marginBottom:16
-},
-
-quickRow:{
-flexDirection:"row",
-flexWrap:"wrap",
-gap:8,
-marginBottom:12
-},
-
-quickBtn:{
-backgroundColor:"#1E293B",
-paddingHorizontal:12,
-paddingVertical:8,
-borderRadius:12
-},
-
-quickText:{
-color:"#38BDF8",
-fontSize:12
-},
-
-messageBubble:{
-padding:12,
-borderRadius:14,
-marginBottom:10,
-maxWidth:"80%"
-},
-
-userBubble:{
-alignSelf:"flex-end",
-backgroundColor:"#2563EB"
-},
-
-botBubble:{
-alignSelf:"flex-start",
-backgroundColor:"#1E293B"
-},
-
-messageText:{
-color:"#FFFFFF"
-},
-
-inputContainer:{
-flexDirection:"row",
-alignItems:"flex-end",
-gap:10,
-marginTop:10,
-marginBottom:-45
-},
-
-input:{
-flex:1,
-backgroundColor:"#1E293B",
-color:"#F8FAFC",
-borderRadius:12,
-paddingHorizontal:12,
-paddingVertical:12,
-maxHeight:120
-},
-
-sendButton:{
-backgroundColor:"#2563EB",
-paddingHorizontal:16,
-paddingVertical:12,
-borderRadius:12
-},
-
-sendText:{
-color:"#FFFFFF",
-fontWeight:"600"
-}
-
+safe:{flex:1,backgroundColor:"#0F172A"},
+container:{flex:1,padding:16,backgroundColor:"#0F172A"},
+title:{fontSize:28,fontWeight:"bold",color:"#F8FAFC",marginBottom:16},
+quickRow:{flexDirection:"row",flexWrap:"wrap",gap:8,marginBottom:12},
+quickBtn:{backgroundColor:"#1E293B",paddingHorizontal:12,paddingVertical:8,borderRadius:12},
+quickText:{color:"#38BDF8",fontSize:12},
+messageBubble:{padding:12,borderRadius:14,marginBottom:10,maxWidth:"80%"},
+userBubble:{alignSelf:"flex-end",backgroundColor:"#2563EB"},
+botBubble:{alignSelf:"flex-start",backgroundColor:"#1E293B"},
+messageText:{color:"#FFFFFF"},
+inputContainer:{flexDirection:"row",alignItems:"flex-end",gap:10,marginTop:10,marginBottom:10},
+input:{flex:1,backgroundColor:"#1E293B",color:"#F8FAFC",borderRadius:12,paddingHorizontal:12,paddingVertical:12,maxHeight:120},
+sendButton:{backgroundColor:"#2563EB",paddingHorizontal:16,paddingVertical:12,borderRadius:12},
+sendText:{color:"#FFFFFF",fontWeight:"600"}
 });

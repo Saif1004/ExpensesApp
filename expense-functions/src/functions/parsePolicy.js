@@ -28,6 +28,13 @@ const client = new OpenAI({
 });
 
 ////////////////////////////////////////////////////
+// CONFIG (SIMPLE + SAFE)
+////////////////////////////////////////////////////
+
+const MAX_AI = 100;       // max AI uses per org
+const COOLDOWN = 3000;   // 3 seconds
+
+////////////////////////////////////////////////////
 // PARSE POLICY FUNCTION
 ////////////////////////////////////////////////////
 
@@ -43,14 +50,63 @@ app.http("parsePolicy", {
 // READ REQUEST
 ////////////////////////////////////////////////////
 
-      const { text, orgId } = await request.json();
+      const { text, orgId, userId } = await request.json();
 
-      if (!text || !orgId) {
+      if (!text || !orgId || !userId) {
         return {
           status: 400,
           jsonBody: {
             success: false,
-            error: "Missing policy text or orgId"
+            error: "Missing required fields"
+          }
+        };
+      }
+
+////////////////////////////////////////////////////
+// USER COOLDOWN (ANTI-SPAM)
+////////////////////////////////////////////////////
+
+      const userRef = db.collection("users").doc(userId);
+      const userDoc = await userRef.get();
+
+      const lastCall =
+        userDoc.data()?.lastAiCall?.toMillis?.() || 0;
+
+      if (Date.now() - lastCall < COOLDOWN) {
+        return {
+          status: 429,
+          jsonBody: {
+            success: false,
+            error: "⏳ Please wait a moment before trying again."
+          }
+        };
+      }
+
+////////////////////////////////////////////////////
+// ORG USAGE LIMIT
+////////////////////////////////////////////////////
+
+      const orgRef = db.collection("organisations").doc(orgId);
+      const orgDoc = await orgRef.get();
+
+      if (!orgDoc.exists) {
+        return {
+          status: 404,
+          jsonBody: {
+            success: false,
+            error: "Organisation not found"
+          }
+        };
+      }
+
+      const aiUsage = orgDoc.data()?.aiUsage || 0;
+
+      if (aiUsage >= MAX_AI) {
+        return {
+          status: 403,
+          jsonBody: {
+            success: false,
+            error: "🚫 AI limit reached. Upgrade to continue using AI features."
           }
         };
       }
@@ -152,7 +208,7 @@ Return JSON only.
           status: 500,
           jsonBody: {
             success: false,
-            error: "AI returned invalid JSON"
+            error: "AI response error. Please try again."
           }
         };
 
@@ -199,6 +255,22 @@ Return JSON only.
       }
 
 ////////////////////////////////////////////////////
+// UPDATE USAGE + COOLDOWN
+////////////////////////////////////////////////////
+
+      await Promise.all([
+
+        orgRef.update({
+          aiUsage: aiUsage + 1
+        }),
+
+        userRef.set({
+          lastAiCall: new Date()
+        }, { merge: true })
+
+      ]);
+
+////////////////////////////////////////////////////
 // SAVE POLICY
 ////////////////////////////////////////////////////
 
@@ -226,7 +298,8 @@ Return JSON only.
         jsonBody: {
           success: true,
           policyId: policyRef.id,
-          policy: parsed
+          policy: parsed,
+          remaining: MAX_AI - (aiUsage + 1) // 🔥 UX bonus
         }
       };
 
@@ -242,7 +315,7 @@ Return JSON only.
         status: 500,
         jsonBody: {
           success: false,
-          error: error.message
+          error: "Something went wrong. Please try again."
         }
       };
 

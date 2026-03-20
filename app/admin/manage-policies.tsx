@@ -1,24 +1,24 @@
 import { useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from "react-native";
 
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
-    collection,
-    deleteDoc,
-    doc,
-    getDocs,
-    query,
-    where
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  query,
+  where
 } from "firebase/firestore";
 
 import { useRouter } from "expo-router";
@@ -155,12 +155,15 @@ const addPolicy = async()=>{
 
     setCreating(true);
 
+    const user = auth.currentUser; // 🔥 ADDED
+
     const res = await fetch(AI_POLICY_URL,{
       method:"POST",
       headers:{ "Content-Type":"application/json" },
       body: JSON.stringify({
         text:title.trim(),
-        orgId
+        orgId,
+        userId:user?.uid // 🔥 CRITICAL FIX
       })
     });
 
