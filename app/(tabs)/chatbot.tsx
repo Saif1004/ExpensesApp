@@ -1,3 +1,4 @@
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -33,18 +34,19 @@ export default function ChatbotScreen() {
 
   const { user } = useAuth();
   const flatListRef = useRef<FlatList>(null);
+  const tabBarHeight = useBottomTabBarHeight();
 
   const [botTyping, setBotTyping] = useState(false);
   const [sending, setSending] = useState(false);
   const lastMessageRef = useRef<string>("");
 
-  const [messages, setMessages] = useState<ChatMessage[]>([
+  const [messages, setMessages] = useState<ChatMessage[]>(([
     {
       id: "1",
       text: "Hi! I'm your expense assistant. Ask me about claims, receipts, or policy.",
       sender: "bot"
     }
-  ]);
+  ]));
 
   const [input, setInput] = useState("");
   const [remainingAI, setRemainingAI] = useState<number | null>(null);
@@ -203,6 +205,7 @@ export default function ChatbotScreen() {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={0}
       >
 
         <View style={styles.container}>
@@ -240,7 +243,7 @@ export default function ChatbotScreen() {
             renderItem={({ item }) => <MessageBubble item={item} />}
             style={{ flex: 1 }}
             contentContainerStyle={{
-              paddingBottom: 140 // space for input
+              paddingBottom: tabBarHeight + 100 // space for input
             }}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
@@ -258,8 +261,13 @@ export default function ChatbotScreen() {
             }
           />
 
-          {/* INPUT (ABSOLUTE = FIX) */}
-          <View style={styles.inputWrapper}>
+          {/* INPUT */}
+          <View
+            style={[
+              styles.inputWrapper,
+              { bottom: tabBarHeight - 145 }
+            ]}
+          >
 
             <TextInput
               value={input}
@@ -357,13 +365,8 @@ const styles = StyleSheet.create({
     color: "#FFFFFF"
   },
 
-  ////////////////////////////////////////////////////
-  // 🔥 REAL FIX
-  ////////////////////////////////////////////////////
-
   inputWrapper: {
     position: "absolute",
-    bottom: -40,
     left: 0,
     right: 0,
     flexDirection: "row",

@@ -177,12 +177,13 @@ export default function TabLayout() {
         tabBarInactiveTintColor:"#64748B",
         tabBarShowLabel:true,
 
-        tabBarStyle:{
-          backgroundColor:"#0F172A",
-          borderTopColor:"#1E293B",
-          height:72 + insets.bottom,
-          paddingBottom:insets.bottom + 12,
-          paddingTop:10,
+        tabBarStyle: {
+          backgroundColor: "#0F172A",
+          borderTopColor: "#1E293B",
+
+          height: 72 + insets.bottom,   // total height
+          paddingBottom: insets.bottom, // ONLY safe area
+          paddingTop: 6,                // small spacing (NOT 10+12 combo)
         },
 
         tabBarItemStyle:{
