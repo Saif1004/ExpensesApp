@@ -10,7 +10,6 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ThemedText } from "../../components/themed-text";
 import { useAuth } from "../context/AuthProvider";
@@ -199,52 +198,41 @@ export default function ChatbotScreen() {
   /////////////////////////////////////////////////////////
 
   return (
-  <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe}>
 
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 90 : 0}
-    >
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
 
-      <View style={styles.container}>
+        <View style={styles.container}>
 
-        <ThemedText type="title" style={styles.title}>
-          Virtual Assistant
-        </ThemedText>
-
-        {remainingAI !== null && (
-          <ThemedText style={{
-            textAlign: "center",
-            marginBottom: 8,
-            fontSize: 12,
-            color:
-              remainingAI > 30 ? "#22C55E"
-              : remainingAI > 10 ? "#F59E0B"
-              : "#EF4444"
-          }}>
-            AI Credits: {remainingAI} / 100
+          <ThemedText type="title" style={styles.title}>
+            Virtual Assistant
           </ThemedText>
-        )}
 
-        <View style={styles.quickRow}>
-          {QUICK_QUESTIONS.map(q => (
-            <TouchableOpacity
-              key={q}
-              style={styles.quickBtn}
-              onPress={() => sendMessage(q)}
-              disabled={sending}
-            >
-              <ThemedText style={styles.quickText}>
-                {q}
-              </ThemedText>
-            </TouchableOpacity>
-          ))}
-        </View>
+          {remainingAI !== null && (
+            <ThemedText style={styles.credits}>
+              AI Credits: {remainingAI} / 100
+            </ThemedText>
+          )}
 
-        {/* CHAT AREA */}
-        <View style={{ flex: 1 }}>
+          <View style={styles.quickRow}>
+            {QUICK_QUESTIONS.map(q => (
+              <TouchableOpacity
+                key={q}
+                style={styles.quickBtn}
+                onPress={() => sendMessage(q)}
+                disabled={sending}
+              >
+                <ThemedText style={styles.quickText}>
+                  {q}
+                </ThemedText>
+              </TouchableOpacity>
+            ))}
+          </View>
 
+          {/* CHAT */}
           <FlatList
             ref={flatListRef}
             data={messages}
@@ -252,15 +240,13 @@ export default function ChatbotScreen() {
             renderItem={({ item }) => <MessageBubble item={item} />}
             style={{ flex: 1 }}
             contentContainerStyle={{
-              paddingBottom: 20
+              paddingBottom: 140 // space for input
             }}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
-
             onContentSizeChange={() => {
               flatListRef.current?.scrollToEnd({ animated: true });
             }}
-
             ListFooterComponent={
               botTyping ? (
                 <View style={[styles.messageBubble, styles.botBubble]}>
@@ -272,45 +258,43 @@ export default function ChatbotScreen() {
             }
           />
 
+          {/* INPUT (ABSOLUTE = FIX) */}
+          <View style={styles.inputWrapper}>
+
+            <TextInput
+              value={input}
+              onChangeText={setInput}
+              placeholder="Ask something..."
+              placeholderTextColor="#64748B"
+              style={styles.input}
+              multiline
+            />
+
+            <TouchableOpacity
+              style={[
+                styles.sendButton,
+                sending && { opacity: 0.5 }
+              ]}
+              onPress={() => sendMessage()}
+              disabled={sending}
+            >
+              <ThemedText style={styles.sendText}>
+                Send
+              </ThemedText>
+            </TouchableOpacity>
+
+          </View>
+
         </View>
 
-        {/* INPUT (NOW NORMAL, NOT ABSOLUTE) */}
-        <View style={styles.inputContainer}>
+      </KeyboardAvoidingView>
 
-          <TextInput
-            value={input}
-            onChangeText={setInput}
-            placeholder="Ask something..."
-            placeholderTextColor="#64748B"
-            style={styles.input}
-            multiline
-          />
-
-          <TouchableOpacity
-            style={[
-              styles.sendButton,
-              sending && { opacity: 0.5 }
-            ]}
-            onPress={() => sendMessage()}
-            disabled={sending}
-          >
-            <ThemedText style={styles.sendText}>
-              Send
-            </ThemedText>
-          </TouchableOpacity>
-
-        </View>
-
-      </View>
-
-    </KeyboardAvoidingView>
-
-  </SafeAreaView>
-);
+    </SafeAreaView>
+  );
 }
 
 /////////////////////////////////////////////////////////
-// STYLES (UNCHANGED + FIX)
+// STYLES
 /////////////////////////////////////////////////////////
 
 const styles = StyleSheet.create({
@@ -324,6 +308,13 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#F8FAFC",
     marginBottom: 16
+  },
+
+  credits: {
+    textAlign: "center",
+    marginBottom: 8,
+    fontSize: 12,
+    color: "#22C55E"
   },
 
   quickRow: {
@@ -366,12 +357,19 @@ const styles = StyleSheet.create({
     color: "#FFFFFF"
   },
 
-  inputContainer: {
+  ////////////////////////////////////////////////////
+  // 🔥 REAL FIX
+  ////////////////////////////////////////////////////
+
+  inputWrapper: {
+    position: "absolute",
+    bottom: -40,
+    left: 0,
+    right: 0,
     flexDirection: "row",
-    alignItems: "flex-end",
     gap: 10,
-    marginTop: 10,
-    paddingBottom: 10
+    padding: 12,
+    backgroundColor: "#0F172A"
   },
 
   input: {
