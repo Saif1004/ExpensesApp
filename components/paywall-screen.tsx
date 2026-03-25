@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import Constants from "expo-constants";
 
-const isExpoGo = Constants.appOwnership === "expo";
+const isExpoGo = Constants.executionEnvironment === "storeClient";
 import { PLAN_LIMITS, OrgPlan } from "../constants/planLimits";
 import { useAuth } from "../app/context/AuthProvider";
 import { db } from "../app/firebase/firebaseConfig";

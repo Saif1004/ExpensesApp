@@ -29,7 +29,7 @@ import { unsubscribeAll } from "../../utils/listenerStore";
 //////////////////////////////////////////////////////
 
 // True when running inside Expo Go (purchases not supported)
-const isExpoGo = Constants.appOwnership === "expo";
+const isExpoGo = Constants.executionEnvironment === "storeClient";
 
 // Prevents configure() being called twice (survives StrictMode double-mount)
 let rcConfigured = false;
@@ -269,11 +269,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         currentRoleRef.current = null;
         currentOrgRef.current  = null;
 
-        // RevenueCat logout
-        if (Platform.OS !== "web") {
+        // RevenueCat logout — only if user was identified (not anonymous)
+        if (!isExpoGo && Platform.OS !== "web") {
           try {
             const Purchases = (await import("react-native-purchases")).default;
-            await Purchases.logOut();
+            const info = await Purchases.getCustomerInfo();
+            if (!info.originalAppUserId.startsWith("$RCAnonymousID")) {
+              await Purchases.logOut();
+            }
           } catch {}
         }
       }
