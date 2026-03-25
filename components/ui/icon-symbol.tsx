@@ -26,8 +26,10 @@ const MAPPING = {
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
 
-  // NEW icons (fix for Android)
+  // Admin / users
   'shield.fill': 'shield',
+  'shield.lefthalf.fill': 'admin-panel-settings',
+  'person.badge.clock.fill': 'manage-accounts',
   'questionmark.circle.fill': 'help',
 } as IconMapping;
 
