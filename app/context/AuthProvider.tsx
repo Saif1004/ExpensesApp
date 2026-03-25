@@ -1,5 +1,6 @@
 import { useRouter, useSegments } from "expo-router";
 import { onAuthStateChanged, User } from "firebase/auth";
+import Constants from "expo-constants";
 import {
   collection,
   doc,
@@ -21,6 +22,21 @@ import React, {
 import { AppState, Platform } from "react-native";
 import { PLAN_LIMITS, OrgPlan } from "../../constants/planLimits";
 import { auth, db } from "../firebase/firebaseConfig";
+import { unsubscribeAll } from "../../utils/listenerStore";
+
+//////////////////////////////////////////////////////
+// MODULE-LEVEL GUARDS
+//////////////////////////////////////////////////////
+
+// True when running inside Expo Go (purchases not supported)
+const isExpoGo = Constants.appOwnership === "expo";
+
+// Prevents configure() being called twice (survives StrictMode double-mount)
+let rcConfigured = false;
+
+// Throttle RevenueCat syncs to at most once per 60 seconds
+let lastRcSync = 0;
+const RC_SYNC_COOLDOWN_MS = 60_000;
 
 //////////////////////////////////////////////////////
 // TYPES
@@ -88,15 +104,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const currentUidRef  = useRef<string | null>(null);
   const currentRoleRef = useRef<string | null>(null);
   const currentOrgRef  = useRef<string | null>(null);
-  const rcInitialised  = useRef(false);
 
   //////////////////////////////////////////////////////
   // REVENUECAT INIT (once, native only)
   //////////////////////////////////////////////////////
 
   const initRevenueCat = useCallback(async () => {
-    if (rcInitialised.current || Platform.OS === "web") return;
-    rcInitialised.current = true;
+    if (rcConfigured || Platform.OS === "web" || isExpoGo) return;
+    rcConfigured = true;
     try {
       const Purchases = (await import("react-native-purchases")).default;
       const apiKey = Platform.OS === "ios"
@@ -113,7 +128,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   //////////////////////////////////////////////////////
 
   const syncRevenueCat = useCallback(async (uid: string, oid: string) => {
-    if (Platform.OS === "web") return;
+    if (Platform.OS === "web" || isExpoGo) return;
+    const now = Date.now();
+    if (now - lastRcSync < RC_SYNC_COOLDOWN_MS) return;
+    lastRcSync = now;
     try {
       const Purchases = (await import("react-native-purchases")).default;
       await Purchases.logIn(uid);
@@ -239,6 +257,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         currentUidRef.current = firebaseUser.uid;
         await loadMembership(firebaseUser.uid);
       } else {
+        unsubscribeAll();
         setUser(null);
         setRole(null);
         setStatus(null);

@@ -1,3 +1,5 @@
+const { app } = require("@azure/functions");
+
 // Shared plan limits — keep in sync with constants/planLimits.ts on the frontend
 
 const PLAN_LIMITS = {
@@ -30,5 +32,17 @@ const PLAN_LIMITS = {
     analyticsAccess: true
   }
 };
+
+app.http("planLimits", {
+  methods: ["GET"],
+  authLevel: "anonymous",
+
+  handler: async (request, context) => {
+    return {
+      status: 200,
+      jsonBody: PLAN_LIMITS
+    };
+  }
+});
 
 module.exports = PLAN_LIMITS;

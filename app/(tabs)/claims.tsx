@@ -28,6 +28,7 @@ import { ThemedView } from "../../components/themed-view";
 
 import { useAuth } from "../context/AuthProvider";
 import { db } from "../firebase/firebaseConfig";
+import { addListener } from "../../utils/listenerStore";
 
 const LAST_SEEN_KEY = "claims_last_seen";
 
@@ -85,7 +86,7 @@ export default function ClaimsScreen() {
       orderBy("createdAt","desc")
     );
 
-    const unsub = onSnapshot(q,(snapshot)=>{
+    const unsub = addListener(onSnapshot(q,(snapshot)=>{
 
       const data:Claim[] = snapshot.docs.map((doc)=>({
         id:doc.id,
@@ -109,7 +110,7 @@ export default function ClaimsScreen() {
       setLoading(false);
       setRefreshing(false);
 
-    });
+    }));
 
     return unsub;
 

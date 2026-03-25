@@ -9,6 +9,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 
 import { db } from "../firebase/firebaseConfig";
 import { useAuth } from "./AuthProvider";
+import { addListener } from "../../utils/listenerStore";
 
 type BadgeContextType = {
   claimsBadge: number;
@@ -54,9 +55,9 @@ export function BadgeProvider({children}:{children:React.ReactNode}){
       where("status","==","pending")
     );
 
-    const unsub = onSnapshot(q,(snap)=>{
+    const unsub = addListener(onSnapshot(q,(snap)=>{
       setClaimsBadge(snap.size);
-    });
+    }));
 
     return unsub;
 
@@ -75,10 +76,10 @@ export function BadgeProvider({children}:{children:React.ReactNode}){
       where("status","==","pending")
     );
 
-    const unsub = onSnapshot(q,(snap)=>{
+    const unsub = addListener(onSnapshot(q,(snap)=>{
       setUsersBadge(snap.size);
       setAdminBadge(snap.size);
-    });
+    }));
 
     return unsub;
 

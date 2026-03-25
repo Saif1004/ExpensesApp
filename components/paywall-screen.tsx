@@ -9,6 +9,9 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
+import Constants from "expo-constants";
+
+const isExpoGo = Constants.appOwnership === "expo";
 import { PLAN_LIMITS, OrgPlan } from "../constants/planLimits";
 import { useAuth } from "../app/context/AuthProvider";
 import { db } from "../app/firebase/firebaseConfig";
@@ -70,11 +73,13 @@ export default function PaywallScreen() {
     orgId,
     orgPlan,
     isPro,
+    trialEndsAt,
     trialDaysLeft,
     refreshOrgPlan
   } = useAuth();
 
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>("monthly");
+  const [startingTrial, setStartingTrial] = useState(false);
 
   const [packages, setPackages] = useState<PlanPackages>({
     proMonthly:      null,
@@ -92,7 +97,7 @@ export default function PaywallScreen() {
   //////////////////////////////////////////////////////
 
   useEffect(() => {
-    if (Platform.OS === "web") {
+    if (Platform.OS === "web" || isExpoGo) {
       setOfferingsLoaded(true);
       return;
     }
@@ -142,7 +147,7 @@ export default function PaywallScreen() {
       return;
     }
 
-    if (Platform.OS === "web") {
+    if (Platform.OS === "web" || isExpoGo) {
       Alert.alert("Not available", "Subscriptions can only be purchased via the mobile app.");
       return;
     }
@@ -185,11 +190,38 @@ export default function PaywallScreen() {
   };
 
   //////////////////////////////////////////////////////
+  // START FREE TRIAL
+  //////////////////////////////////////////////////////
+
+  const handleStartTrial = async () => {
+    if (!orgId) return;
+    if (role !== "admin") {
+      Alert.alert("Admin required", "Ask your organisation admin to start the trial.");
+      return;
+    }
+    setStartingTrial(true);
+    try {
+      const trialEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      await updateDoc(doc(db, "organisations", orgId), {
+        plan: "trial",
+        trialEndsAt: trialEnd,
+        aiCreditsRemaining: 50
+      });
+      await refreshOrgPlan();
+      Alert.alert("Trial Started!", "Your organisation has 7 days of Pro access for free. No payment needed.");
+    } catch {
+      Alert.alert("Error", "Could not start trial. Please try again.");
+    } finally {
+      setStartingTrial(false);
+    }
+  };
+
+  //////////////////////////////////////////////////////
   // RESTORE
   //////////////////////////////////////////////////////
 
   const handleRestore = async () => {
-    if (!orgId || role !== "admin" || Platform.OS === "web") return;
+    if (!orgId || role !== "admin" || Platform.OS === "web" || isExpoGo) return;
     setRestoring(true);
     try {
       const Purchases = (await import("react-native-purchases")).default;
@@ -263,6 +295,32 @@ export default function PaywallScreen() {
       contentContainerStyle={styles.container}
       showsVerticalScrollIndicator={false}
     >
+
+      {/* FREE TRIAL CTA — shown once, for free plan orgs that haven't started a trial */}
+      {orgPlan === "free" && !trialEndsAt && (
+        <View style={styles.freeTrialCard}>
+          <ThemedText style={styles.freeTrialTitle}>Try Pro free for 7 days</ThemedText>
+          <ThemedText style={styles.freeTrialSub}>
+            No payment required. Your whole organisation gets Analytics, AI assistant, and 50 AI credits during the trial.
+          </ThemedText>
+          {role === "admin" ? (
+            <TouchableOpacity
+              style={[styles.freeTrialBtn, startingTrial && styles.ctaDisabled]}
+              onPress={handleStartTrial}
+              disabled={startingTrial}
+            >
+              {startingTrial
+                ? <ActivityIndicator color="#fff" />
+                : <ThemedText style={styles.ctaText}>Start 7-Day Free Trial</ThemedText>
+              }
+            </TouchableOpacity>
+          ) : (
+            <ThemedText style={styles.freeTrialSub}>
+              Ask your organisation admin to start the free trial.
+            </ThemedText>
+          )}
+        </View>
+      )}
 
       {/* TRIAL BANNER */}
       {orgPlan === "trial" && (
@@ -384,7 +442,7 @@ export default function PaywallScreen() {
       </View>
 
       {/* RESTORE */}
-      {role === "admin" && Platform.OS !== "web" && (
+      {role === "admin" && Platform.OS !== "web" && !isExpoGo && (
         <TouchableOpacity onPress={handleRestore} disabled={restoring} style={styles.restoreBtn}>
           {restoring
             ? <ActivityIndicator color="#64748B" size="small" />
@@ -459,6 +517,42 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 32,
     paddingBottom: 40
+  },
+
+  freeTrialCard: {
+    width: "100%",
+    backgroundColor: "#0F2A1A",
+    borderWidth: 1.5,
+    borderColor: "#22C55E",
+    borderRadius: 14,
+    padding: 18,
+    marginBottom: 20,
+    alignItems: "center"
+  },
+
+  freeTrialTitle: {
+    color: "#22C55E",
+    fontSize: 17,
+    fontWeight: "700",
+    marginBottom: 6,
+    textAlign: "center"
+  },
+
+  freeTrialSub: {
+    color: "#94A3B8",
+    fontSize: 12,
+    textAlign: "center",
+    lineHeight: 18,
+    marginBottom: 14
+  },
+
+  freeTrialBtn: {
+    backgroundColor: "#16A34A",
+    paddingVertical: 13,
+    paddingHorizontal: 28,
+    borderRadius: 12,
+    alignItems: "center",
+    width: "100%"
   },
 
   trialBanner: {

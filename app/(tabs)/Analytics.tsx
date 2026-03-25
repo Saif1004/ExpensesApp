@@ -25,6 +25,7 @@ import PaywallScreen from "../../components/paywall-screen";
 import { ThemedText } from "../../components/themed-text";
 import { useAuth } from "../context/AuthProvider";
 import { db } from "../firebase/firebaseConfig";
+import { addListener } from "../../utils/listenerStore";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -83,7 +84,7 @@ export default function AnalyticsScreen() {
             where("userId", "==", user.uid)
           );
 
-    const unsub = onSnapshot(q, (snapshot) => {
+    const unsub = addListener(onSnapshot(q, (snapshot) => {
 
       const claims: Claim[] =
         snapshot.docs.map((doc) => doc.data() as Claim);
@@ -134,7 +135,7 @@ export default function AnalyticsScreen() {
 
       // ❌ REMOVED AUTO AI CALL
 
-    });
+    }));
 
     return unsub;
 

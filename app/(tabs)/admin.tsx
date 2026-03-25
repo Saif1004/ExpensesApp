@@ -23,6 +23,7 @@ import { ThemedText } from "../../components/themed-text";
 import { ThemedView } from "../../components/themed-view";
 import { useAuth } from "../context/AuthProvider";
 import { db } from "../firebase/firebaseConfig";
+import { addListener } from "../../utils/listenerStore";
 
 type Claim = {
   id: string;
@@ -49,7 +50,7 @@ export default function AdminScreen() {
       orderBy("createdAt", "desc")
     );
 
-    const unsub = onSnapshot(q, (snapshot) => {
+    const unsub = addListener(onSnapshot(q, (snapshot) => {
       const data: Claim[] = snapshot.docs.map((docSnap) => ({
         id: docSnap.id,
         ...(docSnap.data() as Omit<Claim, "id">)
@@ -57,7 +58,7 @@ export default function AdminScreen() {
 
       setClaims(data);
       setLoading(false);
-    });
+    }));
 
     return unsub;
   }, [role]);

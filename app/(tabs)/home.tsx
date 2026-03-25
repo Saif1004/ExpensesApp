@@ -16,6 +16,7 @@ import {
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthProvider";
 import { db } from "../firebase/firebaseConfig";
+import { addListener } from "../../utils/listenerStore";
 
 type Claim = {
   id: string;
@@ -70,7 +71,7 @@ export default function HomeScreen() {
       where("userId","==",user.uid)
     );
 
-    const unsub = onSnapshot(q,(snapshot)=>{
+    const unsub = addListener(onSnapshot(q,(snapshot)=>{
 
       const claims = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -92,7 +93,7 @@ export default function HomeScreen() {
       setPending(pendingCount);
       setApproved(approvedCount);
 
-    });
+    }));
 
     const recentQuery = query(
       collection(db,"claims"),
@@ -101,7 +102,7 @@ export default function HomeScreen() {
       limit(3)
     );
 
-    const unsubRecent = onSnapshot(recentQuery,(snapshot)=>{
+    const unsubRecent = addListener(onSnapshot(recentQuery,(snapshot)=>{
 
       const list = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -110,7 +111,7 @@ export default function HomeScreen() {
 
       setRecent(list);
 
-    });
+    }));
 
     return ()=>{
       unsub();

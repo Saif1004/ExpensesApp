@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { IconSymbol } from "../../components/ui/icon-symbol";
 import { useAuth } from "../context/AuthProvider";
 import { db } from "../firebase/firebaseConfig";
+import { addListener } from "../../utils/listenerStore";
 
 const LAST_SEEN_CLAIMS = "claims_last_seen";
 
@@ -47,7 +48,7 @@ export default function TabLayout() {
         where("userId","==",user.uid)
       );
 
-      unsubscribe = onSnapshot(q,(snapshot)=>{
+      unsubscribe = addListener(onSnapshot(q,(snapshot)=>{
 
         let count = 0;
 
@@ -75,7 +76,7 @@ export default function TabLayout() {
 
         setClaimsBadge(count);
 
-      });
+      }));
 
     };
 
@@ -98,9 +99,9 @@ export default function TabLayout() {
       where("status","==","pending")
     );
 
-    const unsubscribe = onSnapshot(q,(snap)=>{
+    const unsubscribe = addListener(onSnapshot(q,(snap)=>{
       setUsersBadge(snap.size);
-    });
+    }));
 
     return unsubscribe;
 
@@ -119,9 +120,9 @@ export default function TabLayout() {
       where("status","==","pending")
     );
 
-    const unsubscribe = onSnapshot(q,(snap)=>{
+    const unsubscribe = addListener(onSnapshot(q,(snap)=>{
       setAdminBadge(snap.size);
-    });
+    }));
 
     return unsubscribe;
 
