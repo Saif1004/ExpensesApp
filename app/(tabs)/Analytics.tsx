@@ -21,6 +21,7 @@ import {
   PieChart
 } from "react-native-chart-kit";
 
+import PaywallScreen from "../../components/paywall-screen";
 import { ThemedText } from "../../components/themed-text";
 import { useAuth } from "../context/AuthProvider";
 import { db } from "../firebase/firebaseConfig";
@@ -47,7 +48,9 @@ type CategoryStats = {
 
 export default function AnalyticsScreen() {
 
-  const { user, role } = useAuth();
+  const { user, role, isPro } = useAuth();
+
+  if(!isPro) return <PaywallScreen />;
 
   const [loading, setLoading] = useState(true);
   const [aiLoading, setAiLoading] = useState(false);
@@ -143,19 +146,30 @@ export default function AnalyticsScreen() {
 
       setAiLoading(true);
 
+      if(!user) return;
+
+      const token = await user.getIdToken();
+
       const res = await fetch(AI_URL,{
         method:"POST",
-        headers:{ "Content-Type":"application/json"},
+        headers:{
+          "Content-Type":"application/json",
+          "Authorization":`Bearer ${token}`
+        },
         body: JSON.stringify({ stats:data })
       });
 
       const result = await res.json();
 
-      setAiInsight(result?.insight || "");
+      if(result?.error){
+        setAiInsight(result.error);
+      } else {
+        setAiInsight(result?.insight || "");
+      }
 
     }catch{
 
-      setAiInsight("");
+      setAiInsight("Failed to generate insights.");
 
     }finally{
 

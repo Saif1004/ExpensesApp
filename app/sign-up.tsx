@@ -13,6 +13,7 @@ import {
   getDocs,
   query,
   serverTimestamp,
+  Timestamp,
   where,
   writeBatch
 } from "firebase/firestore";
@@ -129,7 +130,8 @@ uid,
 email:trimmedEmail,
 username:normalizedUsername,
 displayName:trimmedUsername,
-createdAt:serverTimestamp()
+createdAt:serverTimestamp(),
+plan:"free"
 });
 
 batch.set(usernameRef,{
@@ -145,11 +147,18 @@ if(orgSnap.empty){
 const orgRef=doc(collection(db,"organisations"));
 const membershipRef=doc(collection(db,"memberships"));
 
+const trialEndsAt = Timestamp.fromDate(
+  new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+);
+
 batch.set(orgRef,{
 name:trimmedOrg,
-nameLower:normalizedOrg, // 🔥 FIX
+nameLower:normalizedOrg,
 ownerId:uid,
-aiUsage: 0,
+plan:"trial",
+trialEndsAt,
+aiCreditsRemaining: 50,
+aiCreditsResetAt: null,
 createdAt:serverTimestamp()
 });
 

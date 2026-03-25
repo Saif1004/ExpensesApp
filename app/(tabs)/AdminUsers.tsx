@@ -22,6 +22,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { auth, db } from "../firebase/firebaseConfig";
+import { useAuth } from "../context/AuthProvider";
 
 type UserItem = {
   id: string;
@@ -34,8 +35,11 @@ type UserItem = {
 
 export default function AdminUsers() {
 
-  const [users,setUsers] = useState<UserItem[]>([]);
-  const [loading,setLoading] = useState(true);
+  const { employeeLimit, orgPlan } = useAuth();
+
+  const [users,setUsers]           = useState<UserItem[]>([]);
+  const [approvedCount,setApprovedCount] = useState(0);
+  const [loading,setLoading]       = useState(true);
 
   const [tab,setTab] = useState<"pending"|"approved"|"rejected">("pending");
 
@@ -115,11 +119,23 @@ export default function AdminUsers() {
       setUsers(list);
 
       //////////////////////////////////////////////////////
-      // UPDATE BADGE COUNT
+      // UPDATE BADGE COUNT + APPROVED COUNT
       //////////////////////////////////////////////////////
 
       if(tab === "pending"){
         setPendingCount(list.length);
+      }
+
+      if(tab === "approved"){
+        setApprovedCount(list.length);
+      } else {
+        // Always keep approved count fresh
+        const approvedSnap = await getDocs(query(
+          collection(db,"memberships"),
+          where("orgId","==",orgId),
+          where("status","==","approved")
+        ));
+        setApprovedCount(approvedSnap.size);
       }
 
     }
@@ -191,6 +207,15 @@ export default function AdminUsers() {
   const approveUser = async (membershipId:string) => {
 
     try{
+
+      // Enforce employee limit (admin counts as 1 approved member)
+      if(approvedCount >= employeeLimit){
+        Alert.alert(
+          "Employee limit reached",
+          `Your ${orgPlan} plan allows up to ${employeeLimit} members. Upgrade your plan to add more.`
+        );
+        return;
+      }
 
       await updateDoc(
         doc(db,"memberships",membershipId),
@@ -290,6 +315,15 @@ export default function AdminUsers() {
       <Text style={styles.title}>
         Admin Panel
       </Text>
+
+      <View style={styles.limitRow}>
+        <Text style={styles.limitText}>
+          Members: {approvedCount} / {employeeLimit}
+        </Text>
+        {approvedCount >= employeeLimit && (
+          <Text style={styles.limitWarning}>Limit reached</Text>
+        )}
+      </View>
 
       <View style={styles.tabs}>
 
@@ -491,6 +525,24 @@ const styles = StyleSheet.create({
     color:"#94A3B8",
     textAlign:"center",
     marginTop:30
+  },
+
+  limitRow:{
+    flexDirection:"row",
+    alignItems:"center",
+    gap:10,
+    marginBottom:14
+  },
+
+  limitText:{
+    color:"#64748B",
+    fontSize:12
+  },
+
+  limitWarning:{
+    color:"#F97316",
+    fontSize:11,
+    fontWeight:"700"
   }
 
 });

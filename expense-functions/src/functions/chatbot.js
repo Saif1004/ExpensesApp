@@ -1,6 +1,7 @@
 const { app } = require("@azure/functions");
 const OpenAI = require("openai");
 const admin = require("firebase-admin");
+const PLAN_LIMITS = require("./planLimits");
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -13,9 +14,35 @@ const client = new OpenAI({
   baseURL: `${process.env.AZURE_OPENAI_ENDPOINT}/openai/v1`
 });
 
-const MAX_CREDITS = 100;
-const COOLDOWN = 2000;
-const MAX_REQUESTS_PER_MINUTE = 20;
+const RATE_WINDOW_MS = 60 * 1000; // 1 minute sliding window
+
+//////////////////////////////////////////////////////
+// HELPERS
+//////////////////////////////////////////////////////
+
+async function getOrgForUser(userId) {
+  const snap = await db.collection("memberships")
+    .where("userId", "==", userId)
+    .where("status", "==", "approved")
+    .limit(1)
+    .get();
+
+  if (snap.empty) return null;
+  return snap.docs[0].data().orgId;
+}
+
+function getEffectivePlan(orgData) {
+  const plan = orgData.plan || "free";
+  if (plan === "trial") {
+    const trialEndsAt = orgData.trialEndsAt?.toDate?.() ?? null;
+    if (trialEndsAt && trialEndsAt < new Date()) return "free";
+  }
+  return plan;
+}
+
+//////////////////////////////////////////////////////
+// HANDLER
+//////////////////////////////////////////////////////
 
 app.http("chatbot", {
   methods: ["POST"],
@@ -25,54 +52,145 @@ app.http("chatbot", {
 
     try {
 
-      const authHeader = request.headers.get("authorization");
+      ////////////////////////////////////////////////////
+      // AUTH
+      ////////////////////////////////////////////////////
 
+      const authHeader = request.headers.get("authorization");
       if (!authHeader) {
-        return { status:401, jsonBody:{success:false,error:"Unauthorized"} };
+        return { status: 401, jsonBody: { success: false, error: "Unauthorized" } };
       }
 
       const token = authHeader.split("Bearer ")[1];
       const decoded = await admin.auth().verifyIdToken(token);
       const userId = decoded.uid;
 
-      const { message, history=[] } = await request.json();
+      const { message, history = [] } = await request.json();
 
-      const userRef = db.collection("users").doc(userId);
+      ////////////////////////////////////////////////////
+      // ORG LOOKUP
+      ////////////////////////////////////////////////////
 
-      if(message==="__getCredits__"){
-        const snap = await userRef.get();
+      const orgId = await getOrgForUser(userId);
+      if (!orgId) {
+        return { status: 403, jsonBody: { success: false, error: "No approved organisation found" } };
+      }
+
+      const orgRef = db.collection("organisations").doc(orgId);
+      const orgSnap = await orgRef.get();
+      const orgData = orgSnap.data() || {};
+
+      const plan = getEffectivePlan(orgData);
+      const planConfig = PLAN_LIMITS[plan];
+
+      ////////////////////////////////////////////////////
+      // HANDLE __getCredits__
+      ////////////////////////////////////////////////////
+
+      if (message === "__getCredits__") {
         return {
-          status:200,
-          jsonBody:{
-            success:true,
-            remaining:snap.data()?.aiCredits ?? MAX_CREDITS
+          status: 200,
+          jsonBody: {
+            success: true,
+            remaining: orgData.aiCreditsRemaining ?? 0,
+            limit: planConfig?.aiCreditsPerPeriod ?? 0
           }
         };
       }
 
       ////////////////////////////////////////////////////
-      // CLAIM DATA (FULL)
+      // PLAN CHECK
       ////////////////////////////////////////////////////
 
-      const snapshot = await db
-        .collection("claims")
-        .where("userId","==",userId)
+      if (!planConfig?.chatbotAccess) {
+        return {
+          status: 403,
+          jsonBody: { success: false, error: "Upgrade your plan to use the AI assistant." }
+        };
+      }
+
+      ////////////////////////////////////////////////////
+      // MONTHLY CREDIT RESET (pro / business)
+      ////////////////////////////////////////////////////
+
+      let aiCreditsRemaining = orgData.aiCreditsRemaining ?? 0;
+
+      if (plan === "pro" || plan === "business") {
+        const resetAt = orgData.aiCreditsResetAt?.toDate?.() ?? null;
+        if (!resetAt || resetAt < new Date()) {
+          aiCreditsRemaining = planConfig.aiCreditsPerPeriod;
+          await orgRef.update({
+            aiCreditsRemaining,
+            aiCreditsResetAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+          });
+        }
+      }
+
+      ////////////////////////////////////////////////////
+      // CREDIT CHECK
+      ////////////////////////////////////////////////////
+
+      if (aiCreditsRemaining <= 0) {
+        return {
+          status: 429,
+          jsonBody: {
+            success: false,
+            error: "No AI credits remaining. Upgrade your plan or wait for the monthly reset."
+          }
+        };
+      }
+
+      ////////////////////////////////////////////////////
+      // RATE LIMIT (per user, per minute)
+      ////////////////////////////////////////////////////
+
+      const userRef = db.collection("users").doc(userId);
+      const userSnap = await userRef.get();
+      const userData = userSnap.data() || {};
+
+      const rw = userData.rateLimitChatbot || { count: 0, windowStart: 0 };
+      const now = Date.now();
+      const windowExpired = (now - rw.windowStart) > RATE_WINDOW_MS;
+
+      const newCount = windowExpired ? 1 : rw.count + 1;
+      const maxPerMinute = planConfig.chatbotRatePerMinute;
+
+      if (newCount > maxPerMinute) {
+        return {
+          status: 429,
+          jsonBody: {
+            success: false,
+            error: `Rate limit exceeded. Max ${maxPerMinute} messages per minute on your plan.`
+          }
+        };
+      }
+
+      // Update window (fire-and-forget — don't await to keep latency low)
+      userRef.update({
+        rateLimitChatbot: {
+          count: newCount,
+          windowStart: windowExpired ? now : rw.windowStart
+        }
+      });
+
+      ////////////////////////////////////////////////////
+      // CLAIM DATA
+      ////////////////////////////////////////////////////
+
+      const claimsSnap = await db.collection("claims")
+        .where("userId", "==", userId)
         .get();
 
-      const claims = snapshot.docs.map(d=>d.data());
-
+      const claims = claimsSnap.docs.map(d => d.data());
       let claimsContext = "User has no claims.";
 
-      if(claims.length){
-
-        const total = claims.reduce((s,c)=>s+(Number(c.amount)||0),0);
-
-        const approved = claims.filter(c=>c.status==="approved").length;
-        const pending = claims.filter(c=>c.status==="pending").length;
-        const rejected = claims.filter(c=>c.status==="rejected").length;
-
-        const recent = claims.slice(0,5)
-          .map(c=>`${c.category} £${c.amount} (${c.status})`)
+      if (claims.length) {
+        const total = claims.reduce((s, c) => s + (Number(c.amount) || 0), 0);
+        const approved = claims.filter(c => c.status === "approved").length;
+        const pending  = claims.filter(c => c.status === "pending").length;
+        const rejected = claims.filter(c => c.status === "rejected").length;
+        const recent   = claims.slice(0, 5)
+          .map(c => `${c.category} £${c.amount} (${c.status})`)
           .join("\n");
 
         claimsContext = `
@@ -93,12 +211,11 @@ ${recent}
       ////////////////////////////////////////////////////
 
       const aiRes = await client.chat.completions.create({
-        model:process.env.AZURE_OPENAI_DEPLOYMENT,
-        messages:[
+        model: process.env.AZURE_OPENAI_DEPLOYMENT,
+        messages: [
           {
-            role:"system",
-            content:`
-You are a smart expense assistant.
+            role: "system",
+            content: `You are a smart expense assistant.
 
 IMPORTANT:
 - You DO have access to the user's financial data below
@@ -107,44 +224,46 @@ IMPORTANT:
 
 Policy:
 Meals £50
-Tech £500
-`
+Tech £500`
           },
-          { role:"system", content:claimsContext },
-          ...history.map(m=>({
-            role:m.sender==="user"?"user":"assistant",
-            content:m.text
+          { role: "system", content: claimsContext },
+          ...history.map(m => ({
+            role: m.sender === "user" ? "user" : "assistant",
+            content: m.text
           })),
-          { role:"user", content:message }
+          { role: "user", content: message }
         ],
-        temperature:0.3,
-        max_tokens:200
+        temperature: 0.3,
+        max_tokens: 200
       });
 
       const reply = aiRes.choices[0].message.content;
 
-      await userRef.update({
-        aiCredits: admin.firestore.FieldValue.increment(-1)
+      ////////////////////////////////////////////////////
+      // DEDUCT CREDIT FROM ORG
+      ////////////////////////////////////////////////////
+
+      await orgRef.update({
+        aiCreditsRemaining: admin.firestore.FieldValue.increment(-1)
       });
 
-      const snap = await userRef.get();
+      const updatedOrgSnap = await orgRef.get();
+      const remaining = updatedOrgSnap.data().aiCreditsRemaining ?? 0;
 
       return {
-        status:200,
-        jsonBody:{
-          success:true,
+        status: 200,
+        jsonBody: {
+          success: true,
           reply,
-          remaining:snap.data().aiCredits
+          remaining,
+          limit: planConfig.aiCreditsPerPeriod
         }
       };
 
     } catch (err) {
       return {
-        status:200,
-        jsonBody:{
-          success:false,
-          error:err.message
-        }
+        status: 200,
+        jsonBody: { success: false, error: err.message }
       };
     }
 

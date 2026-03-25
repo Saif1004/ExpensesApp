@@ -12,6 +12,7 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import PaywallScreen from "../../components/paywall-screen";
 import { ThemedText } from "../../components/themed-text";
 import { useAuth } from "../context/AuthProvider";
 
@@ -32,7 +33,9 @@ const QUICK_QUESTIONS = [
 
 export default function ChatbotScreen() {
 
-  const { user } = useAuth();
+  const { user, isPro } = useAuth();
+
+  if(!isPro) return <PaywallScreen />;
   const flatListRef = useRef<FlatList>(null);
   const tabBarHeight = useBottomTabBarHeight();
 
@@ -50,6 +53,7 @@ export default function ChatbotScreen() {
 
   const [input, setInput] = useState("");
   const [remainingAI, setRemainingAI] = useState<number | null>(null);
+  const [creditLimit,  setCreditLimit]  = useState<number | null>(null);
 
   /////////////////////////////////////////////////////////
   // LOAD CREDITS
@@ -75,6 +79,9 @@ export default function ChatbotScreen() {
 
         if (data.remaining !== undefined) {
           setRemainingAI(data.remaining);
+        }
+        if (data.limit !== undefined) {
+          setCreditLimit(data.limit);
         }
       } catch {}
     };
@@ -129,12 +136,20 @@ export default function ChatbotScreen() {
       const data = await response.json();
 
       if (!data.success) {
-        Alert.alert("Error", data.error || "Something went wrong");
+        const botErr: ChatMessage = {
+          id: `${Date.now()}err`,
+          text: data.error || "Something went wrong.",
+          sender: "bot"
+        };
+        setMessages(prev => [...prev, botErr]);
         return;
       }
 
       if (data.remaining !== undefined) {
         setRemainingAI(data.remaining);
+      }
+      if (data.limit !== undefined) {
+        setCreditLimit(data.limit);
       }
 
       const botMessage: ChatMessage = {
@@ -214,9 +229,13 @@ export default function ChatbotScreen() {
             Virtual Assistant
           </ThemedText>
 
-          {remainingAI !== null && (
-            <ThemedText style={styles.credits}>
-              AI Credits: {remainingAI} / 100
+          {remainingAI !== null && creditLimit !== null && (
+            <ThemedText style={[
+              styles.credits,
+              remainingAI <= 5 && { color: "#F97316" },
+              remainingAI === 0 && { color: "#DC2626" }
+            ]}>
+              AI Credits: {remainingAI} / {creditLimit}
             </ThemedText>
           )}
 
