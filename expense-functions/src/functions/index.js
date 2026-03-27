@@ -10,6 +10,7 @@ require("./stripeCreateConnectAccount");
 require("./stripeOnboardingLink");
 require("./stripeSetupPaymentMethod");
 require("./stripeProcessReimbursement");
+require("./stripeRedirects");
 
 
 

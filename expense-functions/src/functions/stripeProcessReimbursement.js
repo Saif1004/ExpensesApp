@@ -22,16 +22,14 @@ app.http('stripeProcessReimbursement', {
       const adminUid = decoded.uid;
 
       const body = await request.json();
-      const { claimId, orgId } = body;
+      const { claimId } = body;
 
-      if (!claimId || !orgId) {
-        return new Response(JSON.stringify({ error: 'claimId and orgId required' }), { status: 400, headers });
+      if (!claimId) {
+        return new Response(JSON.stringify({ error: 'claimId required' }), { status: 400, headers });
       }
 
-      // Load claim
-      const claimRef = admin.firestore()
-        .collection('organisations').doc(orgId)
-        .collection('claims').doc(claimId);
+      // Load claim — claims are stored at root /claims/{claimId}
+      const claimRef = admin.firestore().collection('claims').doc(claimId);
       const claimDoc = await claimRef.get();
 
       if (!claimDoc.exists) {
@@ -39,10 +37,6 @@ app.http('stripeProcessReimbursement', {
       }
 
       const claim = claimDoc.data();
-
-      if (claim.status !== 'approved') {
-        return new Response(JSON.stringify({ error: 'Claim must be approved before reimbursement' }), { status: 400, headers });
-      }
 
       if (claim.paymentStatus === 'paid') {
         return new Response(JSON.stringify({ error: 'Claim already paid' }), { status: 400, headers });
@@ -84,7 +78,7 @@ app.http('stripeProcessReimbursement', {
         description: `Claimio reimbursement: ${claim.category} - ${claim.description || 'No description'}`,
         metadata: {
           claimId,
-          orgId,
+          orgId: claim.orgId || '',
           adminUid,
           employeeUid: claim.userId,
         },
@@ -104,10 +98,9 @@ app.http('stripeProcessReimbursement', {
       // Mark claim as payment_failed if it was a Stripe error
       if (err.type?.startsWith('Stripe')) {
         try {
-          const { claimId, orgId } = await request.json().catch(() => ({}));
-          if (claimId && orgId) {
+          const { claimId } = await request.json().catch(() => ({}));
+          if (claimId) {
             await admin.firestore()
-              .collection('organisations').doc(orgId)
               .collection('claims').doc(claimId)
               .update({ paymentStatus: 'failed', paymentError: err.message });
           }
