@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import {
   collection,
@@ -6,332 +7,221 @@ import {
   query,
   where,
 } from "firebase/firestore";
-
 import { useEffect, useState } from "react";
+import { View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { IconSymbol } from "../../components/ui/icon-symbol";
 import { useAuth } from "../context/AuthProvider";
 import { db } from "../firebase/firebaseConfig";
 import { addListener } from "../../utils/listenerStore";
 
 const LAST_SEEN_CLAIMS = "claims_last_seen";
 
-export default function TabLayout() {
+// Raised centre Add button
+function AddIcon() {
+  return (
+    <View
+      style={{
+        width: 52,
+        height: 52,
+        backgroundColor: "#2563EB",
+        borderRadius: 16,
+        justifyContent: "center",
+        alignItems: "center",
+        marginBottom: 6,
+        shadowColor: "#2563EB",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.45,
+        shadowRadius: 8,
+        elevation: 8,
+      }}
+    >
+      <Ionicons name="add" size={30} color="#fff" />
+    </View>
+  );
+}
 
+export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const { role, authLoaded, user } = useAuth();
 
-  const [claimsBadge,setClaimsBadge] = useState(0);
-  const [usersBadge,setUsersBadge] = useState(0);
-  const [adminBadge,setAdminBadge] = useState(0);
+  const [claimsBadge, setClaimsBadge] = useState(0);
+  const [usersBadge, setUsersBadge] = useState(0);
+  const [adminBadge, setAdminBadge] = useState(0);
 
   const isAdmin = role === "admin";
 
   //////////////////////////////////////////////////////
-  // CLAIMS BADGE
+  // CLAIMS BADGE (employee — updated claims)
   //////////////////////////////////////////////////////
 
-  useEffect(()=>{
+  useEffect(() => {
+    if (!user) return;
+    let unsubscribe: any;
 
-    if(!user) return;
-
-    let unsubscribe:any;
-
-    const setupListener = async() => {
-
+    const setup = async () => {
       const lastSeen = await AsyncStorage.getItem(LAST_SEEN_CLAIMS);
       const lastSeenTime = lastSeen ? Number(lastSeen) : 0;
 
-      const q = query(
-        collection(db,"claims"),
-        where("userId","==",user.uid)
+      const q = query(collection(db, "claims"), where("userId", "==", user.uid));
+
+      unsubscribe = addListener(
+        onSnapshot(q, (snapshot) => {
+          let count = 0;
+          snapshot.docs.forEach((doc) => {
+            const data = doc.data();
+            const created = data.createdAt?.seconds ? data.createdAt.seconds * 1000 : 0;
+            const updated = data.statusUpdatedAt?.seconds ? data.statusUpdatedAt.seconds * 1000 : 0;
+            if (Math.max(created, updated) > lastSeenTime) count++;
+          });
+          setClaimsBadge(count);
+        })
       );
-
-      unsubscribe = addListener(onSnapshot(q,(snapshot)=>{
-
-        let count = 0;
-
-        snapshot.docs.forEach((doc)=>{
-
-          const data = doc.data();
-
-          const created =
-            data.createdAt?.seconds
-              ? data.createdAt.seconds * 1000
-              : 0;
-
-          const updated =
-            data.statusUpdatedAt?.seconds
-              ? data.statusUpdatedAt.seconds * 1000
-              : 0;
-
-          const latest = Math.max(created,updated);
-
-          if(latest > lastSeenTime){
-            count++;
-          }
-
-        });
-
-        setClaimsBadge(count);
-
-      }));
-
     };
 
-    setupListener();
-
-    return ()=> unsubscribe && unsubscribe();
-
-  },[user]);
+    setup();
+    return () => unsubscribe && unsubscribe();
+  }, [user]);
 
   //////////////////////////////////////////////////////
-  // USERS BADGE (pending employees)
+  // USERS BADGE (pending employee approvals)
   //////////////////////////////////////////////////////
 
-  useEffect(()=>{
-
-    if(!user || !isAdmin) return;
-
-    const q = query(
-      collection(db,"memberships"),
-      where("status","==","pending")
-    );
-
-    const unsubscribe = addListener(onSnapshot(q,(snap)=>{
-      setUsersBadge(snap.size);
-    }));
-
-    return unsubscribe;
-
-  },[user,isAdmin]);
+  useEffect(() => {
+    if (!user || !isAdmin) return;
+    const q = query(collection(db, "memberships"), where("status", "==", "pending"));
+    const unsub = addListener(onSnapshot(q, (snap) => setUsersBadge(snap.size)));
+    return unsub;
+  }, [user, isAdmin]);
 
   //////////////////////////////////////////////////////
-  // ADMIN BADGE (pending claims needing approval)
+  // ADMIN BADGE (pending claims)
   //////////////////////////////////////////////////////
 
-  useEffect(()=>{
+  useEffect(() => {
+    if (!user || !isAdmin) return;
+    const q = query(collection(db, "claims"), where("status", "==", "pending"));
+    const unsub = addListener(onSnapshot(q, (snap) => setAdminBadge(snap.size)));
+    return unsub;
+  }, [user, isAdmin]);
 
-    if(!user || !isAdmin) return;
+  if (!authLoaded) return null;
 
-    const q = query(
-      collection(db,"claims"),
-      where("status","==","pending")
-    );
-
-    const unsubscribe = addListener(onSnapshot(q,(snap)=>{
-      setAdminBadge(snap.size);
-    }));
-
-    return unsubscribe;
-
-  },[user,isAdmin]);
-
-  //////////////////////////////////////////////////////
-  // CLEAR CLAIMS BADGE
-  //////////////////////////////////////////////////////
-
-  const clearClaimsBadge = async()=>{
-
-    await AsyncStorage.setItem(
-      LAST_SEEN_CLAIMS,
-      Date.now().toString()
-    );
-
-    setClaimsBadge(0);
-
-  };
-
-  //////////////////////////////////////////////////////
-  // CLEAR USERS BADGE
-  //////////////////////////////////////////////////////
-
-  const clearUsersBadge = ()=>{
-
-    setUsersBadge(0);
-
-  };
-
-  //////////////////////////////////////////////////////
-  // CLEAR ADMIN BADGE
-  //////////////////////////////////////////////////////
-
-  const clearAdminBadge = ()=>{
-
-    setAdminBadge(0);
-
-  };
-
-  if(!authLoaded) return null;
-
-  //////////////////////////////////////////////////////
-  // TABS
-  //////////////////////////////////////////////////////
+  const TAB_HEIGHT = 64;
 
   return (
-
     <Tabs
       screenOptions={{
-        headerShown:false,
-        tabBarActiveTintColor:"#FFFFFF",
-        tabBarInactiveTintColor:"#64748B",
-        tabBarShowLabel:true,
-
+        headerShown: false,
+        tabBarActiveTintColor: "#38BDF8",
+        tabBarInactiveTintColor: "#475569",
+        tabBarShowLabel: true,
         tabBarStyle: {
-          backgroundColor: "#0F172A",
+          backgroundColor: "#0A1628",
+          borderTopWidth: 1,
           borderTopColor: "#1E293B",
-
-          height: 72 + insets.bottom,   // total height
-          paddingBottom: insets.bottom, // ONLY safe area
-          paddingTop: 6,                // small spacing (NOT 10+12 combo)
+          height: TAB_HEIGHT + insets.bottom,
+          paddingBottom: insets.bottom,
+          paddingTop: 8,
         },
-
-        tabBarItemStyle:{
-          justifyContent:"center",
-          alignItems:"center",
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: "600",
+          marginTop: 2,
         },
-
-        tabBarLabelStyle:{
-          fontSize:12,
-          paddingTop:8,
-          paddingBottom:14
-        }
+        tabBarItemStyle: {
+          justifyContent: "center",
+          alignItems: "center",
+        },
       }}
     >
-
-      {/* HOME */}
-
+      {/* ── HOME ── */}
       <Tabs.Screen
         name="home"
         options={{
-          title:"Home",
-          tabBarIcon:({color})=>(
-            <IconSymbol name="house.fill" size={22} color={color}/>
-          )
+          title: "Home",
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? "home" : "home-outline"} size={22} color={color} />
+          ),
         }}
       />
 
-      {/* CLAIM DETAILS HIDDEN */}
-
-      <Tabs.Screen
-        name="claims/[id]"
-        options={{ href:null }}
-      />
-
-      {/* CLAIMS */}
-
+      {/* ── CLAIMS (employee only) ── */}
       <Tabs.Screen
         name="claims"
-        listeners={{
-          tabPress: clearClaimsBadge
-        }}
+        listeners={{ tabPress: () => AsyncStorage.setItem(LAST_SEEN_CLAIMS, Date.now().toString()).then(() => setClaimsBadge(0)) }}
         options={{
-          title:"Claims",
+          title: "Claims",
+          href: isAdmin ? null : undefined,
           tabBarBadge: claimsBadge > 0 ? claimsBadge : undefined,
-          tabBarIcon:({color})=>(
-            <IconSymbol name="doc.text.fill" size={22} color={color}/>
-          )
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? "document-text" : "document-text-outline"} size={22} color={color} />
+          ),
         }}
       />
 
-      {/* PROFILE */}
-
+      {/* ── APPROVE (admin only) ── */}
       <Tabs.Screen
-        name="profile"
+        name="admin"
+        listeners={{ tabPress: () => setAdminBadge(0) }}
         options={{
-          title:"Profile",
-          tabBarIcon:({color})=>(
-            <IconSymbol
-              name="person.crop.circle.fill"
-              size={22}
-              color={color}
-            />
-          )
+          title: "Approve",
+          href: isAdmin ? undefined : null,
+          tabBarBadge: adminBadge > 0 ? adminBadge : undefined,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? "checkmark-circle" : "checkmark-circle-outline"} size={22} color={color} />
+          ),
         }}
       />
 
-      {/* ADD */}
-
+      {/* ── ADD EXPENSE (centre) ── */}
       <Tabs.Screen
         name="add-expense"
         options={{
-          title:"Add",
-          tabBarIcon:({color})=>(
-            <IconSymbol name="plus.circle.fill" size={26} color={color}/>
-          )
+          title: "",
+          tabBarIcon: () => <AddIcon />,
         }}
       />
 
-      {/* ANALYTICS */}
-
+      {/* ── ANALYTICS (employee) / TEAM (admin) ── */}
       <Tabs.Screen
         name="Analytics"
         options={{
-          title:"Analytics",
-          tabBarIcon:({color})=>(
-            <IconSymbol name="chart.bar.xaxis" size={22} color={color}/>
-          )
+          title: "Analytics",
+          href: isAdmin ? null : undefined,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? "bar-chart" : "bar-chart-outline"} size={22} color={color} />
+          ),
         }}
       />
-
-      {/* ADMIN */}
-
-      <Tabs.Screen
-        name="admin"
-        listeners={{
-          tabPress: clearAdminBadge
-        }}
-        options={{
-          title:"Admin",
-          href:isAdmin ? undefined : null,
-          tabBarBadge: adminBadge > 0 ? adminBadge : undefined,
-          tabBarIcon:({color})=>(
-            <IconSymbol name="shield.lefthalf.fill" size={22} color={color}/>
-          )
-        }}
-      />
-
-      {/* USERS APPROVAL */}
 
       <Tabs.Screen
         name="AdminUsers"
-        listeners={{
-          tabPress: clearUsersBadge
-        }}
+        listeners={{ tabPress: () => setUsersBadge(0) }}
         options={{
-          title:"Users",
-          href:isAdmin ? undefined : null,
+          title: "Team",
+          href: isAdmin ? undefined : null,
           tabBarBadge: usersBadge > 0 ? usersBadge : undefined,
-
-          // ⭐ better icon for approvals
-          tabBarIcon:({color})=>(
-            <IconSymbol
-              name="person.badge.clock.fill"
-              size={22}
-              color={color}
-            />
-          )
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? "people" : "people-outline"} size={22} color={color} />
+          ),
         }}
       />
 
-      {/* HELP */}
-
+      {/* ── PROFILE ── */}
       <Tabs.Screen
-        name="chatbot"
+        name="profile"
         options={{
-          title:"Help",
-          tabBarIcon:({color})=>(
-            <IconSymbol
-              name="questionmark.circle.fill"
-              size={22}
-              color={color}
-            />
-          )
+          title: "Profile",
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? "person-circle" : "person-circle-outline"} size={24} color={color} />
+          ),
         }}
       />
 
+      {/* ── HIDDEN SCREENS (navigable but not in tab bar) ── */}
+      <Tabs.Screen name="claims/[id]" options={{ href: null }} />
+      <Tabs.Screen name="chatbot"     options={{ href: null }} />
     </Tabs>
-
   );
 }

@@ -414,10 +414,16 @@ export default function ProfileScreen() {
         <SectionHeader label="ACCOUNT" />
         <View style={styles.card}>
           <MenuRow
+            icon="chatbubble-ellipses-outline"
+            label="AI Assistant"
+            sublabel="Ask questions about claims & policy"
+            onPress={() => router.push("/chatbot")}
+            isFirst
+          />
+          <MenuRow
             icon="lock-closed-outline"
             label="Reset Password"
             onPress={resetPassword}
-            isFirst
             isLast
           />
         </View>

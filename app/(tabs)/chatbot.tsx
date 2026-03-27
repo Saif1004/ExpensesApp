@@ -215,12 +215,12 @@ export default function ChatbotScreen() {
   /////////////////////////////////////////////////////////
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={0}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? tabBarHeight : 0}
       >
 
         <View style={styles.container}>
@@ -261,9 +261,7 @@ export default function ChatbotScreen() {
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => <MessageBubble item={item} />}
             style={{ flex: 1 }}
-            contentContainerStyle={{
-              paddingBottom: tabBarHeight + 100 // space for input
-            }}
+            contentContainerStyle={{ paddingBottom: 12 }}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
             onContentSizeChange={() => {
@@ -281,12 +279,7 @@ export default function ChatbotScreen() {
           />
 
           {/* INPUT */}
-          <View
-            style={[
-              styles.inputWrapper,
-              { bottom: tabBarHeight - 145 }
-            ]}
-          >
+          <View style={styles.inputWrapper}>
 
             <TextInput
               value={input}
@@ -328,7 +321,7 @@ const styles = StyleSheet.create({
 
   safe: { flex: 1, backgroundColor: "#0F172A" },
 
-  container: { flex: 1, padding: 16, backgroundColor: "#0F172A" },
+  container: { flex: 1, paddingTop: 16, paddingHorizontal: 16, backgroundColor: "#0F172A" },
 
   title: {
     fontSize: 28,
@@ -385,13 +378,13 @@ const styles = StyleSheet.create({
   },
 
   inputWrapper: {
-    position: "absolute",
-    left: 0,
-    right: 0,
     flexDirection: "row",
     gap: 10,
-    padding: 12,
-    backgroundColor: "#0F172A"
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: "#0F172A",
+    borderTopWidth: 1,
+    borderTopColor: "#1E293B",
   },
 
   input: {
