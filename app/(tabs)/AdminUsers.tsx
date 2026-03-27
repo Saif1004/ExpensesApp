@@ -15,6 +15,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View
 } from "react-native";
@@ -33,17 +34,30 @@ type UserItem = {
   status?: string;
 };
 
+function getInitials(displayName?: string, email?: string): string {
+  if (displayName && displayName.trim().length > 0) {
+    const parts = displayName.trim().split(" ");
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return displayName.trim()[0].toUpperCase();
+  }
+  if (email) {
+    return email[0].toUpperCase();
+  }
+  return "?";
+}
+
 export default function AdminUsers() {
 
   const { employeeLimit, orgPlan } = useAuth();
 
-  const [users,setUsers]           = useState<UserItem[]>([]);
-  const [approvedCount,setApprovedCount] = useState(0);
-  const [loading,setLoading]       = useState(true);
-
-  const [tab,setTab] = useState<"pending"|"approved"|"rejected">("pending");
-
-  const [pendingCount,setPendingCount] = useState(0);
+  const [users, setUsers]                   = useState<UserItem[]>([]);
+  const [approvedCount, setApprovedCount]   = useState(0);
+  const [loading, setLoading]               = useState(true);
+  const [tab, setTab]                       = useState<"pending" | "approved" | "rejected">("pending");
+  const [pendingCount, setPendingCount]     = useState(0);
+  const [searchQuery, setSearchQuery]       = useState("");
 
   //////////////////////////////////////////////////////
   // LOAD USERS
@@ -51,11 +65,11 @@ export default function AdminUsers() {
 
   const loadUsers = async () => {
 
-    try{
+    try {
 
       setLoading(true);
 
-      if(!auth.currentUser){
+      if (!auth.currentUser) {
         setUsers([]);
         setLoading(false);
         return;
@@ -66,13 +80,13 @@ export default function AdminUsers() {
       //////////////////////////////////////////////////////
 
       const membershipQuery = query(
-        collection(db,"memberships"),
-        where("userId","==",auth.currentUser.uid)
+        collection(db, "memberships"),
+        where("userId", "==", auth.currentUser.uid)
       );
 
       const membershipSnap = await getDocs(membershipQuery);
 
-      if(membershipSnap.empty){
+      if (membershipSnap.empty) {
         setUsers([]);
         setLoading(false);
         return;
@@ -86,21 +100,21 @@ export default function AdminUsers() {
       //////////////////////////////////////////////////////
 
       const q = query(
-        collection(db,"memberships"),
-        where("orgId","==",orgId),
-        where("status","==",tab)
+        collection(db, "memberships"),
+        where("orgId", "==", orgId),
+        where("status", "==", tab)
       );
 
       const snap = await getDocs(q);
 
-      const list:UserItem[] = [];
+      const list: UserItem[] = [];
 
-      for(const docSnap of snap.docs){
+      for (const docSnap of snap.docs) {
 
         const membership = docSnap.data();
 
         const userDoc = await getDoc(
-          doc(db,"users",membership.userId)
+          doc(db, "users", membership.userId)
         );
 
         const userData = userDoc.exists() ? userDoc.data() : {};
@@ -122,30 +136,28 @@ export default function AdminUsers() {
       // UPDATE BADGE COUNT + APPROVED COUNT
       //////////////////////////////////////////////////////
 
-      if(tab === "pending"){
+      if (tab === "pending") {
         setPendingCount(list.length);
       }
 
-      if(tab === "approved"){
+      if (tab === "approved") {
         setApprovedCount(list.length);
       } else {
         // Always keep approved count fresh
         const approvedSnap = await getDocs(query(
-          collection(db,"memberships"),
-          where("orgId","==",orgId),
-          where("status","==","approved")
+          collection(db, "memberships"),
+          where("orgId", "==", orgId),
+          where("status", "==", "approved")
         ));
         setApprovedCount(approvedSnap.size);
       }
 
-    }
-    catch(error){
+    } catch (error) {
 
-      console.log("LOAD USERS ERROR:",error);
-      Alert.alert("Error","Could not load users.");
+      console.log("LOAD USERS ERROR:", error);
+      Alert.alert("Error", "Could not load users.");
 
-    }
-    finally{
+    } finally {
 
       setLoading(false);
 
@@ -159,57 +171,57 @@ export default function AdminUsers() {
 
   const loadPendingCount = async () => {
 
-    try{
+    try {
 
-      if(!auth.currentUser) return;
+      if (!auth.currentUser) return;
 
       const membershipQuery = query(
-        collection(db,"memberships"),
-        where("userId","==",auth.currentUser.uid)
+        collection(db, "memberships"),
+        where("userId", "==", auth.currentUser.uid)
       );
 
       const membershipSnap = await getDocs(membershipQuery);
 
-      if(membershipSnap.empty) return;
+      if (membershipSnap.empty) return;
 
       const orgId = membershipSnap.docs[0].data().orgId;
 
       const q = query(
-        collection(db,"memberships"),
-        where("orgId","==",orgId),
-        where("status","==","pending")
+        collection(db, "memberships"),
+        where("orgId", "==", orgId),
+        where("status", "==", "pending")
       );
 
       const snap = await getDocs(q);
 
       setPendingCount(snap.size);
 
-    }catch(err){
+    } catch (err) {
 
-      console.log("COUNT ERROR:",err);
+      console.log("COUNT ERROR:", err);
 
     }
 
   };
 
-  useEffect(()=>{
+  useEffect(() => {
     loadPendingCount();
-  },[]);
+  }, []);
 
-  useEffect(()=>{
+  useEffect(() => {
     loadUsers();
-  },[tab]);
+  }, [tab]);
 
   //////////////////////////////////////////////////////
   // APPROVE
   //////////////////////////////////////////////////////
 
-  const approveUser = async (membershipId:string) => {
+  const approveUser = async (membershipId: string) => {
 
-    try{
+    try {
 
       // Enforce employee limit (admin counts as 1 approved member)
-      if(approvedCount >= employeeLimit){
+      if (approvedCount >= employeeLimit) {
         Alert.alert(
           "Employee limit reached",
           `Your ${orgPlan} plan allows up to ${employeeLimit} members. Upgrade your plan to add more.`
@@ -218,18 +230,17 @@ export default function AdminUsers() {
       }
 
       await updateDoc(
-        doc(db,"memberships",membershipId),
-        { status:"approved" }
+        doc(db, "memberships", membershipId),
+        { status: "approved" }
       );
 
       loadUsers();
       loadPendingCount();
 
-    }
-    catch(error){
+    } catch (error) {
 
-      console.log("APPROVE ERROR:",error);
-      Alert.alert("Error","Could not approve user.");
+      console.log("APPROVE ERROR:", error);
+      Alert.alert("Error", "Could not approve user.");
 
     }
 
@@ -239,47 +250,55 @@ export default function AdminUsers() {
   // REJECT
   //////////////////////////////////////////////////////
 
-  const rejectUser = async (membershipId:string) => {
+  const rejectUser = async (membershipId: string) => {
 
-    try{
+    try {
 
       await updateDoc(
-        doc(db,"memberships",membershipId),
-        { status:"rejected" }
+        doc(db, "memberships", membershipId),
+        { status: "rejected" }
       );
 
       loadUsers();
       loadPendingCount();
 
-    }
-    catch(error){
+    } catch (error) {
 
-      console.log("REJECT ERROR:",error);
-      Alert.alert("Error","Could not reject user.");
+      console.log("REJECT ERROR:", error);
+      Alert.alert("Error", "Could not reject user.");
 
     }
 
   };
 
   //////////////////////////////////////////////////////
+  // FILTERED USERS
+  //////////////////////////////////////////////////////
+
+  const filteredUsers = users.filter((user) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    const nameMatch = user.displayName?.toLowerCase().includes(q) ?? false;
+    const emailMatch = user.email?.toLowerCase().includes(q) ?? false;
+    return nameMatch || emailMatch;
+  });
+
+  //////////////////////////////////////////////////////
   // TAB BUTTON
   //////////////////////////////////////////////////////
 
-  const TabButton = (name:"pending"|"approved"|"rejected",label:string) => (
+  const TabButton = (name: "pending" | "approved" | "rejected", label: string) => (
 
     <TouchableOpacity
       style={[
         styles.tab,
         tab === name && styles.tabActive
       ]}
-      onPress={()=>{
-
+      onPress={() => {
         setTab(name);
-
-        if(name === "pending"){
+        if (name === "pending") {
           setPendingCount(0);
         }
-
       }}
     >
 
@@ -308,13 +327,11 @@ export default function AdminUsers() {
   // UI
   //////////////////////////////////////////////////////
 
-  return(
+  return (
 
     <SafeAreaView style={styles.container}>
 
-      <Text style={styles.title}>
-        Admin Panel
-      </Text>
+      <Text style={styles.title}>Admin Panel</Text>
 
       <View style={styles.limitRow}>
         <Text style={styles.limitText}>
@@ -325,66 +342,98 @@ export default function AdminUsers() {
         )}
       </View>
 
+      {/* Search bar */}
+      <View style={styles.searchWrapper}>
+        <Text style={styles.searchIcon}>🔍</Text>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search by name or email..."
+          placeholderTextColor="#475569"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          autoCapitalize="none"
+          autoCorrect={false}
+          clearButtonMode="while-editing"
+        />
+      </View>
+
       <View style={styles.tabs}>
-
-        {TabButton("pending","Pending")}
-        {TabButton("approved","Approved")}
-        {TabButton("rejected","Rejected")}
-
+        {TabButton("pending", "Pending")}
+        {TabButton("approved", "Approved")}
+        {TabButton("rejected", "Rejected")}
       </View>
 
       {loading ? (
 
-        <ActivityIndicator color="#3B82F6" size="large"/>
+        <ActivityIndicator color="#38BDF8" size="large" style={{ marginTop: 40 }} />
 
-      ):(
+      ) : (
 
-        <ScrollView>
+        <ScrollView showsVerticalScrollIndicator={false}>
 
-          {users.length===0 ? (
+          {filteredUsers.length === 0 ? (
 
-            <Text style={styles.empty}>
-              No {tab} users
-            </Text>
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyIcon}>
+                {searchQuery.trim() ? "🔍" : "👤"}
+              </Text>
+              <Text style={styles.empty}>
+                {searchQuery.trim()
+                  ? `No results for "${searchQuery}"`
+                  : `No ${tab} users`}
+              </Text>
+            </View>
 
-          ):(
+          ) : (
 
-            users.map((user)=>(
+            filteredUsers.map((user) => (
 
               <View key={user.id} style={styles.card}>
 
-                <Text style={styles.name}>
-                  {user.displayName || "Unknown"}
-                </Text>
+                <View style={styles.cardTop}>
 
-                <Text style={styles.email}>
-                  {user.email || "No email"}
-                </Text>
+                  {/* Avatar initials */}
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>
+                      {getInitials(user.displayName, user.email)}
+                    </Text>
+                  </View>
 
-                <Text style={styles.role}>
-                  Role: {user.role}
-                </Text>
+                  {/* Name + email */}
+                  <View style={styles.userInfo}>
+                    <Text style={styles.name}>
+                      {user.displayName || "Unknown"}
+                    </Text>
+                    <Text style={styles.email}>
+                      {user.email || "No email"}
+                    </Text>
+                  </View>
+
+                  {/* Role badge */}
+                  <View style={styles.roleBadge}>
+                    <Text style={styles.roleBadgeText}>
+                      {user.role || "employee"}
+                    </Text>
+                  </View>
+
+                </View>
 
                 {tab === "pending" && (
 
                   <View style={styles.buttons}>
 
                     <TouchableOpacity
-                      style={styles.approve}
-                      onPress={()=>approveUser(user.id)}
+                      style={styles.approveBtn}
+                      onPress={() => approveUser(user.id)}
                     >
-                      <Text style={styles.approveText}>
-                        Approve
-                      </Text>
+                      <Text style={styles.approveBtnText}>Approve</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
-                      style={styles.reject}
-                      onPress={()=>rejectUser(user.id)}
+                      style={styles.rejectBtn}
+                      onPress={() => rejectUser(user.id)}
                     >
-                      <Text style={styles.rejectText}>
-                        Reject
-                      </Text>
+                      <Text style={styles.rejectBtnText}>Reject</Text>
                     </TouchableOpacity>
 
                   </View>
@@ -409,140 +458,228 @@ export default function AdminUsers() {
 
 const styles = StyleSheet.create({
 
-  container:{
-    flex:1,
-    backgroundColor:"#0F172A",
-    padding:20
+  container: {
+    flex: 1,
+    backgroundColor: "#0F172A",
+    paddingHorizontal: 20,
+    paddingTop: 12
   },
 
-  title:{
-    color:"#F8FAFC",
-    fontSize:26,
-    fontWeight:"bold",
-    marginBottom:16
+  title: {
+    color: "#F8FAFC",
+    fontSize: 26,
+    fontWeight: "bold",
+    marginBottom: 6
   },
 
-  tabs:{
-    flexDirection:"row",
-    marginBottom:20,
-    gap:10
+  limitRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 14
   },
 
-  tab:{
-    flex:1,
-    padding:10,
-    borderRadius:10,
-    backgroundColor:"#1E293B",
-    alignItems:"center",
-    flexDirection:"row",
-    justifyContent:"center",
-    gap:6
+  limitText: {
+    color: "#64748B",
+    fontSize: 12
   },
 
-  tabActive:{
-    backgroundColor:"#2563EB"
+  limitWarning: {
+    color: "#F97316",
+    fontSize: 11,
+    fontWeight: "700"
   },
 
-  tabText:{
-    color:"#94A3B8",
-    fontWeight:"600"
+  /* Search */
+  searchWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1E293B",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#334155",
+    paddingHorizontal: 12,
+    marginBottom: 16,
+    height: 44
+  },
+  searchIcon: {
+    fontSize: 14,
+    marginRight: 8
+  },
+  searchInput: {
+    flex: 1,
+    color: "#F8FAFC",
+    fontSize: 14
   },
 
-  tabTextActive:{
-    color:"#fff"
+  /* Tabs */
+  tabs: {
+    flexDirection: "row",
+    marginBottom: 20,
+    gap: 8
   },
 
-  badge:{
-    backgroundColor:"#DC2626",
-    borderRadius:10,
-    paddingHorizontal:6,
-    paddingVertical:2
+  tab: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: "#1E293B",
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 6,
+    borderWidth: 1,
+    borderColor: "#334155"
   },
 
-  badgeText:{
-    color:"#fff",
-    fontSize:10,
-    fontWeight:"700"
+  tabActive: {
+    backgroundColor: "#2563EB",
+    borderColor: "#2563EB"
   },
 
-  card:{
-    backgroundColor:"#1E293B",
-    padding:16,
-    borderRadius:12,
-    marginBottom:12
+  tabText: {
+    color: "#94A3B8",
+    fontWeight: "600",
+    fontSize: 13
   },
 
-  name:{
-    color:"#F8FAFC",
-    fontSize:16,
-    fontWeight:"600"
+  tabTextActive: {
+    color: "#fff"
   },
 
-  email:{
-    color:"#94A3B8",
-    marginTop:4
+  badge: {
+    backgroundColor: "#DC2626",
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2
   },
 
-  role:{
-    color:"#64748B",
-    marginTop:4,
-    fontSize:12
+  badgeText: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "700"
   },
 
-  buttons:{
-    flexDirection:"row",
-    marginTop:10,
-    gap:10
+  /* Cards */
+  card: {
+    backgroundColor: "#1E293B",
+    borderRadius: 14,
+    marginBottom: 12,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#334155"
   },
 
-  approve:{
-    flex:1,
-    backgroundColor:"#2563EB",
-    padding:10,
-    borderRadius:8,
-    alignItems:"center"
+  cardTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
+    gap: 12
   },
 
-  reject:{
-    flex:1,
-    backgroundColor:"#DC2626",
-    padding:10,
-    borderRadius:8,
-    alignItems:"center"
+  /* Avatar */
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#2563EB",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0
   },
 
-  approveText:{
-    color:"#fff",
-    fontWeight:"600"
+  avatarText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 16
   },
 
-  rejectText:{
-    color:"#fff",
-    fontWeight:"600"
+  userInfo: {
+    flex: 1
   },
 
-  empty:{
-    color:"#94A3B8",
-    textAlign:"center",
-    marginTop:30
+  name: {
+    color: "#F8FAFC",
+    fontSize: 15,
+    fontWeight: "600"
   },
 
-  limitRow:{
-    flexDirection:"row",
-    alignItems:"center",
-    gap:10,
-    marginBottom:14
+  email: {
+    color: "#94A3B8",
+    marginTop: 2,
+    fontSize: 12
   },
 
-  limitText:{
-    color:"#64748B",
-    fontSize:12
+  /* Role badge */
+  roleBadge: {
+    backgroundColor: "#0F172A",
+    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: "#38BDF8"
   },
 
-  limitWarning:{
-    color:"#F97316",
-    fontSize:11,
-    fontWeight:"700"
+  roleBadgeText: {
+    color: "#38BDF8",
+    fontSize: 11,
+    fontWeight: "600",
+    textTransform: "capitalize"
+  },
+
+  /* Action buttons */
+  buttons: {
+    flexDirection: "row",
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+    gap: 10
+  },
+
+  approveBtn: {
+    flex: 1,
+    backgroundColor: "#2563EB",
+    paddingVertical: 11,
+    borderRadius: 10,
+    alignItems: "center"
+  },
+
+  rejectBtn: {
+    flex: 1,
+    backgroundColor: "transparent",
+    paddingVertical: 11,
+    borderRadius: 10,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#DC2626"
+  },
+
+  approveBtnText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 14
+  },
+
+  rejectBtnText: {
+    color: "#DC2626",
+    fontWeight: "700",
+    fontSize: 14
+  },
+
+  /* Empty state */
+  emptyState: {
+    alignItems: "center",
+    marginTop: 60,
+    gap: 10
+  },
+
+  emptyIcon: {
+    fontSize: 36
+  },
+
+  empty: {
+    color: "#94A3B8",
+    textAlign: "center",
+    fontSize: 14
   }
 
 });

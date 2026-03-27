@@ -23,6 +23,7 @@ import { doc, getDoc } from "firebase/firestore";
 
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 
 import { auth, db } from "../../app/firebase/firebaseConfig";
 import { ThemedText } from "../../components/themed-text";
@@ -30,6 +31,105 @@ import { useAuth } from "../context/AuthProvider";
 import { unsubscribeAll } from "../../utils/listenerStore";
 
 const DELETE_URL = process.env.EXPO_PUBLIC_DELETE_ACCOUNT_URL!;
+
+//////////////////////////////////////////////////////
+// Types
+//////////////////////////////////////////////////////
+
+type PaymentInfo = {
+  stripeCardBrand?: string;
+  stripeCardLast4?: string;
+  stripePayoutBrand?: string;
+  stripePayoutLast4?: string;
+};
+
+//////////////////////////////////////////////////////
+// Helper: format card info
+//////////////////////////////////////////////////////
+
+function formatCard(brand?: string, last4?: string): string | null {
+  if (!brand || !last4) return null;
+  return `${brand.toUpperCase()} \u2022\u2022\u2022\u2022 ${last4}`;
+}
+
+//////////////////////////////////////////////////////
+// Sub-components
+//////////////////////////////////////////////////////
+
+function SectionHeader({ label }: { label: string }) {
+  return (
+    <ThemedText style={styles.sectionHeader}>{label}</ThemedText>
+  );
+}
+
+type MenuRowProps = {
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  label: string;
+  sublabel?: string | null;
+  onPress?: () => void;
+  danger?: boolean;
+  chevron?: boolean;
+  rightElement?: React.ReactNode;
+  isFirst?: boolean;
+  isLast?: boolean;
+};
+
+function MenuRow({
+  icon,
+  label,
+  sublabel,
+  onPress,
+  danger = false,
+  chevron = true,
+  rightElement,
+  isFirst = false,
+  isLast = false
+}: MenuRowProps) {
+  return (
+    <TouchableOpacity
+      style={[
+        styles.menuRow,
+        isFirst && styles.menuRowFirst,
+        isLast && styles.menuRowLast,
+        !isLast && styles.menuRowBorder
+      ]}
+      onPress={onPress}
+      activeOpacity={0.65}
+      disabled={!onPress}
+    >
+      {/* Left icon */}
+      <View style={[styles.iconWrap, danger && styles.iconWrapDanger]}>
+        <Ionicons
+          name={icon}
+          size={18}
+          color={danger ? "#F87171" : "#38BDF8"}
+        />
+      </View>
+
+      {/* Label block */}
+      <View style={styles.menuLabelBlock}>
+        <ThemedText style={[styles.menuLabel, danger && styles.menuLabelDanger]}>
+          {label}
+        </ThemedText>
+        {!!sublabel && (
+          <ThemedText style={styles.menuSublabel}>{sublabel}</ThemedText>
+        )}
+      </View>
+
+      {/* Right side */}
+      {rightElement
+        ? rightElement
+        : chevron && (
+          <Ionicons name="chevron-forward" size={16} color="#475569" />
+        )
+      }
+    </TouchableOpacity>
+  );
+}
+
+//////////////////////////////////////////////////////
+// Main screen
+//////////////////////////////////////////////////////
 
 export default function ProfileScreen() {
 
@@ -40,6 +140,7 @@ export default function ProfileScreen() {
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [paymentInfo, setPaymentInfo] = useState<PaymentInfo>({});
 
   // Delete modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -58,7 +159,16 @@ export default function ProfileScreen() {
       try {
         if (!user) { setLoading(false); return; }
         const snap = await getDoc(doc(db, "users", user.uid));
-        if (snap.exists()) setUsername(snap.data().username);
+        if (snap.exists()) {
+          const data = snap.data();
+          setUsername(data.username ?? "");
+          setPaymentInfo({
+            stripeCardBrand:   data.stripeCardBrand,
+            stripeCardLast4:   data.stripeCardLast4,
+            stripePayoutBrand: data.stripePayoutBrand,
+            stripePayoutLast4: data.stripePayoutLast4
+          });
+        }
       } catch (err) {
         console.log("User load error:", err);
       }
@@ -106,14 +216,11 @@ export default function ProfileScreen() {
     setDeleteError("");
 
     try {
-      // Re-authenticate to confirm identity
       const credential = EmailAuthProvider.credential(user.email, deletePassword);
       await reauthenticateWithCredential(user, credential);
 
-      // Get a fresh token for the server
       const token = await user.getIdToken(true);
 
-      // Server deletes all Firestore data + Firebase Auth user
       const res = await fetch(DELETE_URL, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` }
@@ -124,7 +231,6 @@ export default function ProfileScreen() {
         throw new Error(body.error ?? "Server error");
       }
 
-      // Detach all listeners before sign-out to prevent permission-denied errors
       unsubscribeAll();
       await signOut(auth);
       router.replace("/");
@@ -169,10 +275,34 @@ export default function ProfileScreen() {
   if (loading) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+        <ActivityIndicator size="large" color="#38BDF8" />
       </View>
     );
   }
+
+  //////////////////////////////////////////////////////
+  // Derived values
+  //////////////////////////////////////////////////////
+
+  const initials = username?.charAt(0)?.toUpperCase() || "U";
+
+  const planLabel =
+    orgPlan === "free"   ? "Free" :
+    orgPlan === "trial"  ? `Trial · ${trialDaysLeft}d left` :
+    orgPlan.charAt(0).toUpperCase() + orgPlan.slice(1);
+
+  const planCardTitle =
+    orgPlan === "free"   ? "Start your free trial" :
+    orgPlan === "trial"  ? "Upgrade to keep access" :
+    "Manage subscription";
+
+  const planCardSub =
+    orgPlan === "free"   ? "7 days of Pro features, no payment needed" :
+    orgPlan === "trial"  ? `${trialDaysLeft} day${trialDaysLeft !== 1 ? "s" : ""} remaining on trial` :
+    `You're on the ${orgPlan.charAt(0).toUpperCase() + orgPlan.slice(1)} plan`;
+
+  const cardInfoLabel  = formatCard(paymentInfo.stripeCardBrand,   paymentInfo.stripeCardLast4);
+  const payoutInfoLabel = formatCard(paymentInfo.stripePayoutBrand, paymentInfo.stripePayoutLast4);
 
   //////////////////////////////////////////////////////
   // UI
@@ -183,116 +313,142 @@ export default function ProfileScreen() {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
 
-        <ThemedText type="title" style={styles.title}>Profile</ThemedText>
-
-        {/* AVATAR */}
-        <View style={styles.avatarContainer}>
-          <View style={styles.avatar}>
-            <ThemedText style={styles.avatarText}>
-              {username?.charAt(0)?.toUpperCase() || "U"}
-            </ThemedText>
+        {/* ── AVATAR SECTION ── */}
+        <View style={styles.avatarSection}>
+          <View style={styles.avatarRing}>
+            <View style={styles.avatar}>
+              <ThemedText style={styles.avatarText}>{initials}</ThemedText>
+            </View>
           </View>
+
           <ThemedText style={styles.name}>{username || "User"}</ThemedText>
           <ThemedText style={styles.email}>{user?.email}</ThemedText>
-          <View style={styles.planBadge}>
-            <ThemedText style={styles.planBadgeText}>
-              {orgPlan === "trial"
-                ? `Trial · ${trialDaysLeft}d left`
-                : orgPlan.charAt(0).toUpperCase() + orgPlan.slice(1)}
-            </ThemedText>
+
+          <View style={styles.badgeRow}>
+            {/* Role badge */}
+            <View style={[
+              styles.roleBadge,
+              role === "admin" ? styles.roleBadgeAdmin : styles.roleBadgeEmployee
+            ]}>
+              <ThemedText style={[
+                styles.roleBadgeText,
+                role === "admin" ? styles.roleBadgeTextAdmin : styles.roleBadgeTextEmployee
+              ]}>
+                {role?.toUpperCase()}
+              </ThemedText>
+            </View>
+
+            {/* Plan badge */}
+            <View style={styles.planBadge}>
+              <ThemedText style={styles.planBadgeText}>{planLabel}</ThemedText>
+            </View>
           </View>
         </View>
 
-        {/* PLAN CARD */}
+        {/* ── PLAN CARD ── */}
         <TouchableOpacity
           style={styles.planCard}
           onPress={() => router.push("/plans")}
           activeOpacity={0.8}
         >
-          <View style={{ flex: 1 }}>
-            <ThemedText style={styles.planCardTitle}>
-              {orgPlan === "free"
-                ? "Start your free trial"
-                : orgPlan === "trial"
-                ? "Upgrade to keep access"
-                : "Manage subscription"}
-            </ThemedText>
-            <ThemedText style={styles.planCardSub}>
-              {orgPlan === "free"
-                ? "7 days of Pro features, no payment needed"
-                : orgPlan === "trial"
-                ? `${trialDaysLeft} day${trialDaysLeft !== 1 ? "s" : ""} remaining on trial`
-                : `You're on the ${orgPlan.charAt(0).toUpperCase() + orgPlan.slice(1)} plan`}
-            </ThemedText>
+          <View style={styles.planCardIcon}>
+            <Ionicons name="flash" size={18} color="#22C55E" />
           </View>
-          <ThemedText style={styles.planCardArrow}>›</ThemedText>
+          <View style={{ flex: 1 }}>
+            <ThemedText style={styles.planCardTitle}>{planCardTitle}</ThemedText>
+            <ThemedText style={styles.planCardSub}>{planCardSub}</ThemedText>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#22C55E" />
         </TouchableOpacity>
 
-        {/* ADMIN TOOLS */}
+        {/* ── ADMIN TOOLS ── */}
         {role === "admin" && (
-          <View style={styles.card}>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => router.push("../admin/manage-policies")}
-            >
-              <ThemedText style={styles.actionText}>Manage Policies</ThemedText>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => router.push("../admin/manage-employees")}
-            >
-              <ThemedText style={styles.actionText}>Manage Employees</ThemedText>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => router.push("/payment-setup")}
-            >
-              <ThemedText style={styles.actionText}>💳  Payment Method</ThemedText>
-            </TouchableOpacity>
-          </View>
+          <>
+            <SectionHeader label="ADMIN TOOLS" />
+            <View style={styles.card}>
+              <MenuRow
+                icon="document-text-outline"
+                label="Manage Policies"
+                onPress={() => router.push("../admin/manage-policies")}
+                isFirst
+              />
+              <MenuRow
+                icon="people-outline"
+                label="Manage Employees"
+                onPress={() => router.push("../admin/manage-employees")}
+              />
+              <MenuRow
+                icon="card-outline"
+                label="Payment Method"
+                sublabel={cardInfoLabel}
+                onPress={() => router.push("/payment-setup")}
+                isLast
+              />
+            </View>
+          </>
         )}
 
-        {/* EMPLOYEE PAYOUT */}
+        {/* ── EMPLOYEE PAYOUT ── */}
         {role === "employee" && (
-          <View style={styles.card}>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => router.push("/payout-setup")}
-            >
-              <ThemedText style={styles.actionText}>🏦  Payout Account</ThemedText>
-            </TouchableOpacity>
-          </View>
+          <>
+            <SectionHeader label="PAYOUTS" />
+            <View style={styles.card}>
+              <MenuRow
+                icon="wallet-outline"
+                label="Payout Account"
+                sublabel={payoutInfoLabel}
+                onPress={() => router.push("/payout-setup")}
+                isFirst
+                isLast
+              />
+            </View>
+          </>
         )}
 
-        {/* ACCOUNT */}
+        {/* ── ACCOUNT ── */}
+        <SectionHeader label="ACCOUNT" />
         <View style={styles.card}>
-          <TouchableOpacity style={styles.actionButton} onPress={resetPassword}>
-            <ThemedText style={styles.actionText}>Reset Password</ThemedText>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.deleteButton} onPress={openDeleteModal}>
-            <ThemedText style={styles.deleteText}>Delete Account</ThemedText>
-          </TouchableOpacity>
+          <MenuRow
+            icon="lock-closed-outline"
+            label="Reset Password"
+            onPress={resetPassword}
+            isFirst
+            isLast
+          />
         </View>
 
-        <TouchableOpacity
-          style={styles.logoutButton}
-          onPress={logout}
-          disabled={loggingOut}
-        >
-          {loggingOut
-            ? <ActivityIndicator color="#fff" />
-            : <ThemedText style={styles.logoutText}>Log Out</ThemedText>
-          }
-        </TouchableOpacity>
+        {/* ── DANGER ZONE ── */}
+        <SectionHeader label="DANGER ZONE" />
+        <View style={styles.card}>
+          <MenuRow
+            icon="trash-outline"
+            label="Delete Account"
+            onPress={openDeleteModal}
+            danger
+            isFirst
+          />
+          <MenuRow
+            icon="log-out-outline"
+            label={loggingOut ? "Logging out…" : "Log Out"}
+            onPress={loggingOut ? undefined : logout}
+            danger
+            chevron={!loggingOut}
+            rightElement={loggingOut
+              ? <ActivityIndicator color="#F87171" size="small" />
+              : undefined
+            }
+            isLast
+          />
+        </View>
 
       </ScrollView>
 
-      {/* DELETE CONFIRMATION MODAL */}
+      {/* ── DELETE CONFIRMATION MODAL ── */}
       <Modal
         visible={showDeleteModal}
         transparent
@@ -311,6 +467,12 @@ export default function ProfileScreen() {
           />
 
           <View style={styles.modalBox}>
+
+            <View style={styles.modalIconRow}>
+              <View style={styles.modalIconWrap}>
+                <Ionicons name="warning-outline" size={22} color="#F87171" />
+              </View>
+            </View>
 
             <ThemedText style={styles.modalTitle}>Delete Account</ThemedText>
 
@@ -380,7 +542,7 @@ const styles = StyleSheet.create({
 
   container: {
     paddingHorizontal: 20,
-    paddingTop: 16
+    paddingTop: 12
   },
 
   loading: {
@@ -390,140 +552,217 @@ const styles = StyleSheet.create({
     backgroundColor: "#0F172A"
   },
 
-  title: {
-    fontSize: 32,
-    fontWeight: "bold",
-    color: "#F8FAFC",
-    marginBottom: 10
+  /* ── Avatar ── */
+  avatarSection: {
+    alignItems: "center",
+    paddingVertical: 28,
+    marginBottom: 8
   },
 
-  avatarContainer: {
+  avatarRing: {
+    width: 108,
+    height: 108,
+    borderRadius: 54,
+    borderWidth: 3,
+    borderColor: "#38BDF8",
+    justifyContent: "center",
     alignItems: "center",
-    marginBottom: 28
+    marginBottom: 14
   },
 
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: "#2563EB",
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: "#1E3A5F",
     justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 10
+    alignItems: "center"
   },
 
   avatarText: {
-    color: "#FFF",
-    fontSize: 30,
-    fontWeight: "bold"
+    color: "#38BDF8",
+    fontSize: 38,
+    fontWeight: "800"
   },
 
   name: {
     color: "#F8FAFC",
-    fontSize: 20,
-    fontWeight: "600"
+    fontSize: 22,
+    fontWeight: "700",
+    letterSpacing: 0.3
   },
 
   email: {
-    color: "#94A3B8",
+    color: "#64748B",
     marginTop: 4,
     fontSize: 14
   },
 
+  badgeRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 12
+  },
+
+  roleBadge: {
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 4
+  },
+
+  roleBadgeAdmin: {
+    backgroundColor: "#1C1917",
+    borderWidth: 1,
+    borderColor: "#F59E0B"
+  },
+
+  roleBadgeEmployee: {
+    backgroundColor: "#0C1A2E",
+    borderWidth: 1,
+    borderColor: "#38BDF8"
+  },
+
+  roleBadgeText: {
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 1
+  },
+
+  roleBadgeTextAdmin:    { color: "#F59E0B" },
+  roleBadgeTextEmployee: { color: "#38BDF8" },
+
   planBadge: {
-    marginTop: 10,
-    backgroundColor: "#1E293B",
     borderRadius: 20,
     paddingHorizontal: 12,
     paddingVertical: 4,
+    backgroundColor: "#1E293B",
     borderWidth: 1,
     borderColor: "#334155"
   },
 
   planBadgeText: {
     color: "#94A3B8",
-    fontSize: 12,
-    fontWeight: "600",
+    fontSize: 11,
+    fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 0.8
   },
 
+  /* ── Plan card ── */
   planCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#0F2A1A",
+    backgroundColor: "#052E16",
     borderWidth: 1.5,
-    borderColor: "#22C55E",
-    borderRadius: 14,
+    borderColor: "#166534",
+    borderRadius: 16,
     padding: 16,
-    marginBottom: 20
+    marginBottom: 24,
+    gap: 12
+  },
+
+  planCardIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "#0A3D1A",
+    justifyContent: "center",
+    alignItems: "center"
   },
 
   planCardTitle: {
-    color: "#22C55E",
+    color: "#4ADE80",
     fontSize: 15,
     fontWeight: "700",
-    marginBottom: 3
+    marginBottom: 2
   },
 
   planCardSub: {
+    color: "#4B7A59",
+    fontSize: 12
+  },
+
+  /* ── Section header ── */
+  sectionHeader: {
+    color: "#475569",
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 1.2,
+    marginBottom: 8,
+    marginLeft: 4
+  },
+
+  /* ── Menu card ── */
+  card: {
+    backgroundColor: "#1E293B",
+    borderRadius: 16,
+    marginBottom: 24,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#334155"
+  },
+
+  /* ── Menu row ── */
+  menuRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 14
+  },
+
+  menuRowFirst: {
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16
+  },
+
+  menuRowLast: {
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16
+  },
+
+  menuRowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#334155"
+  },
+
+  iconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: "#0F2A3D",
+    justifyContent: "center",
+    alignItems: "center"
+  },
+
+  iconWrapDanger: {
+    backgroundColor: "#2D0A0A"
+  },
+
+  menuLabelBlock: {
+    flex: 1,
+    gap: 2
+  },
+
+  menuLabel: {
+    color: "#F1F5F9",
+    fontSize: 15,
+    fontWeight: "500"
+  },
+
+  menuLabelDanger: {
+    color: "#F87171"
+  },
+
+  menuSublabel: {
     color: "#64748B",
     fontSize: 12
   },
 
-  planCardArrow: {
-    color: "#22C55E",
-    fontSize: 24,
-    marginLeft: 8
-  },
-
-  card: {
-    backgroundColor: "rgba(30,41,59,0.95)",
-    padding: 16,
-    borderRadius: 14,
-    marginBottom: 20
-  },
-
-  actionButton: {
-    paddingVertical: 10
-  },
-
-  actionText: {
-    color: "#38BDF8",
-    fontSize: 16
-  },
-
-  deleteButton: {
-    marginTop: 14,
-    backgroundColor: "#DC2626",
-    padding: 13,
-    borderRadius: 10,
-    alignItems: "center"
-  },
-
-  deleteText: {
-    color: "#FFF",
-    fontWeight: "600",
-    fontSize: 15
-  },
-
-  logoutButton: {
-    backgroundColor: "#EF4444",
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: "center"
-  },
-
-  logoutText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "600"
-  },
-
-  // MODAL
+  /* ── Modal ── */
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
+    backgroundColor: "rgba(0,0,0,0.75)",
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 20
@@ -532,29 +771,47 @@ const styles = StyleSheet.create({
   modalBox: {
     width: "100%",
     backgroundColor: "#1E293B",
-    borderRadius: 18,
+    borderRadius: 20,
     padding: 24,
     borderWidth: 1,
     borderColor: "#334155"
+  },
+
+  modalIconRow: {
+    alignItems: "center",
+    marginBottom: 14
+  },
+
+  modalIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "#2D0A0A",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#7F1D1D"
   },
 
   modalTitle: {
     color: "#F8FAFC",
     fontSize: 20,
     fontWeight: "700",
-    marginBottom: 12
+    marginBottom: 10,
+    textAlign: "center"
   },
 
   modalBody: {
     color: "#94A3B8",
     fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 16
+    lineHeight: 21,
+    marginBottom: 18,
+    textAlign: "center"
   },
 
   modalLabel: {
     color: "#CBD5E1",
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: "600",
     marginBottom: 8
   },
@@ -603,6 +860,12 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: "#DC2626",
     alignItems: "center"
+  },
+
+  deleteText: {
+    color: "#FFF",
+    fontWeight: "700",
+    fontSize: 15
   },
 
   btnDisabled: {
