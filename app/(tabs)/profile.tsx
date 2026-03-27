@@ -6,6 +6,7 @@ import {
   Modal,
   Platform,
   ScrollView,
+  Share,
   StyleSheet,
   TextInput,
   TouchableOpacity,
@@ -19,7 +20,7 @@ import {
   signOut
 } from "firebase/auth";
 
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
 
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -135,12 +136,13 @@ export default function ProfileScreen() {
 
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { role, orgPlan, trialDaysLeft } = useAuth();
+  const { role, orgPlan, trialDaysLeft, orgId } = useAuth();
 
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
   const [paymentInfo, setPaymentInfo] = useState<PaymentInfo>({});
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
 
   // Delete modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -169,6 +171,7 @@ export default function ProfileScreen() {
             stripePayoutLast4: data.stripePayoutLast4
           });
         }
+
       } catch (err) {
         console.log("User load error:", err);
       }
@@ -265,6 +268,41 @@ export default function ProfileScreen() {
       Alert.alert("Error", "Could not log out");
     } finally {
       setLoggingOut(false);
+    }
+  };
+
+  //////////////////////////////////////////////////////
+  // SHARE INVITE CODE
+  //////////////////////////////////////////////////////
+
+  const [generatingCode, setGeneratingCode] = useState(false);
+
+  const generateCode = async () => {
+    if (!orgId) return;
+    setGeneratingCode(true);
+    try {
+      const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+      const newCode = Array.from({ length: 6 }, () =>
+        chars[Math.floor(Math.random() * chars.length)]
+      ).join("");
+      await updateDoc(doc(db, "organisations", orgId), { inviteCode: newCode });
+      setInviteCode(newCode);
+    } catch {
+      Alert.alert("Error", "Could not generate a code. Try again.");
+    } finally {
+      setGeneratingCode(false);
+    }
+  };
+
+  const shareCode = async () => {
+    if (!inviteCode) return;
+    const formatted = `${inviteCode.slice(0, 3)}-${inviteCode.slice(3)}`;
+    try {
+      await Share.share({
+        message: `Join our organisation on Claimio!\n\nInvite code: ${formatted}\n\nDownload Claimio, tap "Join Organisation" and enter this code.`
+      });
+    } catch {
+      console.log("Share cancelled");
     }
   };
 
@@ -370,6 +408,63 @@ export default function ProfileScreen() {
         {role === "admin" && (
           <>
             <SectionHeader label="ADMIN TOOLS" />
+
+            {/* Invite Code Card */}
+            <View style={styles.inviteCard}>
+              <ThemedText style={styles.inviteCardLabel}>TEAM INVITE CODE</ThemedText>
+
+              {inviteCode ? (
+                <>
+                  <ThemedText style={styles.inviteCodeText}>
+                    {`${inviteCode.slice(0, 3)}-${inviteCode.slice(3)}`}
+                  </ThemedText>
+                  <ThemedText style={styles.inviteCardHint}>
+                    This code expires as soon as you generate a new one.
+                  </ThemedText>
+                  <View style={styles.inviteBtnRow}>
+                    <TouchableOpacity style={styles.shareBtn} onPress={shareCode} activeOpacity={0.8}>
+                      <Ionicons name="share-outline" size={15} color="#38BDF8" style={{ marginRight: 6 }} />
+                      <ThemedText style={styles.shareBtnText}>Share</ThemedText>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.regenBtn}
+                      onPress={generateCode}
+                      disabled={generatingCode}
+                      activeOpacity={0.8}
+                    >
+                      {generatingCode
+                        ? <ActivityIndicator size="small" color="#F97316" />
+                        : <>
+                            <Ionicons name="refresh-outline" size={15} color="#F97316" style={{ marginRight: 6 }} />
+                            <ThemedText style={styles.regenBtnText}>New Code</ThemedText>
+                          </>
+                      }
+                    </TouchableOpacity>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <ThemedText style={styles.inviteCardHint}>
+                    Generate a fresh code to share with an employee. Each code invalidates the previous one.
+                  </ThemedText>
+                  <TouchableOpacity
+                    style={styles.shareBtn}
+                    onPress={generateCode}
+                    disabled={generatingCode}
+                    activeOpacity={0.8}
+                  >
+                    {generatingCode
+                      ? <ActivityIndicator size="small" color="#38BDF8" />
+                      : <>
+                          <Ionicons name="key-outline" size={15} color="#38BDF8" style={{ marginRight: 6 }} />
+                          <ThemedText style={styles.shareBtnText}>Generate Code</ThemedText>
+                        </>
+                    }
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+
             <View style={styles.card}>
               <MenuRow
                 icon="document-text-outline"
@@ -706,6 +801,77 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     borderWidth: 1,
     borderColor: "#334155"
+  },
+
+  /* ── Invite code card ── */
+  inviteCard: {
+    backgroundColor: "#0D2137",
+    borderWidth: 1,
+    borderColor: "#2563EB33",
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 14
+  },
+
+  inviteCardLabel: {
+    color: "#64748B",
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    marginBottom: 10
+  },
+
+  inviteCodeText: {
+    color: "#38BDF8",
+    fontSize: 28,
+    fontWeight: "800",
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+    letterSpacing: 4,
+    marginBottom: 8
+  },
+
+  inviteCardHint: {
+    color: "#475569",
+    fontSize: 12,
+    marginBottom: 14
+  },
+
+  inviteBtnRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+
+  shareBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#0F2A3D",
+    borderWidth: 1,
+    borderColor: "#2563EB55",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  shareBtnText: {
+    color: "#38BDF8",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+
+  regenBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1A1208",
+    borderWidth: 1,
+    borderColor: "#F9741644",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  regenBtnText: {
+    color: "#F97316",
+    fontSize: 13,
+    fontWeight: "600",
   },
 
   /* ── Menu row ── */
