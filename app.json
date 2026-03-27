@@ -45,11 +45,25 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.saif1004.claimio",
+          "enableGooglePay": true
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "10fbbd45-8d72-4481-b460-0b3b1e3a1ac0"
+      }
+    },
+    "owner": "saif1004"
   }
 }

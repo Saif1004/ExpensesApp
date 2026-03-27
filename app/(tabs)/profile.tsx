@@ -248,6 +248,24 @@ export default function ProfileScreen() {
             >
               <ThemedText style={styles.actionText}>Manage Employees</ThemedText>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => router.push("/payment-setup")}
+            >
+              <ThemedText style={styles.actionText}>💳  Payment Method</ThemedText>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* EMPLOYEE PAYOUT */}
+        {role === "employee" && (
+          <View style={styles.card}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => router.push("/payout-setup")}
+            >
+              <ThemedText style={styles.actionText}>🏦  Payout Account</ThemedText>
+            </TouchableOpacity>
           </View>
         )}
 

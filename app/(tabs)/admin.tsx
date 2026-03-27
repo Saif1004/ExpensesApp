@@ -11,6 +11,7 @@ import {
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   Modal,
@@ -22,8 +23,10 @@ import {
 import { ThemedText } from "../../components/themed-text";
 import { ThemedView } from "../../components/themed-view";
 import { useAuth } from "../context/AuthProvider";
-import { db } from "../firebase/firebaseConfig";
+import { auth, db } from "../firebase/firebaseConfig";
 import { addListener } from "../../utils/listenerStore";
+
+const REIMBURSE_URL = process.env.EXPO_PUBLIC_STRIPE_REIMBURSE_URL!;
 
 type Claim = {
   id: string;
@@ -31,7 +34,11 @@ type Claim = {
   merchant: string;
   category: string;
   userEmail: string;
+  userId: string;
+  orgId: string;
+  description?: string;
   receiptUrl?: string;
+  paymentStatus?: string;
 };
 
 export default function AdminScreen() {
@@ -63,11 +70,32 @@ export default function AdminScreen() {
     return unsub;
   }, [role]);
 
-  const updateStatus = async (id: string, status: "approved" | "rejected") => {
-    await updateDoc(doc(db, "claims", id), {
+  const updateStatus = async (claim: Claim, status: "approved" | "rejected") => {
+    await updateDoc(doc(db, "claims", claim.id), {
       status,
       statusUpdatedAt: serverTimestamp()
     });
+
+    if (status === "approved") {
+      // Trigger Stripe reimbursement
+      try {
+        const token = await auth.currentUser?.getIdToken();
+        const res = await fetch(REIMBURSE_URL, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ claimId: claim.id, orgId: claim.orgId }),
+        });
+        const data = await res.json();
+        if (data.error) {
+          Alert.alert(
+            "Claim Approved",
+            `Claim approved but payment failed: ${data.error}\n\nCheck that both you and the employee have set up payment accounts.`
+          );
+        }
+      } catch (err: any) {
+        Alert.alert("Payment Error", err.message);
+      }
+    }
   };
 
   if (role !== "admin") {
@@ -131,16 +159,16 @@ export default function AdminScreen() {
             <View style={styles.buttonRow}>
               <TouchableOpacity
                 style={styles.approveBtn}
-                onPress={() => updateStatus(item.id, "approved")}
+                onPress={() => updateStatus(item, "approved")}
               >
                 <ThemedText style={styles.btnText}>
-                  Approve
+                  Approve &amp; Pay
                 </ThemedText>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.rejectBtn}
-                onPress={() => updateStatus(item.id, "rejected")}
+                onPress={() => updateStatus(item, "rejected")}
               >
                 <ThemedText style={styles.btnText}>
                   Reject
