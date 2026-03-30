@@ -516,7 +516,7 @@ const styles = StyleSheet.create({
     gap: 10
   },
   approveBtn: {
-    flex: 1,
+    flex: 2,
     backgroundColor: "#16A34A",
     paddingVertical: 12,
     borderRadius: 12,

@@ -24,6 +24,8 @@ type Claim = {
   category: string;
   status: string;
   receiptUrl?: string;
+  adminFeedback?: string | null;
+  approvedBy?: string | null;
 };
 
 export default function ClaimDetailScreen() {
@@ -145,6 +147,26 @@ export default function ClaimDetailScreen() {
           </View>
 
         </View>
+
+        {/* Approved / Rejected by */}
+
+        {!!claim.approvedBy && (
+          <View style={styles.card}>
+            <ThemedText style={styles.label}>
+              {claim.status === "approved" ? "Approved By" : "Actioned By"}
+            </ThemedText>
+            <ThemedText style={styles.value}>{claim.approvedBy}</ThemedText>
+          </View>
+        )}
+
+        {/* Admin feedback */}
+
+        {!!claim.adminFeedback && (
+          <View style={styles.card}>
+            <ThemedText style={styles.label}>Admin Message</ThemedText>
+            <ThemedText style={styles.value}>{claim.adminFeedback}</ThemedText>
+          </View>
+        )}
 
         {/* Receipt */}
 

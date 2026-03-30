@@ -320,11 +320,11 @@ export default function ClaimsScreen() {
               )}
 
               {/* Admin message */}
-              {!!item.adminMessage && (
+              {!!item.adminFeedback && (
                 <View style={styles.messageBubble}>
                   <Ionicons name="chatbubble-outline" size={13} color="#94A3B8" style={{ marginTop: 1 }} />
                   <ThemedText style={styles.messageText}>
-                    {item.adminMessage}
+                    {item.adminFeedback}
                   </ThemedText>
                 </View>
               )}
