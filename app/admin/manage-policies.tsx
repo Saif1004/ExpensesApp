@@ -155,15 +155,20 @@ const addPolicy = async()=>{
 
     setCreating(true);
 
-    const user = auth.currentUser; // 🔥 ADDED
+    const user = auth.currentUser;
+    if (!user) return;
+    const token = await user.getIdToken();
 
     const res = await fetch(AI_POLICY_URL,{
       method:"POST",
-      headers:{ "Content-Type":"application/json" },
+      headers:{
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
       body: JSON.stringify({
-        text:title.trim(),
+        text:  title.trim(),
         orgId,
-        userId:user?.uid // 🔥 CRITICAL FIX
+        userId: user.uid,
       })
     });
 
