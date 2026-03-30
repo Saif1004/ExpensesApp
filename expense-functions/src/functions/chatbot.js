@@ -2,6 +2,8 @@ const { app } = require("@azure/functions");
 const OpenAI = require("openai");
 const admin = require("firebase-admin");
 const PLAN_LIMITS = require("./planLimits");
+const { requireAuth, secureResponse } = require("./security");
+const { checkAiKillSwitch } = require("./aiConfig");
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -26,7 +28,6 @@ async function getOrgForUser(userId) {
     .where("status", "==", "approved")
     .limit(1)
     .get();
-
   if (snap.empty) return null;
   return snap.docs[0].data().orgId;
 }
@@ -53,27 +54,21 @@ app.http("chatbot", {
     try {
 
       ////////////////////////////////////////////////////
-      // AUTH
+      // OAUTH 2.0 — Bearer token verification
       ////////////////////////////////////////////////////
 
-      const authHeader = request.headers.get("authorization");
-      if (!authHeader) {
-        return { status: 401, jsonBody: { success: false, error: "Unauthorized" } };
-      }
-
-      const token = authHeader.split("Bearer ")[1];
-      const decoded = await admin.auth().verifyIdToken(token);
-      const userId = decoded.uid;
+      const { uid: userId, authError } = await requireAuth(request);
+      if (authError) return authError;
 
       const { message, history = [] } = await request.json();
 
       ////////////////////////////////////////////////////
-      // ORG LOOKUP
+      // RBAC — org membership lookup
       ////////////////////////////////////////////////////
 
       const orgId = await getOrgForUser(userId);
       if (!orgId) {
-        return { status: 403, jsonBody: { success: false, error: "No approved organisation found" } };
+        return secureResponse({ success: false, error: "No approved organisation found" }, 403);
       }
 
       const orgRef = db.collection("organisations").doc(orgId);
@@ -88,14 +83,11 @@ app.http("chatbot", {
       ////////////////////////////////////////////////////
 
       if (message === "__getCredits__") {
-        return {
-          status: 200,
-          jsonBody: {
-            success: true,
-            remaining: orgData.aiCreditsRemaining ?? 0,
-            limit: planConfig?.aiCreditsPerPeriod ?? 0
-          }
-        };
+        return secureResponse({
+          success: true,
+          remaining: orgData.aiCreditsRemaining ?? 0,
+          limit: planConfig?.aiCreditsPerPeriod ?? 0
+        }, 200);
       }
 
       ////////////////////////////////////////////////////
@@ -103,10 +95,7 @@ app.http("chatbot", {
       ////////////////////////////////////////////////////
 
       if (!planConfig?.chatbotAccess) {
-        return {
-          status: 403,
-          jsonBody: { success: false, error: "Upgrade your plan to use the AI assistant." }
-        };
+        return secureResponse({ success: false, error: "Upgrade your plan to use the AI assistant." }, 403);
       }
 
       ////////////////////////////////////////////////////
@@ -131,13 +120,10 @@ app.http("chatbot", {
       ////////////////////////////////////////////////////
 
       if (aiCreditsRemaining <= 0) {
-        return {
-          status: 429,
-          jsonBody: {
-            success: false,
-            error: "No AI credits remaining. Upgrade your plan or wait for the monthly reset."
-          }
-        };
+        return secureResponse({
+          success: false,
+          error: "No AI credits remaining. Upgrade your plan or wait for the monthly reset."
+        }, 429);
       }
 
       ////////////////////////////////////////////////////
@@ -151,21 +137,17 @@ app.http("chatbot", {
       const rw = userData.rateLimitChatbot || { count: 0, windowStart: 0 };
       const now = Date.now();
       const windowExpired = (now - rw.windowStart) > RATE_WINDOW_MS;
-
       const newCount = windowExpired ? 1 : rw.count + 1;
       const maxPerMinute = planConfig.chatbotRatePerMinute;
 
       if (newCount > maxPerMinute) {
-        return {
-          status: 429,
-          jsonBody: {
-            success: false,
-            error: `Rate limit exceeded. Max ${maxPerMinute} messages per minute on your plan.`
-          }
-        };
+        return secureResponse({
+          success: false,
+          error: `Rate limit exceeded. Max ${maxPerMinute} messages per minute on your plan.`
+        }, 429);
       }
 
-      // Update window (fire-and-forget — don't await to keep latency low)
+      // Fire-and-forget window update to keep latency low
       userRef.update({
         rateLimitChatbot: {
           count: newCount,
@@ -185,7 +167,7 @@ app.http("chatbot", {
       let claimsContext = "User has no claims.";
 
       if (claims.length) {
-        const total = claims.reduce((s, c) => s + (Number(c.amount) || 0), 0);
+        const total    = claims.reduce((s, c) => s + (Number(c.amount) || 0), 0);
         const approved = claims.filter(c => c.status === "approved").length;
         const pending  = claims.filter(c => c.status === "pending").length;
         const rejected = claims.filter(c => c.status === "rejected").length;
@@ -250,21 +232,15 @@ Tech £500`
       const updatedOrgSnap = await orgRef.get();
       const remaining = updatedOrgSnap.data().aiCreditsRemaining ?? 0;
 
-      return {
-        status: 200,
-        jsonBody: {
-          success: true,
-          reply,
-          remaining,
-          limit: planConfig.aiCreditsPerPeriod
-        }
-      };
+      return secureResponse({
+        success: true,
+        reply,
+        remaining,
+        limit: planConfig.aiCreditsPerPeriod
+      }, 200);
 
     } catch (err) {
-      return {
-        status: 200,
-        jsonBody: { success: false, error: err.message }
-      };
+      return secureResponse({ success: false, error: err.message }, 200);
     }
 
   }

@@ -16,6 +16,31 @@
     "production": {
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_FIREBASE_API_KEY": "AIzaSyBMlIPiP6tk52j1VrPQD7BVnybczhQAg6Y",
+        "EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN": "expenseapp-3dafd.firebaseapp.com",
+        "EXPO_PUBLIC_FIREBASE_PROJECT_ID": "expenseapp-3dafd",
+        "EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET": "expenseapp-3dafd.firebasestorage.app",
+        "EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID": "349519496442",
+        "EXPO_PUBLIC_FIREBASE_APP_ID": "1:349519496442:web:f83819f84a47517995b543",
+        "EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID": "G-2QKDWK0W3E",
+        "EXPO_PUBLIC_AZURE_VALIDATE_URL": "https://saifexpensewin2026.azurewebsites.net/api/validateClaim",
+        "EXPO_PUBLIC_AZURE_OCR_URL": "https://saifexpensewin2026.azurewebsites.net/api/receiptocr",
+        "EXPO_PUBLIC_UPLOAD_URL": "https://saifexpensewin2026.azurewebsites.net/api/uploadreceipt",
+        "EXPO_PUBLIC_CHATBOT_URL": "https://saifexpensewin2026.azurewebsites.net/api/chatbot",
+        "EXPO_PUBLIC_ANALYTICS_AI_URL": "https://saifexpensewin2026.azurewebsites.net/api/analyticsinsights",
+        "EXPO_PUBLIC_AI_POLICY_URL": "https://saifexpensewin2026.azurewebsites.net/api/parsePolicy",
+        "EXPO_PUBLIC_DELETE_ACCOUNT_URL": "https://saifexpensewin2026.azurewebsites.net/api/deleteAccount",
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "REMOVED",
+        "EXPO_PUBLIC_STRIPE_CREATE_ACCOUNT_URL": "https://saifexpensewin2026.azurewebsites.net/api/stripeCreateConnectAccount",
+        "EXPO_PUBLIC_STRIPE_ONBOARDING_LINK_URL": "https://saifexpensewin2026.azurewebsites.net/api/stripeOnboardingLink",
+        "EXPO_PUBLIC_STRIPE_SETUP_PAYMENT_URL": "https://saifexpensewin2026.azurewebsites.net/api/stripeSetupPaymentMethod",
+        "EXPO_PUBLIC_STRIPE_SAVE_PAYMENT_URL": "https://saifexpensewin2026.azurewebsites.net/api/stripeSavePaymentMethod",
+        "EXPO_PUBLIC_STRIPE_CHECK_ONBOARDING_URL": "https://saifexpensewin2026.azurewebsites.net/api/stripeCheckOnboarding",
+        "EXPO_PUBLIC_STRIPE_REIMBURSE_URL": "https://saifexpensewin2026.azurewebsites.net/api/stripeProcessReimbursement",
+        "EXPO_PUBLIC_RC_IOS_KEY": "REMOVED",
+        "EXPO_PUBLIC_RC_ANDROID_KEY": "REMOVED"
       }
     }
   },

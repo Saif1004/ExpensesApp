@@ -2,6 +2,8 @@ const { app } = require("@azure/functions");
 const OpenAI = require("openai");
 const admin = require("firebase-admin");
 const PLAN_LIMITS = require("./planLimits");
+const { requireAuth, secureResponse } = require("./security");
+const { checkAiKillSwitch } = require("./aiConfig");
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -14,8 +16,8 @@ const client = new OpenAI({
   baseURL: `${process.env.AZURE_OPENAI_ENDPOINT}/openai/v1`
 });
 
-const RATE_WINDOW_MS = 60 * 1000; // 1 minute
-const ANALYTICS_RATE_PER_MINUTE = 3; // all paid plans
+const RATE_WINDOW_MS = 60 * 1000;       // 1 minute
+const ANALYTICS_RATE_PER_MINUTE = 3;    // all paid plans
 
 //////////////////////////////////////////////////////
 // HELPERS
@@ -27,7 +29,6 @@ async function getOrgForUser(userId) {
     .where("status", "==", "approved")
     .limit(1)
     .get();
-
   if (snap.empty) return null;
   return snap.docs[0].data().orgId;
 }
@@ -54,25 +55,19 @@ app.http("analyticsInsights", {
     try {
 
       ////////////////////////////////////////////////////
-      // AUTH
+      // OAUTH 2.0 — Bearer token verification
       ////////////////////////////////////////////////////
 
-      const authHeader = request.headers.get("authorization");
-      if (!authHeader) {
-        return { status: 401, jsonBody: { error: "Unauthorized" } };
-      }
-
-      const token = authHeader.split("Bearer ")[1];
-      const decoded = await admin.auth().verifyIdToken(token);
-      const userId = decoded.uid;
+      const { uid: userId, authError } = await requireAuth(request);
+      if (authError) return authError;
 
       ////////////////////////////////////////////////////
-      // ORG + PLAN CHECK
+      // RBAC — org membership + plan check
       ////////////////////////////////////////////////////
 
       const orgId = await getOrgForUser(userId);
       if (!orgId) {
-        return { status: 403, jsonBody: { error: "No approved organisation found" } };
+        return secureResponse({ error: "No approved organisation found" }, 403);
       }
 
       const orgSnap = await db.collection("organisations").doc(orgId).get();
@@ -82,11 +77,11 @@ app.http("analyticsInsights", {
       const planConfig = PLAN_LIMITS[plan];
 
       if (!planConfig?.analyticsAccess) {
-        return { status: 403, jsonBody: { error: "Upgrade your plan to use AI insights." } };
+        return secureResponse({ error: "Upgrade your plan to use AI insights." }, 403);
       }
 
       ////////////////////////////////////////////////////
-      // RATE LIMIT
+      // RATE LIMIT (per user, per minute)
       ////////////////////////////////////////////////////
 
       const userRef = db.collection("users").doc(userId);
@@ -96,14 +91,10 @@ app.http("analyticsInsights", {
       const rw = userData.rateLimitAnalytics || { count: 0, windowStart: 0 };
       const now = Date.now();
       const windowExpired = (now - rw.windowStart) > RATE_WINDOW_MS;
-
       const newCount = windowExpired ? 1 : rw.count + 1;
 
       if (newCount > ANALYTICS_RATE_PER_MINUTE) {
-        return {
-          status: 429,
-          jsonBody: { error: "Too many requests. Wait a moment before generating another insight." }
-        };
+        return secureResponse({ error: "Too many requests. Wait a moment before generating another insight." }, 429);
       }
 
       userRef.update({
@@ -146,16 +137,10 @@ Write 2-3 short sentences of insights.
         max_tokens: 120
       });
 
-      return {
-        status: 200,
-        jsonBody: { insight: res.choices[0].message.content }
-      };
+      return secureResponse({ insight: res.choices[0].message.content }, 200);
 
     } catch (err) {
-      return {
-        status: 500,
-        jsonBody: { error: err.message }
-      };
+      return secureResponse({ error: err.message }, 500);
     }
 
   }

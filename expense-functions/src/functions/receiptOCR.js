@@ -1,5 +1,8 @@
 const { app } = require("@azure/functions");
 const OpenAI = require("openai");
+const { authAndLimit } = require("./rateLimit");
+const { secureResponse } = require("./security");
+const { checkAiKillSwitch } = require("./aiConfig");
 
 //////////////////////////////////////////////////////////
 // SAFE OPENAI CLIENT
@@ -119,16 +122,20 @@ app.http("receiptOCR", {
     try {
 
       //////////////////////////////////////////////////////////
+      // AUTH + RATE LIMIT (5 OCR calls per minute per user)
+      //////////////////////////////////////////////////////////
+
+      const auth = await authAndLimit(request, "rateLimitOCR", 5);
+      if (auth.error) return auth.error;
+
+      //////////////////////////////////////////////////////////
       // REQUEST BODY
       //////////////////////////////////////////////////////////
 
       const { image } = await request.json();
 
       if (!image) {
-        return {
-          status: 400,
-          jsonBody: { error: "No image provided" }
-        };
+        return secureResponse({ error: "No image provided" }, 400);
       }
 
       //////////////////////////////////////////////////////////
@@ -165,10 +172,7 @@ app.http("receiptOCR", {
         const errText = await analyzeResponse.text();
         context.log("Azure analyze error:", errText);
 
-        return {
-          status: 500,
-          jsonBody: { error: "Azure analyze request failed" }
-        };
+        return secureResponse({ error: "Azure analyze request failed" }, 500);
       }
 
       const operationLocation =
@@ -196,10 +200,7 @@ app.http("receiptOCR", {
 
           context.log("OCR failed:", result);
 
-          return {
-            status: 500,
-            jsonBody: { error: "OCR processing failed" }
-          };
+          return secureResponse({ error: "OCR processing failed" }, 500);
         }
 
         await new Promise(r => setTimeout(r, 1500));
@@ -306,26 +307,12 @@ app.http("receiptOCR", {
       // RESPONSE
       //////////////////////////////////////////////////////////
 
-      return {
-        status: 200,
-        jsonBody: {
-          merchant,
-          amount,
-          date,
-          category
-        }
-      };
+      return secureResponse({ merchant, amount, date, category }, 200);
 
     } catch (error) {
 
       context.log("OCR ERROR:", error);
-
-      return {
-        status: 500,
-        jsonBody: {
-          error: "Internal OCR error"
-        }
-      };
+      return secureResponse({ error: "Internal OCR error" }, 500);
 
     }
 

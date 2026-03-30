@@ -1,5 +1,7 @@
 const { app } = require("@azure/functions");
 const admin = require("firebase-admin");
+const { checkRateLimit, WINDOW_15_MIN } = require("./rateLimit");
+const { requireAuth, secureResponse } = require("./security");
 
 //////////////////////////////////////////////////////
 // FIREBASE INIT
@@ -43,22 +45,19 @@ app.http("deleteAccount", {
     try {
 
       ////////////////////////////////////////////////////
-      // VERIFY TOKEN
+      // OAUTH 2.0 — Bearer token verification
       ////////////////////////////////////////////////////
 
-      const authHeader = request.headers.get("authorization") || "";
-      const token = authHeader.replace("Bearer ", "").trim();
+      const { uid, authError } = await requireAuth(request);
+      if (authError) return authError;
 
-      if (!token) {
-        return { status: 401, jsonBody: { error: "Unauthorized" } };
-      }
+      ////////////////////////////////////////////////////
+      // RATE LIMIT (5 per 15 minutes — irreversible action)
+      ////////////////////////////////////////////////////
 
-      let uid;
-      try {
-        const decoded = await admin.auth().verifyIdToken(token);
-        uid = decoded.uid;
-      } catch {
-        return { status: 401, jsonBody: { error: "Invalid token" } };
+      const { allowed } = await checkRateLimit(uid, 'rateLimitDeleteAccount', 5, WINDOW_15_MIN);
+      if (!allowed) {
+        return secureResponse({ error: "Too many requests. Max 5 per 15 minutes." }, 429);
       }
 
       ////////////////////////////////////////////////////
@@ -91,24 +90,15 @@ app.http("deleteAccount", {
         if (isOwner) {
 
           // Delete every membership in this org
-          const allMemberships = await db
-            .collection("memberships")
-            .where("orgId", "==", orgId)
-            .get();
+          const allMemberships = await db.collection("memberships").where("orgId", "==", orgId).get();
           allMemberships.docs.forEach(m => refsToDelete.push(m.ref));
 
           // Delete every claim in this org
-          const orgClaims = await db
-            .collection("claims")
-            .where("orgId", "==", orgId)
-            .get();
+          const orgClaims = await db.collection("claims").where("orgId", "==", orgId).get();
           orgClaims.docs.forEach(c => refsToDelete.push(c.ref));
 
           // Delete every policy in this org
-          const orgPolicies = await db
-            .collection("policies")
-            .where("orgId", "==", orgId)
-            .get();
+          const orgPolicies = await db.collection("policies").where("orgId", "==", orgId).get();
           orgPolicies.docs.forEach(p => refsToDelete.push(p.ref));
 
           // Delete the org itself
@@ -120,10 +110,7 @@ app.http("deleteAccount", {
           refsToDelete.push(memberDoc.ref);
 
           // Delete this user's claims
-          const userClaims = await db
-            .collection("claims")
-            .where("userId", "==", uid)
-            .get();
+          const userClaims = await db.collection("claims").where("userId", "==", uid).get();
           userClaims.docs.forEach(c => refsToDelete.push(c.ref));
 
         }
@@ -131,17 +118,12 @@ app.http("deleteAccount", {
 
       // If user had no membership, still clean up their claims
       if (membershipSnap.empty) {
-        const userClaims = await db
-          .collection("claims")
-          .where("userId", "==", uid)
-          .get();
+        const userClaims = await db.collection("claims").where("userId", "==", uid).get();
         userClaims.docs.forEach(c => refsToDelete.push(c.ref));
       }
 
       // Username lookup doc
-      if (username) {
-        refsToDelete.push(db.collection("usernames").doc(username));
-      }
+      if (username) refsToDelete.push(db.collection("usernames").doc(username));
 
       // User profile doc
       refsToDelete.push(db.collection("users").doc(uid));
@@ -165,11 +147,11 @@ app.http("deleteAccount", {
 
       await admin.auth().deleteUser(uid);
 
-      return { status: 200, jsonBody: { success: true } };
+      return secureResponse({ success: true }, 200);
 
     } catch (err) {
       context.log("Delete account error:", err);
-      return { status: 500, jsonBody: { error: "Failed to delete account" } };
+      return secureResponse({ error: "Failed to delete account" }, 500);
     }
 
   }

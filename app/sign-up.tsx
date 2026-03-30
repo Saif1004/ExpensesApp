@@ -1,9 +1,24 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { createUserWithEmailAndPassword, signOut, updateProfile } from "firebase/auth";
+import {
+  createUserWithEmailAndPassword,
+  sendEmailVerification,
+  signOut,
+  updateProfile,
+} from "firebase/auth";
 import { collection, doc, getDocs, query, serverTimestamp, where, writeBatch } from "firebase/firestore";
 import { useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "./context/AuthProvider";
 import { auth, db } from "./firebase/firebaseConfig";
@@ -23,6 +38,19 @@ const usernameExists = async (username: string) => {
 };
 
 //////////////////////////////////////////////////////
+// Password strength validator
+// Requirements: 8+ chars, 1 uppercase, 1 lowercase, 1 number
+//////////////////////////////////////////////////////
+
+function validatePassword(password: string): string | null {
+  if (password.length < 8)            return "Password must be at least 8 characters.";
+  if (!/[A-Z]/.test(password))        return "Password must contain at least one uppercase letter.";
+  if (!/[a-z]/.test(password))        return "Password must contain at least one lowercase letter.";
+  if (!/[0-9]/.test(password))        return "Password must contain at least one number.";
+  return null; // valid
+}
+
+//////////////////////////////////////////////////////
 // Types
 //////////////////////////////////////////////////////
 
@@ -39,9 +67,9 @@ export default function SignUp() {
   const [mode, setMode] = useState<Mode>("choose");
 
   // Shared fields
-  const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [username, setUsername]               = useState("");
+  const [email, setEmail]                     = useState("");
+  const [password, setPassword]               = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
   // Create-only
@@ -71,11 +99,11 @@ export default function SignUp() {
   //////////////////////////////////////////////////////
 
   const handleCreate = async () => {
-    const trimmedUsername = username.trim();
+    const trimmedUsername  = username.trim();
     const normalizedUsername = trimmedUsername.toLowerCase();
-    const trimmedEmail = email.trim();
-    const trimmedOrg = organisation.trim();
-    const normalizedOrg = trimmedOrg.toLowerCase();
+    const trimmedEmail     = email.trim().toLowerCase();
+    const trimmedOrg       = organisation.trim();
+    const normalizedOrg    = trimmedOrg.toLowerCase();
 
     if (!trimmedOrg || !trimmedUsername || !trimmedEmail || !password || !confirmPassword) {
       Alert.alert("Missing details", "Please fill in all fields.");
@@ -83,12 +111,13 @@ export default function SignUp() {
     }
 
     if (password !== confirmPassword) {
-      Alert.alert("Passwords do not match");
+      Alert.alert("Passwords do not match", "Both password fields must be identical.");
       return;
     }
 
-    if (password.length < 6) {
-      Alert.alert("Weak password", "Password must be at least 6 characters.");
+    const pwError = validatePassword(password);
+    if (pwError) {
+      Alert.alert("Weak password", pwError);
       return;
     }
 
@@ -100,54 +129,62 @@ export default function SignUp() {
     setLoading(true);
     try {
       const cred = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
-      const uid = cred.user.uid;
+      const uid  = cred.user.uid;
 
       await updateProfile(cred.user, { displayName: trimmedUsername });
 
-      const batch = writeBatch(db);
-
-      const orgRef = doc(collection(db, "organisations"));
+      const batch        = writeBatch(db);
+      const orgRef       = doc(collection(db, "organisations"));
       const membershipRef = doc(collection(db, "memberships"));
-      const userRef = doc(db, "users", uid);
-      const usernameRef = doc(db, "usernames", normalizedUsername);
-
+      const userRef      = doc(db, "users", uid);
+      const usernameRef  = doc(db, "usernames", normalizedUsername);
       const inviteCodeValue = generateInviteCode();
 
       batch.set(userRef, {
         uid,
-        email: trimmedEmail,
-        username: normalizedUsername,
+        email:       trimmedEmail,
+        username:    normalizedUsername,
         displayName: trimmedUsername,
-        createdAt: serverTimestamp(),
-        plan: "free"
+        createdAt:   serverTimestamp(),
+        plan:        "free",
       });
 
       batch.set(usernameRef, { uid });
 
       batch.set(orgRef, {
-        name: trimmedOrg,
-        nameLower: normalizedOrg,
-        ownerId: uid,
-        plan: "free",
-        inviteCode: inviteCodeValue,
+        name:               trimmedOrg,
+        nameLower:          normalizedOrg,
+        ownerId:            uid,
+        plan:               "free",
+        inviteCode:         inviteCodeValue,
         aiCreditsRemaining: 0,
-        aiCreditsResetAt: null,
-        createdAt: serverTimestamp()
+        aiCreditsResetAt:   null,
+        createdAt:          serverTimestamp(),
       });
 
       batch.set(membershipRef, {
-        userId: uid,
-        orgId: orgRef.id,
-        role: "admin",
-        status: "approved",
-        createdAt: serverTimestamp()
+        userId:    uid,
+        orgId:     orgRef.id,
+        role:      "admin",
+        status:    "approved",
+        createdAt: serverTimestamp(),
       });
 
       await batch.commit();
-      await refreshMembership();
-      router.replace("/(tabs)/home");
+
+      // ── Send email verification before signing the user out ──
+      try { await sendEmailVerification(cred.user); } catch {}
+
+      // ── Sign out — must verify email before accessing the app ──
+      await signOut(auth);
+
+      Alert.alert(
+        "Account Created!",
+        "A verification link has been sent to your email. Please verify your address before signing in.",
+        [{ text: "Go to Sign In", onPress: () => router.replace("/sign-in") }]
+      );
+
     } catch (err: any) {
-      console.log("CREATE ERROR:", err);
       const code = err?.code ?? "";
       if (code === "auth/email-already-in-use") {
         Alert.alert("Email in use", "An account with this email already exists.");
@@ -164,10 +201,10 @@ export default function SignUp() {
   //////////////////////////////////////////////////////
 
   const handleJoin = async () => {
-    const trimmedCode = inviteCode.trim().toUpperCase();
-    const trimmedUsername = username.trim();
+    const trimmedCode        = inviteCode.trim().toUpperCase();
+    const trimmedUsername    = username.trim();
     const normalizedUsername = trimmedUsername.toLowerCase();
-    const trimmedEmail = email.trim();
+    const trimmedEmail       = email.trim().toLowerCase();
 
     if (!trimmedCode || !trimmedUsername || !trimmedEmail || !password || !confirmPassword) {
       Alert.alert("Missing details", "Please fill in all fields.");
@@ -175,12 +212,13 @@ export default function SignUp() {
     }
 
     if (password !== confirmPassword) {
-      Alert.alert("Passwords do not match");
+      Alert.alert("Passwords do not match", "Both password fields must be identical.");
       return;
     }
 
-    if (password.length < 6) {
-      Alert.alert("Weak password", "Password must be at least 6 characters.");
+    const pwError = validatePassword(password);
+    if (pwError) {
+      Alert.alert("Weak password", pwError);
       return;
     }
 
@@ -190,13 +228,11 @@ export default function SignUp() {
     }
 
     setLoading(true);
-    let createdUid: string | null = null;
 
     try {
       // 1. Create auth user
-      const cred = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
-      createdUid = cred.user.uid;
-      const uid = createdUid;
+      const cred       = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
+      const uid        = cred.user.uid;
 
       await updateProfile(cred.user, { displayName: trimmedUsername });
 
@@ -208,7 +244,6 @@ export default function SignUp() {
       const orgSnap = await getDocs(orgQuery);
 
       if (orgSnap.empty) {
-        // Delete the just-created auth user
         await cred.user.delete();
         Alert.alert("Invalid invite code", "Ask your admin for the correct code.");
         setLoading(false);
@@ -218,44 +253,43 @@ export default function SignUp() {
       const orgId = orgSnap.docs[0].id;
 
       // 3. Write user doc, username doc, membership
-      const batch = writeBatch(db);
-
-      const userRef = doc(db, "users", uid);
+      const batch       = writeBatch(db);
+      const userRef     = doc(db, "users", uid);
       const usernameRef = doc(db, "usernames", normalizedUsername);
       const membershipRef = doc(collection(db, "memberships"));
 
       batch.set(userRef, {
         uid,
-        email: trimmedEmail,
-        username: normalizedUsername,
+        email:       trimmedEmail,
+        username:    normalizedUsername,
         displayName: trimmedUsername,
-        createdAt: serverTimestamp(),
-        plan: "free"
+        createdAt:   serverTimestamp(),
+        plan:        "free",
       });
-
       batch.set(usernameRef, { uid });
-
       batch.set(membershipRef, {
-        userId: uid,
+        userId:    uid,
         orgId,
-        role: "employee",
-        status: "pending",
-        createdAt: serverTimestamp()
+        role:      "employee",
+        status:    "pending",
+        createdAt: serverTimestamp(),
       });
 
       await batch.commit();
 
-      // 4. Sign out — must wait for approval
+      // 4. Send verification email before signing out
+      try { await sendEmailVerification(cred.user); } catch {}
+
+      // 5. Sign out — must wait for admin approval AND verify email
       await signOut(auth);
 
       Alert.alert(
         "Request Sent!",
-        "Your admin needs to approve your account before you can log in."
+        "A verification link has been sent to your email. Please verify your address, then wait for your admin to approve your account.",
+        [{ text: "Go to Sign In", onPress: () => router.replace("/sign-in") }]
       );
 
-      router.replace("/sign-in");
     } catch (err: any) {
-      console.log("JOIN ERROR:", err);
       const code = err?.code ?? "";
       if (code === "auth/email-already-in-use") {
         Alert.alert("Email in use", "An account with this email already exists.");
@@ -321,7 +355,9 @@ export default function SignUp() {
 
           {/* Sign in link */}
           <TouchableOpacity onPress={() => router.push("/sign-in")} style={styles.signInLink}>
-            <Text style={styles.signInText}>Already have an account? <Text style={styles.signInTextBold}>Sign In</Text></Text>
+            <Text style={styles.signInText}>
+              Already have an account? <Text style={styles.signInTextBold}>Sign In</Text>
+            </Text>
           </TouchableOpacity>
         </ScrollView>
       </LinearGradient>
@@ -401,7 +437,7 @@ export default function SignUp() {
               <TextInput
                 value={password}
                 onChangeText={setPassword}
-                placeholder="Min. 6 characters"
+                placeholder="Min. 8 chars, 1 uppercase, 1 number"
                 placeholderTextColor="#475569"
                 style={styles.input}
                 secureTextEntry
@@ -512,7 +548,7 @@ export default function SignUp() {
             <TextInput
               value={password}
               onChangeText={setPassword}
-              placeholder="Min. 6 characters"
+              placeholder="Min. 8 chars, 1 uppercase, 1 number"
               placeholderTextColor="#475569"
               style={styles.input}
               secureTextEntry
@@ -555,9 +591,7 @@ export default function SignUp() {
 
 const styles = StyleSheet.create({
 
-  flex: {
-    flex: 1
-  },
+  flex: { flex: 1 },
 
   // ── Choose screen ──
 
@@ -565,12 +599,12 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "center",
     paddingHorizontal: 24,
-    paddingVertical: 60
+    paddingVertical: 60,
   },
 
   logoWrap: {
     alignItems: "center",
-    marginBottom: 48
+    marginBottom: 48,
   },
 
   logoIcon: {
@@ -582,7 +616,7 @@ const styles = StyleSheet.create({
     borderColor: "#38BDF833",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 16
+    marginBottom: 16,
   },
 
   appTitle: {
@@ -590,13 +624,13 @@ const styles = StyleSheet.create({
     fontSize: 34,
     fontWeight: "800",
     letterSpacing: 0.5,
-    marginBottom: 6
+    marginBottom: 6,
   },
 
   appSubtitle: {
     color: "#64748B",
     fontSize: 15,
-    textAlign: "center"
+    textAlign: "center",
   },
 
   chooseCard: {
@@ -606,17 +640,17 @@ const styles = StyleSheet.create({
     padding: 18,
     marginBottom: 14,
     borderWidth: 1.5,
-    gap: 14
+    gap: 14,
   },
 
   chooseCardBlue: {
     backgroundColor: "#0D1F3C",
-    borderColor: "#2563EB"
+    borderColor: "#2563EB",
   },
 
   chooseCardSlate: {
     backgroundColor: "#111827",
-    borderColor: "#334155"
+    borderColor: "#334155",
   },
 
   chooseCardIcon: {
@@ -624,47 +658,33 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: 14,
     justifyContent: "center",
-    alignItems: "center"
+    alignItems: "center",
   },
 
-  chooseCardIconBlue: {
-    backgroundColor: "#1E3A8A22"
-  },
+  chooseCardIconBlue:  { backgroundColor: "#1E3A8A22" },
+  chooseCardIconSlate: { backgroundColor: "#1E293B" },
 
-  chooseCardIconSlate: {
-    backgroundColor: "#1E293B"
-  },
-
-  chooseCardText: {
-    flex: 1
-  },
+  chooseCardText: { flex: 1 },
 
   chooseCardTitle: {
     color: "#F1F5F9",
     fontSize: 16,
     fontWeight: "700",
-    marginBottom: 3
+    marginBottom: 3,
   },
 
   chooseCardSub: {
     color: "#64748B",
-    fontSize: 13
+    fontSize: 13,
   },
 
   signInLink: {
     marginTop: 32,
-    alignItems: "center"
+    alignItems: "center",
   },
 
-  signInText: {
-    color: "#64748B",
-    fontSize: 14
-  },
-
-  signInTextBold: {
-    color: "#38BDF8",
-    fontWeight: "600"
-  },
+  signInText:     { color: "#64748B", fontSize: 14 },
+  signInTextBold: { color: "#38BDF8", fontWeight: "600" },
 
   // ── Form screens ──
 
@@ -672,35 +692,31 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: 24,
     paddingTop: 60,
-    paddingBottom: 40
+    paddingBottom: 40,
   },
 
   backBtn: {
     width: 40,
     height: 40,
     justifyContent: "center",
-    marginBottom: 24
+    marginBottom: 24,
   },
 
-  formHeader: {
-    marginBottom: 32
-  },
+  formHeader: { marginBottom: 32 },
 
   formTitle: {
     color: "#F8FAFC",
     fontSize: 28,
     fontWeight: "800",
-    marginBottom: 6
+    marginBottom: 6,
   },
 
   formSubtitle: {
     color: "#64748B",
-    fontSize: 15
+    fontSize: 15,
   },
 
-  fieldGroup: {
-    marginBottom: 16
-  },
+  fieldGroup: { marginBottom: 16 },
 
   fieldLabel: {
     color: "#94A3B8",
@@ -708,7 +724,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textTransform: "uppercase",
     letterSpacing: 0.8,
-    marginBottom: 8
+    marginBottom: 8,
   },
 
   input: {
@@ -719,7 +735,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: Platform.OS === "ios" ? 15 : 11,
     color: "#F8FAFC",
-    fontSize: 15
+    fontSize: 15,
   },
 
   inviteCodeInput: {
@@ -728,7 +744,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     letterSpacing: 4,
     color: "#38BDF8",
-    textAlign: "center"
+    textAlign: "center",
   },
 
   primaryBtn: {
@@ -736,17 +752,14 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: "center",
-    marginTop: 8
+    marginTop: 8,
   },
 
   primaryBtnText: {
     color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: "700"
+    fontWeight: "700",
   },
 
-  btnDisabled: {
-    opacity: 0.6
-  }
-
+  btnDisabled: { opacity: 0.6 },
 });

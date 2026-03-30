@@ -1,5 +1,5 @@
 import { useRouter, useSegments } from "expo-router";
-import { onAuthStateChanged, User } from "firebase/auth";
+import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import Constants from "expo-constants";
 import {
   collection,
@@ -253,6 +253,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
+        // Reload to get the latest emailVerified status from the server
+        try { await firebaseUser.reload(); } catch {}
+
+        // Block unverified users — sign them out so they can't access the app
+        if (!firebaseUser.emailVerified) {
+          await signOut(auth);
+          setAuthLoaded(true);
+          return;
+        }
+
         setUser(firebaseUser);
         currentUidRef.current = firebaseUser.uid;
         await loadMembership(firebaseUser.uid);
@@ -291,9 +301,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   //////////////////////////////////////////////////////
 
   useEffect(() => {
-    const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active" && currentOrgRef.current) {
-        refreshOrgPlan();
+    const sub = AppState.addEventListener("change", async (state) => {
+      if (state === "active") {
+        // Force-refresh the ID token when app comes to foreground.
+        // If the token has been revoked (e.g. password changed, account deleted),
+        // getIdToken(true) will throw — we then sign the user out immediately.
+        if (auth.currentUser) {
+          try {
+            await auth.currentUser.getIdToken(true); // throws on revoked token
+            await auth.currentUser.reload();          // get fresh emailVerified
+          } catch {
+            await signOut(auth);
+            return;
+          }
+        }
+        if (currentOrgRef.current) {
+          refreshOrgPlan();
+        }
       }
     });
     return () => sub.remove();
@@ -310,6 +334,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const inAuth = segments[0] === "sign-in" || segments[0] === "sign-up";
 
     if (!user) {
+      if (inTabs) router.replace("/sign-in");
+      return;
+    }
+
+    // Extra guard: if somehow an unverified user's session survived, block them
+    if (!user.emailVerified) {
       if (inTabs) router.replace("/sign-in");
       return;
     }

@@ -1,9 +1,14 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { sendPasswordResetEmail, signInWithEmailAndPassword } from "firebase/auth";
+import {
+  sendEmailVerification,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
+  signOut,
+} from "firebase/auth";
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -18,27 +23,38 @@ import {
 } from "react-native";
 import { auth, db } from "./firebase/firebaseConfig";
 
+//////////////////////////////////////////////////////
+// RATE LIMIT CONSTANTS
+//////////////////////////////////////////////////////
+
+const MAX_ATTEMPTS    = 5;
+const LOCKOUT_MS      = 15 * 60 * 1000; // 15 minutes
+
 export default function SignIn() {
   const router = useRouter();
 
-  const [identifier, setIdentifier] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [identifier, setIdentifier]       = useState("");
+  const [password, setPassword]           = useState("");
+  const [showPassword, setShowPassword]   = useState(false);
+  const [loading, setLoading]             = useState(false);
+
+  // Client-side login rate limiting
+  const failedAttemptsRef = useRef(0);
+  const [lockedUntil, setLockedUntil]     = useState<number | null>(null);
 
   //////////////////////////////////////////////////////
   // FIND EMAIL FROM USERNAME
   //////////////////////////////////////////////////////
 
-  const findEmailFromUsername = async (username: string) => {
+  const findEmailFromUsername = async (username: string): Promise<string | null> => {
     try {
-      const normalized = username.trim().toLowerCase();
-      const usernameDoc = await getDoc(doc(db, "usernames", normalized));
+      const normalized    = username.trim().toLowerCase();
+      const usernameDoc   = await getDoc(doc(db, "usernames", normalized));
       if (!usernameDoc.exists()) return null;
-      const { uid } = usernameDoc.data();
-      const userDoc = await getDoc(doc(db, "users", uid));
+      const { uid }       = usernameDoc.data();
+      const userDoc       = await getDoc(doc(db, "users", uid));
       if (!userDoc.exists()) return null;
-      return userDoc.data().email;
+      return userDoc.data().email ?? null;
     } catch {
       return null;
     }
@@ -68,6 +84,16 @@ export default function SignIn() {
       return;
     }
 
+    // ── Client-side lockout check ──
+    if (lockedUntil && Date.now() < lockedUntil) {
+      const minsLeft = Math.ceil((lockedUntil - Date.now()) / 60_000);
+      Alert.alert(
+        "Too many attempts",
+        `Account temporarily locked. Try again in ${minsLeft} minute${minsLeft !== 1 ? "s" : ""}.`
+      );
+      return;
+    }
+
     try {
       setLoading(true);
 
@@ -83,7 +109,24 @@ export default function SignIn() {
       }
 
       const cred = await signInWithEmailAndPassword(auth, email, password);
-      const uid = cred.user.uid;
+
+      // ── Reload to get the latest emailVerified status ──
+      await cred.user.reload();
+
+      // ── Email verification gate ──
+      if (!cred.user.emailVerified) {
+        // Auto-resend verification email while still authenticated (Firebase rate-limits this)
+        try { await sendEmailVerification(cred.user); } catch {}
+        await signOut(auth);
+        Alert.alert(
+          "Email Not Verified",
+          "A verification link has been sent to your inbox. Please verify your email before signing in."
+        );
+        return;
+      }
+
+      // ── Membership check ──
+      const uid        = cred.user.uid;
       const membership = await checkMembership(uid);
 
       if (membership?.status === "pending") {
@@ -99,17 +142,43 @@ export default function SignIn() {
         return;
       }
 
+      // ── Success — reset attempt counter ──
+      failedAttemptsRef.current = 0;
+      setLockedUntil(null);
+
       router.replace("/(tabs)/home");
+
     } catch (err: any) {
       const code = err?.code ?? "";
-      if (code === "auth/invalid-credential" || code === "auth/wrong-password") {
-        Alert.alert("Incorrect password", "Please check your password and try again.");
-      } else if (code === "auth/user-not-found") {
-        Alert.alert("Not found", "No account with that email address.");
+
+      if (
+        code === "auth/invalid-credential" ||
+        code === "auth/wrong-password" ||
+        code === "auth/user-not-found"
+      ) {
+        // ── Track failed attempts ──
+        failedAttemptsRef.current += 1;
+        const remaining = MAX_ATTEMPTS - failedAttemptsRef.current;
+
+        if (failedAttemptsRef.current >= MAX_ATTEMPTS) {
+          const until = Date.now() + LOCKOUT_MS;
+          setLockedUntil(until);
+          failedAttemptsRef.current = 0;
+          Alert.alert(
+            "Too many attempts",
+            "Account temporarily locked for 15 minutes. Please try again later."
+          );
+        } else {
+          Alert.alert(
+            "Incorrect credentials",
+            `Email or password is incorrect. ${remaining} attempt${remaining !== 1 ? "s" : ""} remaining.`
+          );
+        }
+
       } else if (code === "auth/too-many-requests") {
-        Alert.alert("Too many attempts", "Account temporarily locked. Try again later.");
+        Alert.alert("Too many attempts", "Account temporarily locked by the server. Try again later.");
       } else {
-        Alert.alert("Sign in failed", err?.message || "Something went wrong.");
+        Alert.alert("Sign in failed", "Something went wrong. Please try again.");
       }
     } finally {
       setLoading(false);
@@ -117,25 +186,49 @@ export default function SignIn() {
   };
 
   //////////////////////////////////////////////////////
-  // FORGOT PASSWORD
+  // FORGOT PASSWORD (supports email OR username)
   //////////////////////////////////////////////////////
 
   const forgotPassword = async () => {
-    if (!identifier.includes("@")) {
-      Alert.alert("Enter your email", "Type your email address in the field above, then tap Forgot Password.");
+    if (!identifier.trim()) {
+      Alert.alert("Enter your details", "Type your email or username above, then tap Forgot Password.");
       return;
     }
+
     try {
-      await sendPasswordResetEmail(auth, identifier.trim());
-      Alert.alert("Email sent", "Check your inbox for password reset instructions.");
-    } catch (err: any) {
-      Alert.alert("Error", err.message);
+      setLoading(true);
+
+      let email = identifier.trim();
+
+      if (!identifier.includes("@")) {
+        // Username → look up email
+        const foundEmail = await findEmailFromUsername(identifier.trim().toLowerCase());
+        if (!foundEmail) {
+          // Don't reveal whether username exists — show generic message
+          Alert.alert("Email sent", "If an account exists, you will receive a password reset email.");
+          return;
+        }
+        email = foundEmail;
+      }
+
+      await sendPasswordResetEmail(auth, email);
+      Alert.alert(
+        "Email sent",
+        "If an account exists with that email, you will receive password reset instructions."
+      );
+    } catch {
+      // Generic message — never expose whether account exists
+      Alert.alert("Email sent", "If an account exists, you will receive a password reset email.");
+    } finally {
+      setLoading(false);
     }
   };
 
   //////////////////////////////////////////////////////
   // UI
   //////////////////////////////////////////////////////
+
+  const isLocked = !!(lockedUntil && Date.now() < lockedUntil);
 
   return (
     <LinearGradient colors={["#020617", "#0F172A"]} style={styles.gradient}>
@@ -175,6 +268,7 @@ export default function SignIn() {
                 autoCorrect={false}
                 keyboardType="email-address"
                 style={styles.input}
+                editable={!isLocked}
               />
             </View>
 
@@ -189,6 +283,7 @@ export default function SignIn() {
                 placeholderTextColor="#475569"
                 secureTextEntry={!showPassword}
                 style={[styles.input, { flex: 1 }]}
+                editable={!isLocked}
               />
               <TouchableOpacity onPress={() => setShowPassword(v => !v)} style={styles.eyeBtn}>
                 <Ionicons
@@ -200,15 +295,26 @@ export default function SignIn() {
             </View>
 
             {/* Forgot password */}
-            <TouchableOpacity onPress={forgotPassword} style={styles.forgotBtn}>
+            <TouchableOpacity onPress={forgotPassword} style={styles.forgotBtn} disabled={loading}>
               <Text style={styles.forgotText}>Forgot password?</Text>
             </TouchableOpacity>
 
+            {/* Lockout warning */}
+            {isLocked && (
+              <View style={styles.lockoutBanner}>
+                <Ionicons name="lock-closed" size={14} color="#F87171" />
+                <Text style={styles.lockoutText}>
+                  Too many failed attempts. Try again in{" "}
+                  {Math.ceil(((lockedUntil ?? 0) - Date.now()) / 60_000)} min.
+                </Text>
+              </View>
+            )}
+
             {/* Sign in button */}
             <TouchableOpacity
-              style={[styles.signInBtn, loading && styles.btnDisabled]}
+              style={[styles.signInBtn, (loading || isLocked) && styles.btnDisabled]}
               onPress={handleSignIn}
-              disabled={loading}
+              disabled={loading || isLocked}
               activeOpacity={0.85}
             >
               {loading
@@ -332,6 +438,23 @@ const styles = StyleSheet.create({
     color: "#38BDF8",
     fontSize: 13,
     fontWeight: "500",
+  },
+
+  lockoutBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#450A0A",
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 14,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#7F1D1D",
+  },
+  lockoutText: {
+    color: "#F87171",
+    fontSize: 13,
+    flex: 1,
   },
 
   signInBtn: {

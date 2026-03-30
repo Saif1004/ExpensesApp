@@ -1,5 +1,7 @@
 const { app } = require("@azure/functions");
 const { BlobServiceClient } = require("@azure/storage-blob");
+const { authAndLimit } = require("./rateLimit");
+const { secureResponse } = require("./security");
 
 app.http("uploadReceipt", {
   methods: ["POST"],
@@ -7,22 +9,20 @@ app.http("uploadReceipt", {
 
   handler: async (request, context) => {
     try {
+      // AUTH + RATE LIMIT (10 uploads per minute per user)
+      const auth = await authAndLimit(request, "rateLimitUpload", 10);
+      if (auth.error) return auth.error;
+
       const { image } = await request.json();
 
       if (!image) {
-        return {
-          status: 400,
-          jsonBody: { error: "No image provided" }
-        };
+        return secureResponse({ error: "No image provided" }, 400);
       }
 
       const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
 
       if (!connectionString) {
-        return {
-          status: 500,
-          jsonBody: { error: "Storage connection string missing" }
-        };
+        return secureResponse({ error: "Storage connection string missing" }, 500);
       }
 
       context.log("Starting receipt upload...");
@@ -50,21 +50,11 @@ app.http("uploadReceipt", {
 
       context.log("Receipt uploaded successfully:", blockBlobClient.url);
 
-      return {
-        status: 200,
-        jsonBody: {
-          url: blockBlobClient.url
-        }
-      };
+      return secureResponse({ url: blockBlobClient.url }, 200);
+
     } catch (error) {
       context.log("UPLOAD ERROR:", error?.message || error);
-
-      return {
-        status: 500,
-        jsonBody: {
-          error: error?.message || "Receipt upload failed"
-        }
-      };
+      return secureResponse({ error: error?.message || "Receipt upload failed" }, 500);
     }
   }
 });

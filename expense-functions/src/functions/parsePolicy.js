@@ -1,6 +1,9 @@
 const { app } = require("@azure/functions");
 const OpenAI = require("openai");
 const admin = require("firebase-admin");
+const { authAndLimit } = require("./rateLimit");
+const { secureResponse, validateString, sanitize } = require("./security");
+const { checkAiKillSwitch } = require("./aiConfig");
 
 ////////////////////////////////////////////////////
 // FIREBASE INITIALIZATION
@@ -47,19 +50,29 @@ app.http("parsePolicy", {
     try {
 
 ////////////////////////////////////////////////////
+// AUTH + RATE LIMIT (5 per 15 minutes)
+////////////////////////////////////////////////////
+
+      const auth = await authAndLimit(request, "rateLimitParsePolicy", 5, 15 * 60 * 1000);
+      if (auth.error) return auth.error;
+
+////////////////////////////////////////////////////
 // READ REQUEST
 ////////////////////////////////////////////////////
 
-      const { text, orgId, userId } = await request.json();
+      const body = await request.json();
+      const orgId = sanitize(body.orgId ?? "");
+      const userId = auth.uid; // use verified uid, not body
 
-      if (!text || !orgId || !userId) {
-        return {
-          status: 400,
-          jsonBody: {
-            success: false,
-            error: "Missing required fields"
-          }
-        };
+      // Validate text input
+      const textResult = validateString(body.text, "text", { maxLen: 2000 });
+      if (textResult.fieldError) {
+        return secureResponse({ success: false, error: textResult.fieldError }, 400);
+      }
+      const text = sanitize(textResult.value);
+
+      if (!orgId) {
+        return secureResponse({ success: false, error: "Missing required fields" }, 400);
       }
 
 ////////////////////////////////////////////////////
@@ -73,13 +86,7 @@ app.http("parsePolicy", {
         userDoc.data()?.lastAiCall?.toMillis?.() || 0;
 
       if (Date.now() - lastCall < COOLDOWN) {
-        return {
-          status: 429,
-          jsonBody: {
-            success: false,
-            error: "⏳ Please wait a moment before trying again."
-          }
-        };
+        return secureResponse({ success: false, error: "⏳ Please wait a moment before trying again." }, 429);
       }
 
 ////////////////////////////////////////////////////
@@ -90,25 +97,13 @@ app.http("parsePolicy", {
       const orgDoc = await orgRef.get();
 
       if (!orgDoc.exists) {
-        return {
-          status: 404,
-          jsonBody: {
-            success: false,
-            error: "Organisation not found"
-          }
-        };
+        return secureResponse({ success: false, error: "Organisation not found" }, 404);
       }
 
       const aiUsage = orgDoc.data()?.aiUsage || 0;
 
       if (aiUsage >= MAX_AI) {
-        return {
-          status: 403,
-          jsonBody: {
-            success: false,
-            error: "🚫 AI limit reached. Upgrade to continue using AI features."
-          }
-        };
+        return secureResponse({ success: false, error: "🚫 AI limit reached. Upgrade to continue using AI features." }, 403);
       }
 
 ////////////////////////////////////////////////////
@@ -204,13 +199,7 @@ Return JSON only.
 
         context.log("AI returned invalid JSON:", content);
 
-        return {
-          status: 500,
-          jsonBody: {
-            success: false,
-            error: "AI response error. Please try again."
-          }
-        };
+        return secureResponse({ success: false, error: "AI response error. Please try again." }, 500);
 
       }
 
@@ -219,13 +208,7 @@ Return JSON only.
 ////////////////////////////////////////////////////
 
       if (!parsed.type) {
-        return {
-          status: 400,
-          jsonBody: {
-            success: false,
-            error: "Invalid policy structure"
-          }
-        };
+        return secureResponse({ success: false, error: "Invalid policy structure" }, 400);
       }
 
 ////////////////////////////////////////////////////
@@ -293,15 +276,12 @@ Return JSON only.
 // RESPONSE
 ////////////////////////////////////////////////////
 
-      return {
-        status: 200,
-        jsonBody: {
-          success: true,
-          policyId: policyRef.id,
-          policy: parsed,
-          remaining: MAX_AI - (aiUsage + 1) // 🔥 UX bonus
-        }
-      };
+      return secureResponse({
+        success: true,
+        policyId: policyRef.id,
+        policy: parsed,
+        remaining: MAX_AI - (aiUsage + 1)
+      }, 200);
 
 ////////////////////////////////////////////////////
 // ERROR HANDLER
@@ -310,14 +290,7 @@ Return JSON only.
     } catch (error) {
 
       context.log("PARSE POLICY ERROR:", error);
-
-      return {
-        status: 500,
-        jsonBody: {
-          success: false,
-          error: "Something went wrong. Please try again."
-        }
-      };
+      return secureResponse({ success: false, error: "Something went wrong. Please try again." }, 500);
 
     }
 

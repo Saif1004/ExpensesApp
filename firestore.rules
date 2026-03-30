@@ -1,0 +1,269 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ══════════════════════════════════════════════════════════════════
+    // DEFAULT DENY
+    // Every collection is locked unless explicitly opened below.
+    // This is the most important line — it prevents accidental exposure
+    // if a new collection is added without a corresponding rule.
+    // ══════════════════════════════════════════════════════════════════
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ── HELPER FUNCTIONS ─────────────────────────────────────────────
+
+    // Must be authenticated with a verified email
+    function verified() {
+      return request.auth != null
+          && request.auth.token.email_verified == true;
+    }
+
+    // True if the calling user is the registered owner of the given org.
+    // Uses one cross-document get() per unique orgId per request.
+    // Firebase caches the result so multiple docs in the same org only
+    // trigger ONE extra read (not one per document).
+    function isOrgOwner(orgId) {
+      return get(/databases/$(database)/documents/organisations/$(orgId))
+               .data.ownerId == request.auth.uid;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // COLLECTION: users/{uid}
+    //
+    // Each user may only read and write their OWN document.
+    //
+    // Protected fields that only Azure Functions (Admin SDK) may write:
+    //   plan, stripeCustomerId, stripePaymentMethodId, stripeAccountId,
+    //   stripeOnboardingComplete, stripe* payout fields, lastAiCall,
+    //   rateLimit* fields.
+    //
+    // An attacker cannot self-upgrade their plan or inject Stripe data.
+    // ══════════════════════════════════════════════════════════════════
+
+    match /users/{uid} {
+
+      // Owner-only read — NOT public
+      allow read: if verified() && request.auth.uid == uid;
+
+      // Create own profile during sign-up.
+      // uid and email must match the auth token; plan must start as "free".
+      allow create: if verified()
+                    && request.auth.uid == uid
+                    && request.resource.data.uid   == uid
+                    && request.resource.data.email == request.auth.token.email
+                    && request.resource.data.plan  == 'free';
+
+      // Update own profile — cannot touch sensitive server-managed fields
+      allow update: if verified()
+                    && request.auth.uid == uid
+                    && !request.resource.data.diff(resource.data)
+                        .affectedKeys()
+                        .hasAny([
+                          'uid',
+                          'email',
+                          'plan',
+                          'stripeCustomerId',
+                          'stripePaymentMethodId',
+                          'stripeCardLast4',
+                          'stripeCardBrand',
+                          'stripeAccountId',
+                          'stripeOnboardingComplete',
+                          'stripePayoutLast4',
+                          'stripePayoutBrand',
+                          'stripePayoutType',
+                          'lastAiCall',
+                          'rateLimitOCR',
+                          'rateLimitUpload',
+                          'rateLimitValidate',
+                          'rateLimitChatbot',
+                          'rateLimitAnalytics',
+                          'rateLimitDeleteAccount',
+                          'rateLimitSetupPayment',
+                          'rateLimitCreateAccount',
+                          'rateLimitOnboardingLink'
+                        ]);
+
+      // Deletion is handled exclusively by the deleteAccount Azure Function
+      allow delete: if false;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // COLLECTION: usernames/{username}
+    //
+    // Username → UID lookup table used during sign-in.
+    // Any verified user may read (needed to resolve username to email).
+    // Only the owner can create their own record (uid must match token).
+    // Immutable after creation — no update or client-side delete.
+    // ══════════════════════════════════════════════════════════════════
+
+    match /usernames/{username} {
+
+      allow read:   if verified();
+
+      allow create: if verified()
+                    && request.resource.data.uid == request.auth.uid;
+
+      allow update: if false;  // usernames are permanent once claimed
+      allow delete: if false;  // deleteAccount Azure Function only
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // COLLECTION: memberships/{membershipId}
+    //
+    // Links a user to an org with a role (admin | employee) and
+    // status (pending | approved).
+    //
+    // Read:   owner of the record OR the org owner (for admin panel)
+    // Create: (a) employee joining via invite → role=employee, status=pending
+    //         (b) admin self-joining their own new org → role=admin, status=approved
+    // Update: ONLY the org owner may change status / role.
+    //         userId and orgId are immutable once set.
+    // Delete: blocked from client (deleteAccount Azure Function only)
+    // ══════════════════════════════════════════════════════════════════
+
+    match /memberships/{membershipId} {
+
+      allow read: if verified() && (
+        // Employee reads their own membership
+        resource.data.userId == request.auth.uid
+        // Org owner reads all memberships in their org (admin panel)
+        || isOrgOwner(resource.data.orgId)
+      );
+
+      // (a) Employee joins via invite code
+      allow create: if verified()
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.role   == 'employee'
+                    && request.resource.data.status == 'pending';
+
+      // (b) Admin self-joining their new org during sign-up
+      allow create: if verified()
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.role   == 'admin'
+                    && request.resource.data.status == 'approved';
+
+      // Org owner approves / rejects / changes role.
+      // Core identity fields (userId, orgId) are locked after creation.
+      allow update: if verified()
+                    && isOrgOwner(resource.data.orgId)
+                    && request.resource.data.userId == resource.data.userId
+                    && request.resource.data.orgId  == resource.data.orgId;
+
+      allow delete: if false;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // COLLECTION: organisations/{orgId}
+    //
+    // Read:   any verified user (AuthProvider loads the org for all
+    //         members; org data contains no PII).
+    // Create: only the declared owner, during sign-up.
+    //         Must start on the "free" plan — plan upgrades are done
+    //         via RevenueCat / Azure Function, never client writes.
+    // Update: only the org owner.
+    //         Billing and AI credit fields are server-managed only.
+    // Delete: blocked (deleteAccount Azure Function only).
+    // ══════════════════════════════════════════════════════════════════
+
+    match /organisations/{orgId} {
+
+      allow read: if verified();
+
+      allow create: if verified()
+                    && request.resource.data.ownerId == request.auth.uid
+                    && request.resource.data.plan    == 'free';
+
+      allow update: if verified()
+                    && resource.data.ownerId == request.auth.uid
+                    // ownerId cannot be transferred from the client
+                    && request.resource.data.ownerId == resource.data.ownerId
+                    // Block client from touching server-managed billing fields
+                    && !request.resource.data.diff(resource.data)
+                        .affectedKeys()
+                        .hasAny([
+                          'plan',
+                          'ownerId',
+                          'aiCreditsRemaining',
+                          'aiCreditsResetAt',
+                          'aiUsage'
+                        ]);
+
+      allow delete: if false;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // COLLECTION: claims/{claimId}
+    //
+    // Claims are CREATED by the validateClaim Azure Function (Admin SDK).
+    // The client is not permitted to create claims directly.
+    //
+    // Read:   employee reads their own claims;
+    //         org owner reads all claims in their org (admin panel).
+    //
+    // Update: org owner may update status, adminFeedback, and
+    //         rejectedAt (reject without payment); all financial and
+    //         identity fields are immutable from the client.
+    //
+    // Delete: not permitted from client.
+    // ══════════════════════════════════════════════════════════════════
+
+    match /claims/{claimId} {
+
+      allow read: if verified() && (
+        resource.data.userId == request.auth.uid
+        || isOrgOwner(resource.data.orgId)
+      );
+
+      // All claim creation goes through the validateClaim Azure Function
+      allow create: if false;
+
+      // Org owner can reject a claim (update status + feedback)
+      // without going through Stripe.
+      // Financial and identity fields are completely locked.
+      allow update: if verified()
+                    && isOrgOwner(resource.data.orgId)
+                    // Lock all financial and identity fields
+                    && request.resource.data.userId       == resource.data.userId
+                    && request.resource.data.orgId        == resource.data.orgId
+                    && request.resource.data.amount       == resource.data.amount
+                    && request.resource.data.category     == resource.data.category
+                    && request.resource.data.merchant     == resource.data.merchant
+                    && request.resource.data.purchaseDate == resource.data.purchaseDate
+                    && request.resource.data.receiptUrl   == resource.data.receiptUrl
+                    // Only these fields may change:
+                    // status, adminFeedback, rejectedAt, approvedAt, approvedBy
+                    && request.resource.data.diff(resource.data)
+                        .affectedKeys()
+                        .hasOnly([
+                          'status',
+                          'adminFeedback',
+                          'rejectedAt',
+                          'approvedAt',
+                          'approvedBy'
+                        ]);
+
+      allow delete: if false;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // COLLECTION: policies/{policyId}
+    //
+    // Policies are created by the parsePolicy Azure Function (Admin SDK).
+    // Clients are entirely read-only.
+    //
+    // Read:   any verified user (needed during claim submission to load
+    //         org spending limits and receipt thresholds).
+    // Write:  blocked from client — Admin SDK only.
+    // ══════════════════════════════════════════════════════════════════
+
+    match /policies/{policyId} {
+      allow read:  if verified();
+      allow write: if false;
+    }
+
+  }
+}

@@ -1,5 +1,14 @@
 const { app } = require("@azure/functions");
 const admin = require("firebase-admin");
+const { authAndLimit } = require("./rateLimit");
+const {
+  secureResponse,
+  validateAmount,
+  validateCategory,
+  validateDate,
+  validateString,
+  sanitize,
+} = require("./security");
 
 //////////////////////////////////////////////////////
 // FIREBASE INIT
@@ -29,199 +38,136 @@ app.http("validateClaim", {
 
     try {
 
+      ////////////////////////////////////////////////////
+      // AUTH + RATE LIMIT (10 submissions per minute)
+      ////////////////////////////////////////////////////
+
+      const auth = await authAndLimit(request, "rateLimitValidate", 10);
+      if (auth.error) return auth.error;
+
+      // uid from verified token — never trust body
+      const userId = auth.uid;
+
       const {
         amount,
         category,
         purchaseDate,
         receiptUrl,
-        userId,
         merchant,
         userEmail
       } = await request.json();
 
-//////////////////////////////////////////////////////
-// BASIC VALIDATION
-//////////////////////////////////////////////////////
+      ////////////////////////////////////////////////////
+      // INPUT VALIDATION (security.js)
+      ////////////////////////////////////////////////////
 
-      if (!amount || !category || !purchaseDate || !userId || !merchant?.trim()) {
-        return {
-          status: 400,
-          jsonBody: { valid:false, reason:"Missing required fields." }
-        };
-      }
+      const amountResult = validateAmount(amount);
+      if (amountResult.fieldError)
+        return secureResponse({ valid: false, reason: amountResult.fieldError }, 400);
 
-      const numericAmount = Number(amount);
+      const categoryResult = validateCategory(category);
+      if (categoryResult.fieldError)
+        return secureResponse({ valid: false, reason: categoryResult.fieldError }, 400);
 
-      if (isNaN(numericAmount) || numericAmount <= 0) {
-        return {
-          status: 400,
-          jsonBody: { valid:false, reason:"Invalid amount." }
-        };
-      }
+      const dateResult = validateDate(purchaseDate, "purchaseDate");
+      if (dateResult.fieldError)
+        return secureResponse({ valid: false, reason: dateResult.fieldError }, 400);
 
-//////////////////////////////////////////////////////
-// FIND USER ORG
-//////////////////////////////////////////////////////
+      const merchantResult = validateString(merchant, "merchant", { maxLen: 200 });
+      if (merchantResult.fieldError)
+        return secureResponse({ valid: false, reason: merchantResult.fieldError }, 400);
+
+      const numericAmount = amountResult.value;
+      const cleanMerchant = sanitize(merchantResult.value);
+      const cleanUserEmail = sanitize(userEmail ?? "");
+
+      ////////////////////////////////////////////////////
+      // FIND USER ORG
+      ////////////////////////////////////////////////////
 
       const membershipSnap = await db
         .collection("memberships")
-        .where("userId","==",userId)
+        .where("userId", "==", userId)
+        .where("status", "==", "approved")
         .limit(1)
         .get();
 
-      if(membershipSnap.empty){
-        return {
-          status:400,
-          jsonBody:{valid:false,reason:"User not assigned to organisation."}
-        };
-      }
+      if (membershipSnap.empty)
+        return secureResponse({ valid: false, reason: "User not assigned to an approved organisation." }, 400);
 
       const orgId = membershipSnap.docs[0].data().orgId;
 
-//////////////////////////////////////////////////////
-// LOAD POLICIES
-//////////////////////////////////////////////////////
+      ////////////////////////////////////////////////////
+      // LOAD + APPLY POLICIES
+      ////////////////////////////////////////////////////
 
       const policiesSnap = await db
         .collection("policies")
-        .where("orgId","==",orgId)
+        .where("orgId", "==", orgId)
         .get();
 
-//////////////////////////////////////////////////////
-// DEFAULT RULES
-//////////////////////////////////////////////////////
-
       let receiptThreshold = 25;
+      const categoryLimits = { Meals: 50, Travel: 300, Office: 500, Technology: 3000 };
 
-      const categoryLimits = {
-        Meals:50,
-        Travel:300,
-        Office:500,
-        Technology:3000
-      };
-
-//////////////////////////////////////////////////////
-// APPLY POLICIES
-//////////////////////////////////////////////////////
-
-      policiesSnap.forEach(doc=>{
-
+      policiesSnap.forEach(doc => {
         const policy = doc.data();
-
-        if(policy.type === "receipt_required"){
-          receiptThreshold = policy.value ?? receiptThreshold;
-        }
-
-        if(policy.type === "category_limit" && policy.category){
-          categoryLimits[policy.category] = policy.value;
-        }
-
+        if (policy.type === "receipt_required") receiptThreshold = policy.value ?? receiptThreshold;
+        if (policy.type === "category_limit" && policy.category) categoryLimits[policy.category] = policy.value;
       });
 
-//////////////////////////////////////////////////////
-// RECEIPT POLICY
-//////////////////////////////////////////////////////
+      ////////////////////////////////////////////////////
+      // RECEIPT POLICY
+      ////////////////////////////////////////////////////
 
       const hasReceipt = !!receiptUrl;
 
-      if(numericAmount > receiptThreshold && !hasReceipt){
-        return {
-          status:400,
-          jsonBody:{
-            valid:false,
-            reason:`Receipt required above £${receiptThreshold}`
-          }
-        };
-      }
+      if (numericAmount > receiptThreshold && !hasReceipt)
+        return secureResponse({ valid: false, reason: `Receipt required for expenses above £${receiptThreshold}.` }, 400);
 
-//////////////////////////////////////////////////////
-// CATEGORY LIMIT
-//////////////////////////////////////////////////////
+      ////////////////////////////////////////////////////
+      // CATEGORY LIMIT
+      ////////////////////////////////////////////////////
 
-      if(numericAmount > categoryLimits[category]){
-        return {
-          status:400,
-          jsonBody:{
-            valid:false,
-            reason:`${category} limit exceeded`
-          }
-        };
-      }
+      if (numericAmount > (categoryLimits[category] ?? Infinity))
+        return secureResponse({ valid: false, reason: `${category} limit exceeded.` }, 400);
 
-//////////////////////////////////////////////////////
-// DATE POLICY
-//////////////////////////////////////////////////////
+      ////////////////////////////////////////////////////
+      // SUBMISSION WINDOW (30 days)
+      ////////////////////////////////////////////////////
 
-      const today = new Date();
-      const expenseDate = new Date(purchaseDate);
+      const diffDays = (Date.now() - new Date(purchaseDate).getTime()) / (1000 * 60 * 60 * 24);
 
-      const diffDays =
-        (today.getTime()-expenseDate.getTime())/(1000*60*60*24);
+      if (diffDays > 30)
+        return secureResponse({ valid: false, reason: "Submission window expired (30 days)." }, 400);
 
-      if(diffDays > 30){
-        return {
-          status:400,
-          jsonBody:{
-            valid:false,
-            reason:"Submission window expired."
-          }
-        };
-      }
-
-//////////////////////////////////////////////////////
-// SAVE CLAIM
-//////////////////////////////////////////////////////
+      ////////////////////////////////////////////////////
+      // SAVE CLAIM
+      ////////////////////////////////////////////////////
 
       const claimRef = await db.collection("claims").add({
-
         userId,
-        userEmail,
+        userEmail: cleanUserEmail,
         orgId,
-
-        merchant:merchant.trim(),
-        amount:numericAmount,
+        merchant: cleanMerchant,
+        amount: numericAmount,
         category,
         purchaseDate,
-
-        receiptUrl,
+        receiptUrl: receiptUrl ?? null,
         hasReceipt,
-
-        status:"pending",
-
-        createdAt:admin.firestore.FieldValue.serverTimestamp()
-
+        status: "pending",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-//////////////////////////////////////////////////////
-// RESPONSE
-//////////////////////////////////////////////////////
+      ////////////////////////////////////////////////////
+      // RESPONSE — HTTPS headers via secureResponse
+      ////////////////////////////////////////////////////
 
-      return{
-        status:200,
-        jsonBody:{
-          valid:true,
-          claimId:claimRef.id,
-          status:"pending"
-        }
-      };
+      return secureResponse({ valid: true, claimId: claimRef.id, status: "pending" }, 200);
 
-    }
+    } catch (error) {
 
-//////////////////////////////////////////////////////
-// ERROR HANDLER
-//////////////////////////////////////////////////////
-
-    catch(error){
-
-      context.log("VALIDATE CLAIM ERROR:",error);
-
-      return{
-        status:500,
-        jsonBody:{
-          valid:false,
-          reason:"Internal server error."
-        }
-      };
+      context.log("VALIDATE CLAIM ERROR:", error);
+      return secureResponse({ valid: false, reason: "Internal server error." }, 500);
 
     }
 

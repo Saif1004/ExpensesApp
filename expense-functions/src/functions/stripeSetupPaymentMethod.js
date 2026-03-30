@@ -1,22 +1,34 @@
 const { app } = require('@azure/functions');
 const admin = require('firebase-admin');
 const Stripe = require('stripe');
+const { checkRateLimit, WINDOW_15_MIN } = require('./rateLimit');
+const { requireAuth, secureResponse } = require('./security');
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-// Creates a Stripe Customer for the admin (if not exists) and returns a
-// SetupIntent client secret so the app can collect their card via Stripe SDK.
+////////////////////////////////////////////////////
+// SETUP PAYMENT METHOD
+// Creates a Stripe Customer (if not exists) and
+// returns a SetupIntent client secret so the app
+// can collect the admin's card via Stripe SDK.
+////////////////////////////////////////////////////
+
 app.http('stripeSetupPaymentMethod', {
   methods: ['POST'],
   authLevel: 'anonymous',
   handler: async (request, context) => {
-    const headers = { 'Content-Type': 'application/json' };
 
     try {
-      const authHeader = request.headers.get('authorization') || '';
-      const idToken = authHeader.replace('Bearer ', '');
-      const decoded = await admin.auth().verifyIdToken(idToken);
-      const uid = decoded.uid;
+
+      // OAUTH 2.0 Bearer verification
+      const { uid, authError } = await requireAuth(request);
+      if (authError) return authError;
+
+      // 5 per 15 minutes — payment setup is auth-sensitive
+      const { allowed } = await checkRateLimit(uid, 'rateLimitSetupPayment', 5, WINDOW_15_MIN);
+      if (!allowed) {
+        return secureResponse({ error: 'Too many requests. Max 5 per 15 minutes.' }, 429);
+      }
 
       const userDoc = await admin.firestore().collection('users').doc(uid).get();
       const userData = userDoc.data();
@@ -31,46 +43,45 @@ app.http('stripeSetupPaymentMethod', {
           metadata: { uid },
         });
         customerId = customer.id;
-        await admin.firestore().collection('users').doc(uid).update({
-          stripeCustomerId: customerId,
-        });
+        await admin.firestore().collection('users').doc(uid).update({ stripeCustomerId: customerId });
       }
 
-      // Create SetupIntent so client can securely collect card
+      // SetupIntent lets the client securely collect card details
       const setupIntent = await stripe.setupIntents.create({
         customer: customerId,
         payment_method_types: ['card'],
         usage: 'off_session', // allow charging without user present
       });
 
-      return new Response(JSON.stringify({
-        clientSecret: setupIntent.client_secret,
-        customerId,
-      }), { status: 200, headers });
+      return secureResponse({ clientSecret: setupIntent.client_secret, customerId }, 200);
+
     } catch (err) {
       context.error('stripeSetupPaymentMethod error:', err);
-      return new Response(JSON.stringify({ error: err.message }), { status: 500, headers });
+      return secureResponse({ error: err.message }, 500);
     }
   },
 });
 
-// Called after client-side card setup completes — saves the payment method ID to Firestore.
+////////////////////////////////////////////////////
+// SAVE PAYMENT METHOD
+// Called after client-side card setup completes —
+// attaches the PM to the customer and saves to Firestore.
+////////////////////////////////////////////////////
+
 app.http('stripeSavePaymentMethod', {
   methods: ['POST'],
   authLevel: 'anonymous',
   handler: async (request, context) => {
-    const headers = { 'Content-Type': 'application/json' };
 
     try {
-      const authHeader = request.headers.get('authorization') || '';
-      const idToken = authHeader.replace('Bearer ', '');
-      const decoded = await admin.auth().verifyIdToken(idToken);
-      const uid = decoded.uid;
+
+      const { uid, authError } = await requireAuth(request);
+      if (authError) return authError;
 
       const { paymentMethodId } = await request.json();
 
       if (!paymentMethodId) {
-        return new Response(JSON.stringify({ error: 'paymentMethodId required' }), { status: 400, headers });
+        return secureResponse({ error: 'paymentMethodId required' }, 400);
       }
 
       const userDoc = await admin.firestore().collection('users').doc(uid).get();
@@ -94,43 +105,42 @@ app.http('stripeSavePaymentMethod', {
         stripeCardBrand: card.brand,
       });
 
-      return new Response(JSON.stringify({
-        success: true,
-        last4: card.last4,
-        brand: card.brand,
-      }), { status: 200, headers });
+      return secureResponse({ success: true, last4: card.last4, brand: card.brand }, 200);
+
     } catch (err) {
       context.error('stripeSavePaymentMethod error:', err);
-      return new Response(JSON.stringify({ error: err.message }), { status: 500, headers });
+      return secureResponse({ error: err.message }, 500);
     }
   },
 });
 
-// Checks if employee's Connect account onboarding is complete and updates Firestore.
+////////////////////////////////////////////////////
+// CHECK ONBOARDING
+// Checks if employee's Connect account onboarding
+// is complete and updates Firestore.
+////////////////////////////////////////////////////
+
 app.http('stripeCheckOnboarding', {
   methods: ['POST'],
   authLevel: 'anonymous',
   handler: async (request, context) => {
-    const headers = { 'Content-Type': 'application/json' };
 
     try {
-      const authHeader = request.headers.get('authorization') || '';
-      const idToken = authHeader.replace('Bearer ', '');
-      const decoded = await admin.auth().verifyIdToken(idToken);
-      const uid = decoded.uid;
+
+      const { uid, authError } = await requireAuth(request);
+      if (authError) return authError;
 
       const userDoc = await admin.firestore().collection('users').doc(uid).get();
       const { stripeAccountId } = userDoc.data();
 
       if (!stripeAccountId) {
-        return new Response(JSON.stringify({ complete: false }), { status: 200, headers });
+        return secureResponse({ complete: false }, 200);
       }
 
       const account = await stripe.accounts.retrieve(stripeAccountId);
       const complete = account.details_submitted && account.charges_enabled;
 
       if (complete) {
-        // Fetch external account details (bank account or debit card)
         const updateData = { stripeOnboardingComplete: true };
 
         try {
@@ -144,17 +154,18 @@ app.http('stripeCheckOnboarding', {
             updateData.stripePayoutBrand = ext.object === 'card'
               ? (ext.brand || 'Card')
               : (ext.bank_name || 'Bank Account');
-            updateData.stripePayoutType = ext.object; // 'card' or 'bank_account'
+            updateData.stripePayoutType = ext.object;
           }
         } catch (_) {}
 
         await admin.firestore().collection('users').doc(uid).update(updateData);
       }
 
-      return new Response(JSON.stringify({ complete }), { status: 200, headers });
+      return secureResponse({ complete }, 200);
+
     } catch (err) {
       context.error('stripeCheckOnboarding error:', err);
-      return new Response(JSON.stringify({ error: err.message }), { status: 500, headers });
+      return secureResponse({ error: err.message }, 500);
     }
   },
 });
