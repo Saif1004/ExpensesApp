@@ -138,7 +138,7 @@ app.http('stripeCheckOnboarding', {
       }
 
       const account = await stripe.accounts.retrieve(stripeAccountId);
-      const complete = account.details_submitted && account.charges_enabled;
+      const complete = account.details_submitted && account.charges_enabled && account.payouts_enabled;
 
       if (complete) {
         const updateData = { stripeOnboardingComplete: true };

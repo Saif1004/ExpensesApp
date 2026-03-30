@@ -105,6 +105,15 @@ app.http('stripeProcessReimbursement', {
       }
 
       ////////////////////////////////////////////////////
+      // VERIFY EMPLOYEE ACCOUNT CAN RECEIVE TRANSFERS
+      ////////////////////////////////////////////////////
+
+      const employeeAccount = await stripe.accounts.retrieve(employeeData.stripeAccountId);
+      if (!employeeAccount.payouts_enabled) {
+        return secureResponse({ error: 'Employee payout account is not yet active. They may need to complete additional verification in their payout account settings.' }, 400);
+      }
+
+      ////////////////////////////////////////////////////
       // STRIPE PAYMENT
       ////////////////////////////////////////////////////
 

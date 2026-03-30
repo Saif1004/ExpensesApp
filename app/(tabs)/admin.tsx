@@ -241,14 +241,14 @@ export default function AdminScreen() {
                 style={styles.approveBtn}
                 onPress={() => openConfirmModal(item, "approved")}
               >
-                <ThemedText style={styles.btnText}>Approve & Pay</ThemedText>
+                <ThemedText style={styles.btnText} numberOfLines={1}>Approve & Pay</ThemedText>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.rejectBtn}
                 onPress={() => openConfirmModal(item, "rejected")}
               >
-                <ThemedText style={styles.btnText}>Reject</ThemedText>
+                <ThemedText style={styles.btnText} numberOfLines={1}>Reject</ThemedText>
               </TouchableOpacity>
             </View>
           </ThemedView>
@@ -321,7 +321,7 @@ export default function AdminScreen() {
                 style={[styles.confirmBtn, isApprove ? styles.confirmBtnApprove : styles.confirmBtnReject]}
                 onPress={handleConfirm}
               >
-                <ThemedText style={styles.confirmBtnText}>
+                <ThemedText style={styles.confirmBtnText} numberOfLines={1}>
                   {isApprove ? "Approve & Pay" : "Reject"}
                 </ThemedText>
               </TouchableOpacity>
@@ -633,7 +633,7 @@ const styles = StyleSheet.create({
     fontSize: 14
   },
   confirmBtn: {
-    flex: 1,
+    flex: 2,
     paddingVertical: 13,
     borderRadius: 12,
     alignItems: "center"
