@@ -11,6 +11,8 @@ require("./stripeOnboardingLink");
 require("./stripeSetupPaymentMethod");
 require("./stripeProcessReimbursement");
 require("./stripeRedirects");
+require("./startTrial");
+require("./syncPlan");
 
 
 

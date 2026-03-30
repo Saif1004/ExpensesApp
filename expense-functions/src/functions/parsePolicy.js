@@ -57,6 +57,13 @@ app.http("parsePolicy", {
       if (auth.error) return auth.error;
 
 ////////////////////////////////////////////////////
+// AI KILL SWITCH
+////////////////////////////////////////////////////
+
+      const blocked = await checkAiKillSwitch("parsePolicy");
+      if (blocked) return blocked;
+
+////////////////////////////////////////////////////
 // READ REQUEST
 ////////////////////////////////////////////////////
 
@@ -187,13 +194,20 @@ Return JSON only.
 
 ////////////////////////////////////////////////////
 // PARSE JSON SAFELY
+// Strip markdown code fences that OpenAI sometimes wraps around JSON
+// e.g.  ```json\n{...}\n```  →  {...}
 ////////////////////////////////////////////////////
 
       let parsed;
 
       try {
 
-        parsed = JSON.parse(content);
+        const cleaned = content
+          .replace(/^```(?:json)?\s*/i, "")  // strip leading ```json or ```
+          .replace(/\s*```\s*$/,        "")  // strip trailing ```
+          .trim();
+
+        parsed = JSON.parse(cleaned);
 
       } catch (err) {
 

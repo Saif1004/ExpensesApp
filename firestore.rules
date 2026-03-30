@@ -267,10 +267,12 @@ service cloud.firestore {
                         .affectedKeys()
                         .hasOnly([
                           'status',
+                          'statusUpdatedAt',
                           'adminFeedback',
                           'rejectedAt',
                           'approvedAt',
-                          'approvedBy'
+                          'approvedBy',
+                          'adminId'
                         ]);
 
       allow delete: if false;

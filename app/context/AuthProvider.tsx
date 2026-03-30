@@ -7,7 +7,6 @@ import {
   getDoc,
   getDocs,
   query,
-  updateDoc,
   where
 } from "firebase/firestore";
 import React, {
@@ -136,30 +135,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const Purchases = (await import("react-native-purchases")).default;
       await Purchases.logIn(uid);
-      const info = await Purchases.getCustomerInfo();
 
-      // Check separate pro and business entitlements
-      const hasBusiness = !!info.entitlements.active[PLAN_LIMITS.business.rcEntitlement!];
-      const hasPro      = !!info.entitlements.active[PLAN_LIMITS.pro.rcEntitlement!];
-      const rcPlan: OrgPlan = hasBusiness ? "business" : hasPro ? "pro" : "free";
+      // Verify entitlements server-side via Azure Function — client cannot
+      // write plan/aiCreditsRemaining directly (Firestore rules block it).
+      const token = await auth.currentUser?.getIdToken();
+      if (!token) return;
 
-      // Only write to Firestore if plan changed — don't overwrite an active trial with "free"
-      const orgSnap = await getDoc(doc(db, "organisations", oid));
-      const currentPlan = (orgSnap.data()?.plan ?? "free") as OrgPlan;
-
-      const shouldUpdate =
-        rcPlan !== currentPlan &&
-        // Don't downgrade an active trial — let it expire naturally
-        !(rcPlan === "free" && (currentPlan === "trial" || currentPlan === "free"));
-
-      if (shouldUpdate) {
-        const updates: Record<string, unknown> = { plan: rcPlan };
-        if (rcPlan === "pro" || rcPlan === "business") {
-          updates.aiCreditsRemaining = PLAN_LIMITS[rcPlan].aiCreditsPerPeriod;
-          updates.aiCreditsResetAt   = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-        }
-        await updateDoc(doc(db, "organisations", oid), updates);
-      }
+      await fetch(process.env.EXPO_PUBLIC_SYNC_PLAN_URL!, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body:    JSON.stringify({ orgId: oid }),
+      });
+      // refreshOrgPlan() will be called by the caller (loadOrgData) after this returns
     } catch (err) {
       console.log("RevenueCat sync error:", err);
     }
@@ -181,9 +168,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setTrialEndsAt(trialEnd);
     setAiCreditsRemaining(credits);
 
-    // Admin: sync RevenueCat → Firestore
+    // Admin: sync RevenueCat → Firestore (fire-and-forget; plan refreshes on next loadOrgData)
     if (memberRole === "admin") {
-      syncRevenueCat(uid, oid);
+      syncRevenueCat(uid, oid).then(async () => {
+        // Re-read org after sync so the UI reflects any plan change
+        const refreshed = await getDoc(doc(db, "organisations", oid));
+        const d = refreshed.data() || {};
+        setOrgPlan((d.plan ?? "free") as OrgPlan);
+        setAiCreditsRemaining(d.aiCreditsRemaining ?? 0);
+        setTrialEndsAt(d.trialEndsAt?.toDate?.() ?? null);
+      }).catch(() => {});
     }
   }, [syncRevenueCat]);
 

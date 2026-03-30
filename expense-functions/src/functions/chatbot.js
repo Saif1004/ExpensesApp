@@ -60,6 +60,9 @@ app.http("chatbot", {
       const { uid: userId, authError } = await requireAuth(request);
       if (authError) return authError;
 
+      const blocked = await checkAiKillSwitch("chatbot");
+      if (blocked) return blocked;
+
       const { message, history = [] } = await request.json();
 
       ////////////////////////////////////////////////////

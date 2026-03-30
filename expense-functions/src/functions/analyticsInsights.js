@@ -61,6 +61,9 @@ app.http("analyticsInsights", {
       const { uid: userId, authError } = await requireAuth(request);
       if (authError) return authError;
 
+      const blocked = await checkAiKillSwitch("analytics");
+      if (blocked) return blocked;
+
       ////////////////////////////////////////////////////
       // RBAC — org membership + plan check
       ////////////////////////////////////////////////////

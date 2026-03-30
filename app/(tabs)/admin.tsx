@@ -108,11 +108,14 @@ export default function AdminScreen() {
     closeConfirmModal();
 
     await updateDoc(doc(db, "claims", claim.id), {
-      status: action,
+      status:          action,
       statusUpdatedAt: serverTimestamp(),
       approvedBy,
       adminId,
-      adminMessage: adminMessage.trim() || null
+      adminFeedback:   adminMessage.trim() || null,
+      ...(action === "approved"
+        ? { approvedAt: serverTimestamp() }
+        : { rejectedAt: serverTimestamp() }),
     });
 
     if (action === "approved") {

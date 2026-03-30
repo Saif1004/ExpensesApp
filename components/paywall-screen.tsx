@@ -1,4 +1,3 @@
-import { doc, updateDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -12,9 +11,12 @@ import {
 import Constants from "expo-constants";
 
 const isExpoGo = Constants.executionEnvironment === "storeClient";
+
+const START_TRIAL_URL = process.env.EXPO_PUBLIC_START_TRIAL_URL!;
+const SYNC_PLAN_URL   = process.env.EXPO_PUBLIC_SYNC_PLAN_URL!;
+
 import { PLAN_LIMITS, OrgPlan } from "../constants/planLimits";
 import { useAuth } from "../app/context/AuthProvider";
-import { db } from "../app/firebase/firebaseConfig";
 import { ThemedText } from "./themed-text";
 
 //////////////////////////////////////////////////////
@@ -166,20 +168,21 @@ export default function PaywallScreen() {
 
     try {
       const Purchases = (await import("react-native-purchases")).default;
-      const { customerInfo } = await Purchases.purchasePackage(pkgInfo.pkg as any);
+      await Purchases.purchasePackage(pkgInfo.pkg as any);
 
-      const hasBusiness = !!customerInfo.entitlements.active[PLAN_LIMITS.business.rcEntitlement!];
-      const hasPro      = !!customerInfo.entitlements.active[PLAN_LIMITS.pro.rcEntitlement!];
-      const newPlan: OrgPlan = hasBusiness ? "business" : hasPro ? "pro" : targetPlan;
-
-      await updateDoc(doc(db, "organisations", orgId), {
-        plan: newPlan,
-        aiCreditsRemaining: PLAN_LIMITS[newPlan].aiCreditsPerPeriod,
-        aiCreditsResetAt:   new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      // Verify purchase server-side and write plan via Admin SDK
+      // (client cannot write `plan` directly — Firestore rules block it)
+      const token  = await user!.getIdToken();
+      const syncRes = await fetch(SYNC_PLAN_URL, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body:    JSON.stringify({ orgId }),
       });
+      const syncData = await syncRes.json();
+      const newPlan: OrgPlan = syncData.plan ?? targetPlan;
 
       await refreshOrgPlan();
-      Alert.alert("Subscribed!", `Welcome to ${PLAN_LIMITS[newPlan].label}! Your whole team now has access.`);
+      Alert.alert("Subscribed!", `Welcome to ${PLAN_LIMITS[newPlan]?.label ?? newPlan}! Your whole team now has access.`);
     } catch (err: any) {
       if (!err?.userCancelled) {
         Alert.alert("Purchase failed", "Something went wrong. Please try again.");
@@ -194,19 +197,24 @@ export default function PaywallScreen() {
   //////////////////////////////////////////////////////
 
   const handleStartTrial = async () => {
-    if (!orgId) return;
+    if (!orgId || !user) return;
     if (role !== "admin") {
       Alert.alert("Admin required", "Ask your organisation admin to start the trial.");
       return;
     }
     setStartingTrial(true);
     try {
-      const trialEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-      await updateDoc(doc(db, "organisations", orgId), {
-        plan: "trial",
-        trialEndsAt: trialEnd,
-        aiCreditsRemaining: 50
+      const token = await user.getIdToken();
+      const res   = await fetch(START_TRIAL_URL, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body:    JSON.stringify({ orgId }),
       });
+      const data = await res.json();
+      if (!res.ok) {
+        Alert.alert("Error", data.error ?? "Could not start trial. Please try again.");
+        return;
+      }
       await refreshOrgPlan();
       Alert.alert("Trial Started!", "Your organisation has 7 days of Pro access for free. No payment needed.");
     } catch {
@@ -225,20 +233,22 @@ export default function PaywallScreen() {
     setRestoring(true);
     try {
       const Purchases = (await import("react-native-purchases")).default;
-      const info = await Purchases.restorePurchases();
+      await Purchases.restorePurchases();
 
-      const hasBusiness = !!info.entitlements.active[PLAN_LIMITS.business.rcEntitlement!];
-      const hasPro      = !!info.entitlements.active[PLAN_LIMITS.pro.rcEntitlement!];
+      // Verify restored entitlements server-side and write plan via Admin SDK
+      const token   = await user!.getIdToken();
+      const syncRes = await fetch(SYNC_PLAN_URL, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body:    JSON.stringify({ orgId }),
+      });
+      const syncData = await syncRes.json();
+      const newPlan: OrgPlan = syncData.plan ?? "free";
 
-      if (hasBusiness || hasPro) {
-        const newPlan: OrgPlan = hasBusiness ? "business" : "pro";
-        await updateDoc(doc(db, "organisations", orgId), {
-          plan: newPlan,
-          aiCreditsRemaining: PLAN_LIMITS[newPlan].aiCreditsPerPeriod,
-          aiCreditsResetAt:   new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-        });
-        await refreshOrgPlan();
-        Alert.alert("Restored", `Your ${PLAN_LIMITS[newPlan].label} subscription has been restored.`);
+      await refreshOrgPlan();
+
+      if (newPlan !== "free") {
+        Alert.alert("Restored", `Your ${PLAN_LIMITS[newPlan]?.label ?? newPlan} subscription has been restored.`);
       } else {
         Alert.alert("Nothing to restore", "No active subscription found.");
       }

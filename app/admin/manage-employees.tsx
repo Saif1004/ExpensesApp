@@ -14,7 +14,6 @@ import {
     collection,
     deleteDoc,
     doc,
-    getDoc,
     getDocs,
     query,
     updateDoc,
@@ -22,7 +21,6 @@ import {
 } from "firebase/firestore";
 
 import { useRouter } from "expo-router";
-import { auth } from "../firebase/firebaseConfig";
 
 import { useAuth } from "../context/AuthProvider";
 import { db } from "../firebase/firebaseConfig";
@@ -30,7 +28,7 @@ import { db } from "../firebase/firebaseConfig";
 export default function ManageEmployees(){
 
 const router = useRouter();
-const { role, authLoaded } = useAuth();
+const { role, authLoaded, orgId, user } = useAuth();
 
 const [users,setUsers] = useState<any[]>([]);
 const [loading,setLoading] = useState(true);
@@ -59,65 +57,33 @@ try{
 
 setLoading(true);
 
-const currentUser = auth.currentUser;
-
-if(!currentUser) return;
-
-//////////////////////////////////////////////////////
-// GET ADMIN MEMBERSHIP
-//////////////////////////////////////////////////////
-
-const membershipQuery = query(
-collection(db,"memberships"),
-where("userId","==",currentUser.uid)
-);
-
-const membershipSnap = await getDocs(membershipQuery);
-
-if(membershipSnap.empty){
-setUsers([]);
-return;
+if(!user?.emailVerified || !orgId){
+  setUsers([]);
+  setLoading(false);
+  return;
 }
 
-const adminMembership = membershipSnap.docs[0].data();
-const orgId = adminMembership.orgId;
-
-//////////////////////////////////////////////////////
-// GET MEMBERS OF SAME ORG
-//////////////////////////////////////////////////////
-
 const q = query(
-collection(db,"memberships"),
-where("orgId","==",orgId)
+  collection(db,"memberships"),
+  where("orgId","==",orgId)
 );
 
 const snap = await getDocs(q);
 
-const list:any[]=[];
-
-for(const docSnap of snap.docs){
-
-const membership = docSnap.data();
-
-//////////////////////////////////////////////////////
-// LOAD USER PROFILE
-//////////////////////////////////////////////////////
-
-const userDoc = await getDoc(doc(db,"users",membership.userId));
-
-const userData = userDoc.exists()
-? userDoc.data()
-: {};
-
-list.push({
-id: docSnap.id,
-userId: membership.userId,
-role: membership.role,
-email: userData.email,
-username: userData.username
+// displayName, email, username stored on the membership doc at sign-up
+// — no cross-user getDoc(users/{uid}) needed (owner-only rule would deny it)
+const list = snap.docs.map(docSnap => {
+  const m = docSnap.data();
+  return {
+    id:          docSnap.id,
+    userId:      m.userId,
+    role:        m.role,
+    status:      m.status,
+    displayName: m.displayName,
+    email:       m.email,
+    username:    m.username ?? m.displayName,
+  };
 });
-
-}
 
 setUsers(list);
 
@@ -135,7 +101,7 @@ setLoading(false);
 
 useEffect(()=>{
 loadUsers();
-},[]);
+},[orgId, user]);
 
 //////////////////////////////////////////////////////
 // TOGGLE ROLE
@@ -208,7 +174,7 @@ renderItem={({item}:any)=>(
 <View style={styles.card}>
 
 <Text style={styles.name}>
-{item.username || "Unknown User"}
+{item.displayName || item.username || "Unknown User"}
 </Text>
 
 <Text style={styles.email}>
