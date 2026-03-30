@@ -7,7 +7,7 @@ import {
   signInWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
-import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore"; // getDocs/query/where used by checkMembership
 import { useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -46,15 +46,16 @@ export default function SignIn() {
   // FIND EMAIL FROM USERNAME
   //////////////////////////////////////////////////////
 
-  const findEmailFromUsername = async (username: string): Promise<string | null> => {
+  const findEmailFromUsername = async (username: string): Promise<string | "OLD_ACCOUNT" | null> => {
     try {
-      const normalized    = username.trim().toLowerCase();
-      const usernameDoc   = await getDoc(doc(db, "usernames", normalized));
+      const normalized  = username.trim().toLowerCase();
+      const usernameDoc = await getDoc(doc(db, "usernames", normalized));
       if (!usernameDoc.exists()) return null;
-      const { uid }       = usernameDoc.data();
-      const userDoc       = await getDoc(doc(db, "users", uid));
-      if (!userDoc.exists()) return null;
-      return userDoc.data().email ?? null;
+      const data = usernameDoc.data();
+      // New accounts store email directly. Old accounts only have uid.
+      if (data.email) return data.email;
+      // Old account — email not stored in username doc yet
+      return "OLD_ACCOUNT";
     } catch {
       return null;
     }
@@ -105,13 +106,21 @@ export default function SignIn() {
           Alert.alert("User not found", "No account with that username.");
           return;
         }
+        if (foundEmail === "OLD_ACCOUNT") {
+          Alert.alert(
+            "Sign in with email",
+            "This account was created before username login was available. Please sign in with your email address instead."
+          );
+          return;
+        }
         email = foundEmail;
       }
 
       const cred = await signInWithEmailAndPassword(auth, email, password);
 
-      // ── Reload to get the latest emailVerified status ──
+      // ── Reload + force-refresh JWT so Firestore rules see email_verified:true ──
       await cred.user.reload();
+      await cred.user.getIdToken(true); // must run BEFORE any Firestore reads
 
       // ── Email verification gate ──
       if (!cred.user.emailVerified) {
@@ -201,10 +210,9 @@ export default function SignIn() {
       let email = identifier.trim();
 
       if (!identifier.includes("@")) {
-        // Username → look up email
         const foundEmail = await findEmailFromUsername(identifier.trim().toLowerCase());
-        if (!foundEmail) {
-          // Don't reveal whether username exists — show generic message
+        if (!foundEmail || foundEmail === "OLD_ACCOUNT") {
+          // Don't reveal whether username/account exists
           Alert.alert("Email sent", "If an account exists, you will receive a password reset email.");
           return;
         }

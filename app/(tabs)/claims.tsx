@@ -119,7 +119,7 @@ export default function ClaimsScreen() {
       setLoading(false);
       setRefreshing(false);
 
-    }));
+    }, () => { /* silently swallow permission-denied on sign-out/delete */ }));
 
     return unsub;
 

@@ -43,7 +43,7 @@ function AddIcon() {
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
-  const { role, authLoaded, user } = useAuth();
+  const { role, authLoaded, user, orgId } = useAuth();
 
   const [claimsBadge, setClaimsBadge] = useState(0);
   const [usersBadge, setUsersBadge] = useState(0);
@@ -56,14 +56,19 @@ export default function TabLayout() {
   //////////////////////////////////////////////////////
 
   useEffect(() => {
-    if (!user) return;
+    // Only listen once user is verified — prevents permission-denied with stale JWT
+    if (!user || !user.emailVerified) return;
     let unsubscribe: any;
 
     const setup = async () => {
       const lastSeen = await AsyncStorage.getItem(LAST_SEEN_CLAIMS);
       const lastSeenTime = lastSeen ? Number(lastSeen) : 0;
 
-      const q = query(collection(db, "claims"), where("userId", "==", user.uid));
+      // Filter by userId — Firestore rules allow reads where userId == auth.uid
+      const q = query(
+        collection(db, "claims"),
+        where("userId", "==", user.uid)
+      );
 
       unsubscribe = addListener(
         onSnapshot(q, (snapshot) => {
@@ -75,7 +80,7 @@ export default function TabLayout() {
             if (Math.max(created, updated) > lastSeenTime) count++;
           });
           setClaimsBadge(count);
-        })
+        }, () => { /* silently swallow permission-denied on sign-out/delete */ })
       );
     };
 
@@ -88,22 +93,32 @@ export default function TabLayout() {
   //////////////////////////////////////////////////////
 
   useEffect(() => {
-    if (!user || !isAdmin) return;
-    const q = query(collection(db, "memberships"), where("status", "==", "pending"));
-    const unsub = addListener(onSnapshot(q, (snap) => setUsersBadge(snap.size)));
+    // orgId required — admin queries MUST be scoped to the org.
+    // Without it the query spans all orgs → Firestore rules deny the whole query.
+    if (!user || !user.emailVerified || !isAdmin || !orgId) return;
+    const q = query(
+      collection(db, "memberships"),
+      where("orgId",  "==", orgId),
+      where("status", "==", "pending")
+    );
+    const unsub = addListener(onSnapshot(q, (snap) => setUsersBadge(snap.size), () => {}));
     return unsub;
-  }, [user, isAdmin]);
+  }, [user, isAdmin, orgId]);
 
   //////////////////////////////////////////////////////
   // ADMIN BADGE (pending claims)
   //////////////////////////////////////////////////////
 
   useEffect(() => {
-    if (!user || !isAdmin) return;
-    const q = query(collection(db, "claims"), where("status", "==", "pending"));
-    const unsub = addListener(onSnapshot(q, (snap) => setAdminBadge(snap.size)));
+    if (!user || !user.emailVerified || !isAdmin || !orgId) return;
+    const q = query(
+      collection(db, "claims"),
+      where("orgId",  "==", orgId),
+      where("status", "==", "pending")
+    );
+    const unsub = addListener(onSnapshot(q, (snap) => setAdminBadge(snap.size), () => {}));
     return unsub;
-  }, [user, isAdmin]);
+  }, [user, isAdmin, orgId]);
 
   if (!authLoaded) return null;
 

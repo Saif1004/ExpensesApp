@@ -23,6 +23,7 @@ import { AppState, Platform } from "react-native";
 import { PLAN_LIMITS, OrgPlan } from "../../constants/planLimits";
 import { auth, db } from "../firebase/firebaseConfig";
 import { unsubscribeAll } from "../../utils/listenerStore";
+import { getIsSigningUp } from "../utils/signUpFlag";
 
 //////////////////////////////////////////////////////
 // MODULE-LEVEL GUARDS
@@ -253,11 +254,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // Reload to get the latest emailVerified status from the server
-        try { await firebaseUser.reload(); } catch {}
+        // Reload to get latest emailVerified status, then force-refresh the JWT
+        // so Firestore rules see the updated email_verified claim immediately.
+        try {
+          await firebaseUser.reload();
+          await firebaseUser.getIdToken(true); // force new JWT with fresh claims
+        } catch {}
 
-        // Block unverified users — sign them out so they can't access the app
-        if (!firebaseUser.emailVerified) {
+        // Block unverified users — sign them out so they can't access the app.
+        // Exception: skip during sign-up flow so the batch writes can complete
+        // before the user is signed out (signUpFlag prevents the race condition).
+        if (!firebaseUser.emailVerified && !getIsSigningUp()) {
           await signOut(auth);
           setAuthLoaded(true);
           return;

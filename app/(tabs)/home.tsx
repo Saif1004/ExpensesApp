@@ -93,7 +93,7 @@ export default function HomeScreen() {
       setPending(pendingCount);
       setApproved(approvedCount);
 
-    }));
+    }, () => { /* silently swallow permission-denied on sign-out/delete */ }));
 
     const recentQuery = query(
       collection(db,"claims"),
@@ -111,7 +111,7 @@ export default function HomeScreen() {
 
       setRecent(list);
 
-    }));
+    }, () => { /* silently swallow permission-denied on sign-out/delete */ }));
 
     return ()=>{
       unsub();

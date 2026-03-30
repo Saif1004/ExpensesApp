@@ -51,7 +51,7 @@ type ConfirmModal = {
 };
 
 export default function AdminScreen() {
-  const { role } = useAuth();
+  const { role, orgId, user } = useAuth();
 
   const [claims, setClaims] = useState<Claim[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,10 +64,12 @@ export default function AdminScreen() {
   });
 
   useEffect(() => {
-    if (role !== "admin") return;
+    // Must scope by orgId — unscoped queries fail Firestore rules
+    if (role !== "admin" || !orgId || !user?.emailVerified) return;
 
     const q = query(
       collection(db, "claims"),
+      where("orgId",  "==", orgId),
       where("status", "==", "pending"),
       orderBy("createdAt", "desc")
     );
@@ -80,10 +82,10 @@ export default function AdminScreen() {
 
       setClaims(data);
       setLoading(false);
-    }));
+    }, () => { /* silently swallow permission-denied on sign-out/delete */ }));
 
     return unsub;
-  }, [role]);
+  }, [role, orgId, user]);
 
   const openConfirmModal = (claim: Claim, action: "approved" | "rejected") => {
     setAdminMessage("");

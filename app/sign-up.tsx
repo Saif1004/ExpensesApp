@@ -6,7 +6,7 @@ import {
   signOut,
   updateProfile,
 } from "firebase/auth";
-import { collection, doc, getDocs, query, serverTimestamp, where, writeBatch } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, query, serverTimestamp, where, writeBatch } from "firebase/firestore";
 import { useState } from "react";
 import {
   Alert,
@@ -22,6 +22,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "./context/AuthProvider";
 import { auth, db } from "./firebase/firebaseConfig";
+import { setIsSigningUp } from "./utils/signUpFlag";
 
 //////////////////////////////////////////////////////
 // Helpers
@@ -33,8 +34,9 @@ const generateInviteCode = () => {
 };
 
 const usernameExists = async (username: string) => {
-  const snap = await getDocs(query(collection(db, "usernames"), where("__name__", "==", username)));
-  return !snap.empty;
+  // Use getDoc on the exact document — where("__name__") matches the full path, not the ID
+  const snap = await getDoc(doc(db, "usernames", username));
+  return snap.exists();
 };
 
 //////////////////////////////////////////////////////
@@ -127,19 +129,24 @@ export default function SignUp() {
     }
 
     setLoading(true);
+    setIsSigningUp(true);
+    let cred: any = null;
     try {
-      const cred = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
+      cred = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
       const uid  = cred.user.uid;
 
       await updateProfile(cred.user, { displayName: trimmedUsername });
 
-      const batch        = writeBatch(db);
-      const orgRef       = doc(collection(db, "organisations"));
-      const membershipRef = doc(collection(db, "memberships"));
-      const userRef      = doc(db, "users", uid);
-      const usernameRef  = doc(db, "usernames", normalizedUsername);
+      // ── Send verification email IMMEDIATELY after account creation ──
+      try { await sendEmailVerification(cred.user); } catch {}
+
+      const orgRef          = doc(collection(db, "organisations"));
+      const membershipRef   = doc(collection(db, "memberships"));
+      const userRef         = doc(db, "users", uid);
+      const usernameRef     = doc(db, "usernames", normalizedUsername);
       const inviteCodeValue = generateInviteCode();
 
+      const batch = writeBatch(db);
       batch.set(userRef, {
         uid,
         email:       trimmedEmail,
@@ -148,9 +155,7 @@ export default function SignUp() {
         createdAt:   serverTimestamp(),
         plan:        "free",
       });
-
-      batch.set(usernameRef, { uid });
-
+      batch.set(usernameRef, { uid, email: trimmedEmail });
       batch.set(orgRef, {
         name:               trimmedOrg,
         nameLower:          normalizedOrg,
@@ -161,26 +166,23 @@ export default function SignUp() {
         aiCreditsResetAt:   null,
         createdAt:          serverTimestamp(),
       });
-
       batch.set(membershipRef, {
-        userId:    uid,
-        orgId:     orgRef.id,
-        role:      "admin",
-        status:    "approved",
-        createdAt: serverTimestamp(),
+        userId:      uid,
+        orgId:       orgRef.id,
+        role:        "admin",
+        status:      "approved",
+        displayName: trimmedUsername,
+        email:       trimmedEmail,
+        createdAt:   serverTimestamp(),
       });
-
       await batch.commit();
-
-      // ── Send email verification before signing the user out ──
-      try { await sendEmailVerification(cred.user); } catch {}
 
       // ── Sign out — must verify email before accessing the app ──
       await signOut(auth);
 
       Alert.alert(
-        "Account Created!",
-        "A verification link has been sent to your email. Please verify your address before signing in.",
+        "Check your email",
+        "A verification link has been sent to your email address. Please verify before signing in.",
         [{ text: "Go to Sign In", onPress: () => router.replace("/sign-in") }]
       );
 
@@ -189,9 +191,14 @@ export default function SignUp() {
       if (code === "auth/email-already-in-use") {
         Alert.alert("Email in use", "An account with this email already exists.");
       } else {
-        Alert.alert("Sign up failed", "Please try again.");
+        // Clean up the auth account so the user can try again cleanly
+        if (cred?.user) {
+          try { await cred.user.delete(); } catch {}
+        }
+        Alert.alert("Sign up failed", "Something went wrong. Please try again.");
       }
     } finally {
+      setIsSigningUp(false);
       setLoading(false);
     }
   };
@@ -228,15 +235,22 @@ export default function SignUp() {
     }
 
     setLoading(true);
+    setIsSigningUp(true);
+    let cred: any = null;
 
     try {
       // 1. Create auth user
-      const cred       = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
+      cred       = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
       const uid        = cred.user.uid;
 
       await updateProfile(cred.user, { displayName: trimmedUsername });
 
+      // ── Send verification email IMMEDIATELY after account creation ──
+      try { await sendEmailVerification(cred.user); } catch {}
+
       // 2. Look up org by invite code
+      // organisations are readable by any authenticated user (not just verified)
+      // so this works immediately after createUserWithEmailAndPassword
       const orgQuery = query(
         collection(db, "organisations"),
         where("inviteCode", "==", trimmedCode)
@@ -266,25 +280,24 @@ export default function SignUp() {
         createdAt:   serverTimestamp(),
         plan:        "free",
       });
-      batch.set(usernameRef, { uid });
+      batch.set(usernameRef, { uid, email: trimmedEmail });
       batch.set(membershipRef, {
-        userId:    uid,
+        userId:      uid,
         orgId,
-        role:      "employee",
-        status:    "pending",
-        createdAt: serverTimestamp(),
+        role:        "employee",
+        status:      "pending",
+        displayName: trimmedUsername,
+        email:       trimmedEmail,
+        createdAt:   serverTimestamp(),
       });
 
       await batch.commit();
 
-      // 4. Send verification email before signing out
-      try { await sendEmailVerification(cred.user); } catch {}
-
-      // 5. Sign out — must wait for admin approval AND verify email
+      // 4. Sign out — must verify email AND wait for admin approval
       await signOut(auth);
 
       Alert.alert(
-        "Request Sent!",
+        "Check your email",
         "A verification link has been sent to your email. Please verify your address, then wait for your admin to approve your account.",
         [{ text: "Go to Sign In", onPress: () => router.replace("/sign-in") }]
       );
@@ -294,9 +307,14 @@ export default function SignUp() {
       if (code === "auth/email-already-in-use") {
         Alert.alert("Email in use", "An account with this email already exists.");
       } else {
-        Alert.alert("Sign up failed", "Please try again.");
+        // Clean up orphaned auth account so user can try again
+        if (cred?.user) {
+          try { await cred.user.delete(); } catch {}
+        }
+        Alert.alert("Sign up failed", "Something went wrong. Please try again.");
       }
     } finally {
+      setIsSigningUp(false);
       setLoading(false);
     }
   };

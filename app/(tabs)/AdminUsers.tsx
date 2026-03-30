@@ -1,7 +1,6 @@
 import {
   collection,
   doc,
-  getDoc,
   getDocs,
   query,
   updateDoc,
@@ -22,7 +21,7 @@ import {
 
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { auth, db } from "../firebase/firebaseConfig";
+import { db } from "../firebase/firebaseConfig";
 import { useAuth } from "../context/AuthProvider";
 
 type UserItem = {
@@ -50,7 +49,7 @@ function getInitials(displayName?: string, email?: string): string {
 
 export default function AdminUsers() {
 
-  const { employeeLimit, orgPlan } = useAuth();
+  const { employeeLimit, orgPlan, orgId, user } = useAuth();
 
   const [users, setUsers]                   = useState<UserItem[]>([]);
   const [approvedCount, setApprovedCount]   = useState(0);
@@ -69,31 +68,11 @@ export default function AdminUsers() {
 
       setLoading(true);
 
-      if (!auth.currentUser) {
+      if (!user?.emailVerified || !orgId) {
         setUsers([]);
         setLoading(false);
         return;
       }
-
-      //////////////////////////////////////////////////////
-      // ADMIN MEMBERSHIP
-      //////////////////////////////////////////////////////
-
-      const membershipQuery = query(
-        collection(db, "memberships"),
-        where("userId", "==", auth.currentUser.uid)
-      );
-
-      const membershipSnap = await getDocs(membershipQuery);
-
-      if (membershipSnap.empty) {
-        setUsers([]);
-        setLoading(false);
-        return;
-      }
-
-      const adminMembership = membershipSnap.docs[0].data();
-      const orgId = adminMembership.orgId;
 
       //////////////////////////////////////////////////////
       // QUERY MEMBERS BY STATUS
@@ -107,28 +86,19 @@ export default function AdminUsers() {
 
       const snap = await getDocs(q);
 
-      const list: UserItem[] = [];
-
-      for (const docSnap of snap.docs) {
-
+      const list: UserItem[] = snap.docs.map((docSnap) => {
         const membership = docSnap.data();
-
-        const userDoc = await getDoc(
-          doc(db, "users", membership.userId)
-        );
-
-        const userData = userDoc.exists() ? userDoc.data() : {};
-
-        list.push({
-          id: docSnap.id,
-          userId: membership.userId,
-          role: membership.role,
-          status: membership.status,
-          displayName: userData.displayName,
-          email: userData.email
-        });
-
-      }
+        return {
+          id:          docSnap.id,
+          userId:      membership.userId,
+          role:        membership.role,
+          status:      membership.status,
+          // displayName + email are stored on the membership doc at sign-up
+          // so we never need to cross-read users/{uid} (which is owner-only)
+          displayName: membership.displayName,
+          email:       membership.email,
+        };
+      });
 
       setUsers(list);
 
@@ -173,18 +143,7 @@ export default function AdminUsers() {
 
     try {
 
-      if (!auth.currentUser) return;
-
-      const membershipQuery = query(
-        collection(db, "memberships"),
-        where("userId", "==", auth.currentUser.uid)
-      );
-
-      const membershipSnap = await getDocs(membershipQuery);
-
-      if (membershipSnap.empty) return;
-
-      const orgId = membershipSnap.docs[0].data().orgId;
+      if (!user?.emailVerified || !orgId) return;
 
       const q = query(
         collection(db, "memberships"),
@@ -193,7 +152,6 @@ export default function AdminUsers() {
       );
 
       const snap = await getDocs(q);
-
       setPendingCount(snap.size);
 
     } catch (err) {
@@ -206,11 +164,11 @@ export default function AdminUsers() {
 
   useEffect(() => {
     loadPendingCount();
-  }, []);
+  }, [orgId, user]);
 
   useEffect(() => {
     loadUsers();
-  }, [tab]);
+  }, [tab, orgId, user]);
 
   //////////////////////////////////////////////////////
   // APPROVE

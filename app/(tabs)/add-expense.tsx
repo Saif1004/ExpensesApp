@@ -130,13 +130,21 @@ export default function AddExpenseScreen() {
     try {
       setOcrLoading(true);
 
+      // Get a fresh Firebase ID token — required by every Azure Function
+      if (!user) throw new Error("Not authenticated");
+      const idToken = await user.getIdToken();
+      const authHeaders = {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${idToken}`,
+      };
+
       //////////////////////
       // Upload Receipt
       //////////////////////
 
       const uploadRes = await fetch(AZURE_UPLOAD_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders,
         body: JSON.stringify({ image: image.base64 }),
       });
 
@@ -155,7 +163,7 @@ export default function AddExpenseScreen() {
 
       const ocrRes = await fetch(AZURE_OCR_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders,
         body: JSON.stringify({ image: image.base64 }),
       });
 
@@ -225,9 +233,15 @@ export default function AddExpenseScreen() {
     try {
       setSaving(true);
 
+      // Get a fresh Firebase ID token — required by every Azure Function
+      const idToken = await user.getIdToken();
+
       const response = await fetch(AZURE_VALIDATE_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${idToken}`,
+        },
         body: JSON.stringify({
           amount: Number(amount),
           merchant: merchant.trim(),

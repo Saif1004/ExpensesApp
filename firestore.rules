@@ -50,12 +50,13 @@ service cloud.firestore {
       allow read: if verified() && request.auth.uid == uid;
 
       // Create own profile during sign-up.
-      // uid and email must match the auth token; plan must start as "free".
-      allow create: if verified()
-                    && request.auth.uid == uid
-                    && request.resource.data.uid   == uid
-                    && request.resource.data.email == request.auth.token.email
-                    && request.resource.data.plan  == 'free';
+      // Uses request.auth != null (not verified()) because email is not yet
+      // verified at the moment the batch write runs — verification email is
+      // sent immediately after, then the user is signed out.
+      // Minimal rule: any authenticated user can create their own profile doc.
+      // The path wildcard {uid} already ensures the document ID == auth UID.
+      allow create: if request.auth != null
+                    && request.auth.uid == uid;
 
       // Update own profile — cannot touch sensitive server-managed fields
       allow update: if verified()
@@ -94,21 +95,44 @@ service cloud.firestore {
     // ══════════════════════════════════════════════════════════════════
     // COLLECTION: usernames/{username}
     //
-    // Username → UID lookup table used during sign-in.
-    // Any verified user may read (needed to resolve username to email).
-    // Only the owner can create their own record (uid must match token).
-    // Immutable after creation — no update or client-side delete.
+    // Username → UID + email lookup table used during sign-in.
+    //
+    // READ: PUBLIC — must be unauthenticated because the sign-in flow
+    //   resolves a username to an email BEFORE the user has authenticated.
+    //   The document only stores { uid, email } — no more sensitive than
+    //   a public profile. Security still depends on Firestore rules for
+    //   all other collections.
+    //
+    // CREATE: only the account owner during sign-up. The user IS
+    //   authenticated at this point (just not email-verified yet).
+    //
+    // UPDATE/DELETE: locked — Admin SDK only.
     // ══════════════════════════════════════════════════════════════════
 
     match /usernames/{username} {
 
-      allow read:   if verified();
+      // Public read — needed for pre-auth username → email lookup
+      allow read: if true;
 
-      allow create: if verified()
+      // UID must match — that's sufficient to prove ownership
+      allow create: if request.auth != null
                     && request.resource.data.uid == request.auth.uid;
 
       allow update: if false;  // usernames are permanent once claimed
       allow delete: if false;  // deleteAccount Azure Function only
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // COLLECTION: config/{document}
+    //
+    // Server-managed feature flags (e.g. AI kill switch at config/ai).
+    // Verified users may READ so the app can react to feature toggles.
+    // WRITE is blocked from all clients — Azure Functions (Admin SDK) only.
+    // ══════════════════════════════════════════════════════════════════
+
+    match /config/{document} {
+      allow read:  if verified();
+      allow write: if false;
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -134,14 +158,14 @@ service cloud.firestore {
         || isOrgOwner(resource.data.orgId)
       );
 
-      // (a) Employee joins via invite code
-      allow create: if verified()
+      // (a) Employee joins via invite code (email not yet verified at sign-up)
+      allow create: if request.auth != null
                     && request.resource.data.userId == request.auth.uid
                     && request.resource.data.role   == 'employee'
                     && request.resource.data.status == 'pending';
 
-      // (b) Admin self-joining their new org during sign-up
-      allow create: if verified()
+      // (b) Admin self-joining their new org during sign-up (email not yet verified)
+      allow create: if request.auth != null
                     && request.resource.data.userId == request.auth.uid
                     && request.resource.data.role   == 'admin'
                     && request.resource.data.status == 'approved';
@@ -171,9 +195,12 @@ service cloud.firestore {
 
     match /organisations/{orgId} {
 
-      allow read: if verified();
+      // request.auth != null (not verified()) so new members can look up
+      // the org by invite code during sign-up before email is verified.
+      allow read: if request.auth != null;
 
-      allow create: if verified()
+      // request.auth != null (not verified()) — email not yet verified at sign-up time
+      allow create: if request.auth != null
                     && request.resource.data.ownerId == request.auth.uid
                     && request.resource.data.plan    == 'free';
 

@@ -49,7 +49,7 @@ type CategoryStats = {
 
 export default function AnalyticsScreen() {
 
-  const { user, role, isPro } = useAuth();
+  const { user, role, isPro, orgId } = useAuth();
 
   if(!isPro) return <PaywallScreen />;
 
@@ -74,15 +74,14 @@ export default function AnalyticsScreen() {
 
   useEffect(() => {
 
-    if (!user) return;
+    if (!user || !user.emailVerified) return;
 
+    // Admin: scope to org. Employee: scope to own userId.
+    // Unscoped queries fail Firestore rules (permission-denied).
     const q =
-      role === "admin"
-        ? query(collection(db, "claims"))
-        : query(
-            collection(db, "claims"),
-            where("userId", "==", user.uid)
-          );
+      role === "admin" && orgId
+        ? query(collection(db, "claims"), where("orgId", "==", orgId))
+        : query(collection(db, "claims"), where("userId", "==", user.uid));
 
     const unsub = addListener(onSnapshot(q, (snapshot) => {
 
@@ -133,13 +132,11 @@ export default function AnalyticsScreen() {
       setStats(newStats);
       setLoading(false);
 
-      // ❌ REMOVED AUTO AI CALL
-
-    }));
+    }, () => { /* silently swallow permission-denied on sign-out/delete */ }));
 
     return unsub;
 
-  }, [user, role]);
+  }, [user, role, orgId]);
 
   async function generateAIInsights(data:any){
 
