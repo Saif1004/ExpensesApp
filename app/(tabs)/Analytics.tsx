@@ -1,5 +1,6 @@
 import {
   collection,
+  getDocs,
   onSnapshot,
   query,
   where
@@ -9,12 +10,16 @@ import { useEffect, useState } from "react";
 
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   ScrollView,
   StyleSheet,
   TouchableOpacity,
   View
 } from "react-native";
+
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 
 import {
   BarChart,
@@ -38,6 +43,9 @@ type Claim = {
   category: Category;
   status: "pending" | "approved" | "rejected";
   suspicious?: boolean;
+  merchant?: string;
+  paymentStatus?: string;
+  createdAt?: { toDate: () => Date };
 };
 
 type CategoryStats = {
@@ -175,6 +183,47 @@ export default function AnalyticsScreen() {
 
     }
 
+  }
+
+  async function exportCSV() {
+    try {
+      if (!user) return;
+
+      const q =
+        role === "admin" && orgId
+          ? query(collection(db, "claims"), where("orgId", "==", orgId))
+          : query(collection(db, "claims"), where("userId", "==", user.uid));
+
+      const snapshot = await getDocs(q);
+      const claims: Claim[] = snapshot.docs.map((d) => d.data() as Claim);
+
+      const header = "Merchant,Amount,Category,Status,Payment Status,Date\n";
+      const rows = claims.map((c) => {
+        const merchant = (c.merchant ?? "").replace(/,/g, " ");
+        const amount = Number(c.amount).toFixed(2);
+        const category = (c.category ?? "").replace(/,/g, " ");
+        const status = c.status ?? "";
+        const paymentStatus = c.paymentStatus ?? "";
+        const date = c.createdAt ? c.createdAt.toDate().toISOString().split("T")[0] : "";
+        return `${merchant},${amount},${category},${status},${paymentStatus},${date}`;
+      });
+
+      const csv = header + rows.join("\n");
+      const fileUri = (FileSystem.documentDirectory ?? "") + "claims_export.csv";
+
+      await FileSystem.writeAsStringAsync(fileUri, csv, {
+        encoding: FileSystem.EncodingType.UTF8
+      });
+
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(fileUri, { mimeType: "text/csv", dialogTitle: "Export Claims CSV" });
+      } else {
+        Alert.alert("Export saved", `CSV saved to:\n${fileUri}`);
+      }
+    } catch (e: any) {
+      Alert.alert("Export Error", e?.message ?? "Failed to export CSV.");
+    }
   }
 
   const approvalRate =
@@ -318,6 +367,16 @@ export default function AnalyticsScreen() {
 
           </View>
 
+          {/* Export CSV */}
+          <TouchableOpacity
+            style={styles.exportBtn}
+            onPress={exportCSV}
+          >
+            <ThemedText style={styles.exportBtnText}>
+              Export CSV
+            </ThemedText>
+          </TouchableOpacity>
+
           <ThemedText style={styles.chartTitle}>
             Claim Status
           </ThemedText>
@@ -430,6 +489,21 @@ marginTop:6,
 fontSize:22,
 fontWeight:"bold",
 color:"#F97316"
+},
+
+exportBtn:{
+marginTop:20,
+borderWidth:1,
+borderColor:"#38BDF8",
+borderRadius:10,
+paddingVertical:12,
+alignItems:"center"
+},
+
+exportBtnText:{
+color:"#38BDF8",
+fontWeight:"700",
+fontSize:14
 },
 
 chartTitle:{

@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  getDoc,
   onSnapshot,
   orderBy,
   query,
@@ -22,12 +23,15 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 
 import { ThemedText } from "../../components/themed-text";
 import { ThemedView } from "../../components/themed-view";
 import { useAuth } from "../context/AuthProvider";
 import { auth, db } from "../firebase/firebaseConfig";
 import { addListener } from "../../utils/listenerStore";
+import { sendPushNotification } from "../../utils/pushNotifications";
 
 const REIMBURSE_URL = process.env.EXPO_PUBLIC_STRIPE_REIMBURSE_URL!;
 
@@ -42,6 +46,9 @@ type Claim = {
   description?: string;
   receiptUrl?: string;
   paymentStatus?: string;
+  status?: string;
+  approvedBy?: string;
+  adminFeedback?: string;
 };
 
 type ConfirmModal = {
@@ -52,9 +59,13 @@ type ConfirmModal = {
 
 export default function AdminScreen() {
   const { role, orgId, user } = useAuth();
+  const insets = useSafeAreaInsets();
 
+  const [tab, setTab] = useState<"pending" | "history">("pending");
   const [claims, setClaims] = useState<Claim[]>([]);
+  const [historyClaims, setHistoryClaims] = useState<Claim[]>([]);
   const [loading, setLoading] = useState(true);
+  const [historyLoading, setHistoryLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState("");
   const [adminMessage, setAdminMessage] = useState("");
   const [confirmModal, setConfirmModal] = useState<ConfirmModal>({
@@ -63,6 +74,7 @@ export default function AdminScreen() {
     action: null
   });
 
+  // Pending claims listener
   useEffect(() => {
     // Must scope by orgId — unscoped queries fail Firestore rules
     if (role !== "admin" || !orgId || !user?.emailVerified) return;
@@ -82,6 +94,30 @@ export default function AdminScreen() {
 
       setClaims(data);
       setLoading(false);
+    }, () => { /* silently swallow permission-denied on sign-out/delete */ }));
+
+    return unsub;
+  }, [role, orgId, user]);
+
+  // History claims listener
+  useEffect(() => {
+    if (role !== "admin" || !orgId || !user?.emailVerified) return;
+
+    const q = query(
+      collection(db, "claims"),
+      where("orgId", "==", orgId),
+      where("status", "in", ["approved", "rejected"]),
+      orderBy("createdAt", "desc")
+    );
+
+    const unsub = addListener(onSnapshot(q, (snapshot) => {
+      const data: Claim[] = snapshot.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...(docSnap.data() as Omit<Claim, "id">)
+      }));
+
+      setHistoryClaims(data);
+      setHistoryLoading(false);
     }, () => { /* silently swallow permission-denied on sign-out/delete */ }));
 
     return unsub;
@@ -118,6 +154,29 @@ export default function AdminScreen() {
         : { rejectedAt: serverTimestamp() }),
     });
 
+    // Send push notification to employee
+    try {
+      const empDoc = await getDoc(doc(db, "users", claim.userId));
+      const empToken = empDoc.data()?.expoPushToken;
+      if (empToken) {
+        if (action === "approved") {
+          await sendPushNotification(
+            empToken,
+            "Claim Approved ✅",
+            `Your £${Number(claim.amount).toFixed(2)} claim at ${claim.merchant} was approved`
+          );
+        } else {
+          await sendPushNotification(
+            empToken,
+            "Claim Rejected",
+            `Your £${Number(claim.amount).toFixed(2)} claim at ${claim.merchant} was rejected`
+          );
+        }
+      }
+    } catch {
+      // Silently fail — push notifications are non-critical
+    }
+
     if (action === "approved") {
       try {
         const token = await currentUser?.getIdToken();
@@ -147,7 +206,7 @@ export default function AdminScreen() {
     );
   }
 
-  if (loading) {
+  if (loading && tab === "pending") {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#38BDF8" />
@@ -158,102 +217,220 @@ export default function AdminScreen() {
   const isApprove = confirmModal.action === "approved";
 
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView style={[styles.container, { paddingTop: insets.top + 8 }]}>
       <View style={styles.headerRow}>
-        <ThemedText type="title" style={styles.title}>Admin Panel</ThemedText>
+        <View>
+          <ThemedText type="title" style={styles.title}>Admin Panel</ThemedText>
+          <ThemedText style={styles.subtitle}>Review & action expense claims</ThemedText>
+        </View>
         <View style={styles.countBadge}>
-          <ThemedText style={styles.countBadgeText}>{claims.length} pending</ThemedText>
+          <Ionicons
+            name={tab === "pending" ? "time-outline" : "checkmark-done-outline"}
+            size={12}
+            color="#94A3B8"
+            style={{ marginRight: 4 }}
+          />
+          <ThemedText style={styles.countBadgeText}>
+            {tab === "pending" ? `${claims.length} pending` : `${historyClaims.length} processed`}
+          </ThemedText>
         </View>
       </View>
 
-      <FlatList
-        data={claims}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={{ paddingBottom: 24 }}
-        showsVerticalScrollIndicator={false}
-        renderItem={({ item }) => (
-          <ThemedView style={styles.card}>
-            {/* Card header */}
-            <View style={styles.cardHeader}>
-              <View>
-                <ThemedText style={styles.amount}>
-                  £{Number(item.amount).toFixed(2)}
-                </ThemedText>
-                <ThemedText style={styles.merchant}>{item.merchant}</ThemedText>
-              </View>
-              <View style={styles.categoryBadge}>
-                <ThemedText style={styles.categoryText}>{item.category}</ThemedText>
-              </View>
-            </View>
+      {/* Tab bar */}
+      <View style={styles.tabBar}>
+        <TouchableOpacity
+          style={[styles.tabPill, tab === "pending" && styles.tabPillActive]}
+          onPress={() => setTab("pending")}
+          activeOpacity={0.7}
+        >
+          <ThemedText style={[styles.tabPillText, tab === "pending" && styles.tabPillTextActive]}>
+            Pending
+          </ThemedText>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tabPill, tab === "history" && styles.tabPillActive]}
+          onPress={() => setTab("history")}
+          activeOpacity={0.7}
+        >
+          <ThemedText style={[styles.tabPillText, tab === "history" && styles.tabPillTextActive]}>
+            History
+          </ThemedText>
+        </TouchableOpacity>
+      </View>
 
-            {/* Divider */}
-            <View style={styles.divider} />
-
-            {/* Email row */}
-            <View style={styles.infoRow}>
-              <ThemedText style={styles.infoLabel}>Employee</ThemedText>
-              <ThemedText style={styles.infoValue}>{item.userEmail}</ThemedText>
-            </View>
-
-            {item.description ? (
-              <View style={styles.infoRow}>
-                <ThemedText style={styles.infoLabel}>Note</ThemedText>
-                <ThemedText style={styles.infoValue}>{item.description}</ThemedText>
-              </View>
-            ) : null}
-
-            {/* Payment status badge */}
-            {item.paymentStatus === "paid" && (
-              <View style={[styles.paymentBadge, styles.paymentBadgePaid]}>
-                <ThemedText style={styles.paymentBadgeText}>💳 Paid</ThemedText>
-              </View>
-            )}
-            {item.paymentStatus === "failed" && (
-              <View style={[styles.paymentBadge, styles.paymentBadgeFailed]}>
-                <ThemedText style={styles.paymentBadgeText}>⚠️ Payment Failed</ThemedText>
-              </View>
-            )}
-
-            {/* Receipt */}
-            {item.receiptUrl ? (
-              <TouchableOpacity
-                style={styles.receiptWrapper}
-                onPress={() => setSelectedImage(item.receiptUrl!)}
-              >
-                <Image
-                  source={{ uri: item.receiptUrl }}
-                  style={styles.receiptImage}
-                  resizeMode="cover"
-                />
-                <View style={styles.receiptOverlay}>
-                  <ThemedText style={styles.receiptOverlayText}>Tap to view receipt</ThemedText>
+      {tab === "pending" ? (
+        <FlatList
+          data={claims}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item }) => (
+            <ThemedView style={styles.card}>
+              {/* Card header */}
+              <View style={styles.cardHeader}>
+                <View>
+                  <ThemedText style={styles.amount}>
+                    £{Number(item.amount).toFixed(2)}
+                  </ThemedText>
+                  <ThemedText style={styles.merchant}>{item.merchant}</ThemedText>
                 </View>
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.noReceiptRow}>
-                <ThemedText style={styles.noReceipt}>No receipt attached</ThemedText>
+                <View style={styles.categoryBadge}>
+                  <ThemedText style={styles.categoryText}>{item.category}</ThemedText>
+                </View>
               </View>
+
+              {/* Divider */}
+              <View style={styles.divider} />
+
+              {/* Email row */}
+              <View style={styles.infoRow}>
+                <ThemedText style={styles.infoLabel}>Employee</ThemedText>
+                <ThemedText style={styles.infoValue}>{item.userEmail}</ThemedText>
+              </View>
+
+              {item.description ? (
+                <View style={styles.infoRow}>
+                  <ThemedText style={styles.infoLabel}>Note</ThemedText>
+                  <ThemedText style={styles.infoValue}>{item.description}</ThemedText>
+                </View>
+              ) : null}
+
+              {/* Payment status badge */}
+              {item.paymentStatus === "paid" && (
+                <View style={[styles.paymentBadge, styles.paymentBadgePaid]}>
+                  <ThemedText style={styles.paymentBadgeText}>💳 Paid</ThemedText>
+                </View>
+              )}
+              {item.paymentStatus === "failed" && (
+                <View style={[styles.paymentBadge, styles.paymentBadgeFailed]}>
+                  <ThemedText style={styles.paymentBadgeText}>⚠️ Payment Failed</ThemedText>
+                </View>
+              )}
+
+              {/* Receipt */}
+              {item.receiptUrl ? (
+                <TouchableOpacity
+                  style={styles.receiptWrapper}
+                  onPress={() => setSelectedImage(item.receiptUrl!)}
+                >
+                  <Image
+                    source={{ uri: item.receiptUrl }}
+                    style={styles.receiptImage}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.receiptOverlay}>
+                    <ThemedText style={styles.receiptOverlayText}>Tap to view receipt</ThemedText>
+                  </View>
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.noReceiptRow}>
+                  <ThemedText style={styles.noReceipt}>No receipt attached</ThemedText>
+                </View>
+              )}
+
+              {/* Action buttons */}
+              {item.userId === user?.uid ? (
+                <View style={styles.selfClaimNotice}>
+                  <Ionicons name="lock-closed-outline" size={14} color="#475569" style={{ marginRight: 6 }} />
+                  <ThemedText style={styles.selfClaimText}>
+                    You cannot approve your own claim
+                  </ThemedText>
+                </View>
+              ) : (
+                <View style={styles.buttonRow}>
+                  <TouchableOpacity
+                    style={styles.approveBtn}
+                    onPress={() => openConfirmModal(item, "approved")}
+                  >
+                    <ThemedText style={styles.btnText} numberOfLines={1}>Approve & Pay</ThemedText>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.rejectBtn}
+                    onPress={() => openConfirmModal(item, "rejected")}
+                  >
+                    <ThemedText style={styles.btnText} numberOfLines={1}>Reject</ThemedText>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </ThemedView>
+          )}
+        />
+      ) : (
+        historyLoading ? (
+          <View style={styles.center}>
+            <ActivityIndicator size="large" color="#38BDF8" />
+          </View>
+        ) : (
+          <FlatList
+            data={historyClaims}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+            showsVerticalScrollIndicator={false}
+            renderItem={({ item }) => (
+              <ThemedView style={styles.card}>
+                {/* Card header */}
+                <View style={styles.cardHeader}>
+                  <View>
+                    <ThemedText style={styles.amount}>
+                      £{Number(item.amount).toFixed(2)}
+                    </ThemedText>
+                    <ThemedText style={styles.merchant}>{item.merchant}</ThemedText>
+                  </View>
+                  <View style={[
+                    styles.historyStatusBadge,
+                    item.status === "approved" ? styles.historyStatusApproved : styles.historyStatusRejected
+                  ]}>
+                    <ThemedText style={[
+                      styles.historyStatusText,
+                      item.status === "approved" ? styles.historyStatusTextApproved : styles.historyStatusTextRejected
+                    ]}>
+                      {item.status?.toUpperCase()}
+                    </ThemedText>
+                  </View>
+                </View>
+
+                {/* Divider */}
+                <View style={styles.divider} />
+
+                {/* Info rows */}
+                <View style={styles.infoRow}>
+                  <ThemedText style={styles.infoLabel}>Employee</ThemedText>
+                  <ThemedText style={styles.infoValue}>{item.userEmail}</ThemedText>
+                </View>
+
+                {item.approvedBy ? (
+                  <View style={styles.infoRow}>
+                    <ThemedText style={styles.infoLabel}>
+                      {item.status === "approved" ? "Approved By" : "Rejected By"}
+                    </ThemedText>
+                    <ThemedText style={styles.infoValue}>{item.approvedBy}</ThemedText>
+                  </View>
+                ) : null}
+
+                {item.adminFeedback ? (
+                  <View style={styles.infoRow}>
+                    <ThemedText style={styles.infoLabel}>Feedback</ThemedText>
+                    <ThemedText style={styles.infoValue}>{item.adminFeedback}</ThemedText>
+                  </View>
+                ) : null}
+
+                {/* Payment status badge */}
+                {item.paymentStatus === "paid" && (
+                  <View style={[styles.paymentBadge, styles.paymentBadgePaid]}>
+                    <ThemedText style={styles.paymentBadgeText}>💳 Paid</ThemedText>
+                  </View>
+                )}
+                {item.paymentStatus === "failed" && (
+                  <View style={[styles.paymentBadge, styles.paymentBadgeFailed]}>
+                    <ThemedText style={styles.paymentBadgeText}>⚠️ Payment Failed</ThemedText>
+                  </View>
+                )}
+              </ThemedView>
             )}
-
-            {/* Action buttons */}
-            <View style={styles.buttonRow}>
-              <TouchableOpacity
-                style={styles.approveBtn}
-                onPress={() => openConfirmModal(item, "approved")}
-              >
-                <ThemedText style={styles.btnText} numberOfLines={1}>Approve & Pay</ThemedText>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.rejectBtn}
-                onPress={() => openConfirmModal(item, "rejected")}
-              >
-                <ThemedText style={styles.btnText} numberOfLines={1}>Reject</ThemedText>
-              </TouchableOpacity>
-            </View>
-          </ThemedView>
-        )}
-      />
+          />
+        )
+      )}
 
       {/* ── Confirmation Modal ── */}
       <Modal
@@ -364,21 +541,27 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
-    marginTop: 24,
-    marginBottom: 20
+    marginBottom: 16
   },
   title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#F8FAFC"
+    fontSize: 26,
+    fontWeight: "800",
+    color: "#F8FAFC",
+    marginBottom: 2
+  },
+  subtitle: {
+    color: "#475569",
+    fontSize: 13
   },
   countBadge: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: "#1E293B",
     borderRadius: 20,
     paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingVertical: 6,
     borderWidth: 1,
     borderColor: "#334155"
   },
@@ -386,6 +569,35 @@ const styles = StyleSheet.create({
     color: "#94A3B8",
     fontSize: 12,
     fontWeight: "600"
+  },
+
+  /* Tab bar */
+  tabBar: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 16
+  },
+  tabPill: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 10,
+    backgroundColor: "#1E293B",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#334155"
+  },
+  tabPillActive: {
+    backgroundColor: "#172554",
+    borderColor: "#2563EB"
+  },
+  tabPillText: {
+    color: "#64748B",
+    fontSize: 13,
+    fontWeight: "600"
+  },
+  tabPillTextActive: {
+    color: "#93C5FD",
+    fontWeight: "700"
   },
 
   /* Card */
@@ -450,6 +662,29 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     textAlign: "right",
     maxWidth: "70%"
+  },
+
+  /* History status badges */
+  historyStatusBadge: {
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4
+  },
+  historyStatusApproved: {
+    backgroundColor: "#052E16"
+  },
+  historyStatusRejected: {
+    backgroundColor: "#450A0A"
+  },
+  historyStatusText: {
+    fontSize: 11,
+    fontWeight: "700"
+  },
+  historyStatusTextApproved: {
+    color: "#4ADE80"
+  },
+  historyStatusTextRejected: {
+    color: "#F87171"
   },
 
   /* Payment status badges */
@@ -672,6 +907,25 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "600",
     fontSize: 14
+  },
+
+  /* Self-claim lock notice */
+  selfClaimNotice: {
+    flexDirection: "row",
+    alignItems: "center",
+    margin: 16,
+    marginTop: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: "#1E293B",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#334155"
+  },
+  selfClaimText: {
+    color: "#475569",
+    fontSize: 13,
+    fontStyle: "italic"
   },
 
   /* Misc */

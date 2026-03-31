@@ -1,7 +1,11 @@
-import { StyleSheet, TouchableOpacity, View } from "react-native";
-import ParallaxScrollView from "../../components/parallax-scroll-view";
+import {
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View
+} from "react-native";
 import { ThemedText } from "../../components/themed-text";
-import { IconSymbol } from "../../components/ui/icon-symbol";
+import { Ionicons } from "@expo/vector-icons";
 
 import { router } from "expo-router";
 import {
@@ -17,6 +21,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthProvider";
 import { db } from "../firebase/firebaseConfig";
 import { addListener } from "../../utils/listenerStore";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type Claim = {
   id: string;
@@ -24,417 +29,629 @@ type Claim = {
   amount: number;
   category: string;
   status: string;
+  paymentStatus?: string;
+};
+
+const STATUS_CONFIG: Record<string, { color: string; bg: string; icon: React.ComponentProps<typeof Ionicons>["name"] }> = {
+  pending:  { color: "#F59E0B", bg: "#1C1208", icon: "time-outline" },
+  approved: { color: "#22C55E", bg: "#052E16", icon: "checkmark-circle-outline" },
+  rejected: { color: "#EF4444", bg: "#2D0A0A", icon: "close-circle-outline" }
 };
 
 export default function HomeScreen() {
 
-  const { user, refreshMembership } = useAuth(); // 🔥 ADDED
+  const { user, refreshMembership, orgPlan, trialDaysLeft, role } = useAuth();
+  const insets = useSafeAreaInsets();
 
-  const [monthlySpend,setMonthlySpend] = useState(0);
-  const [pending,setPending] = useState(0);
-  const [approved,setApproved] = useState(0);
-  const [recent,setRecent] = useState<Claim[]>([]);
+  const [monthlySpend, setMonthlySpend] = useState(0);
+  const [pending,      setPending]      = useState(0);
+  const [approved,     setApproved]     = useState(0);
+  const [recent,       setRecent]       = useState<Claim[]>([]);
 
-  /////////////////////////////////////////////////////////
-  // 🔥 FORCE REFRESH ROLE ON LOAD
-  /////////////////////////////////////////////////////////
+  // Force refresh role on load
+  useEffect(() => {
+    if (user) refreshMembership();
+  }, [user]);
 
-  useEffect(()=>{
-    if(user){
-      refreshMembership(); // 🔥 THIS FIXES YOUR ISSUE
-    }
-  },[user]);
-
-  /////////////////////////////////////////////////////////
   // Greeting
-  /////////////////////////////////////////////////////////
+  const hour     = new Date().getHours();
+  const greeting = hour < 12 ? "Morning" : hour < 18 ? "Afternoon" : "Evening";
 
-  const hour = new Date().getHours();
-
-  const greeting =
-    hour < 12
-      ? "Good morning"
-      : hour < 18
-      ? "Good afternoon"
-      : "Good evening";
-
-  /////////////////////////////////////////////////////////
   // Firestore listeners
-  /////////////////////////////////////////////////////////
+  useEffect(() => {
+    if (!user) return;
 
-  useEffect(()=>{
+    const q = query(collection(db, "claims"), where("userId", "==", user.uid));
 
-    if(!user) return;
-
-    const q = query(
-      collection(db,"claims"),
-      where("userId","==",user.uid)
-    );
-
-    const unsub = addListener(onSnapshot(q,(snapshot)=>{
-
-      const claims = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Claim[];
-
-      let spend = 0;
-      let pendingCount = 0;
-      let approvedCount = 0;
-
-      claims.forEach(c=>{
+    const unsub = addListener(onSnapshot(q, (snapshot) => {
+      let spend = 0, pendingCount = 0, approvedCount = 0;
+      snapshot.docs.forEach(doc => {
+        const c = doc.data() as Claim;
         spend += Number(c.amount) || 0;
-
-        if(c.status==="pending") pendingCount++;
-        if(c.status==="approved") approvedCount++;
+        if (c.status === "pending")  pendingCount++;
+        if (c.status === "approved") approvedCount++;
       });
-
       setMonthlySpend(spend);
       setPending(pendingCount);
       setApproved(approvedCount);
+    }, () => {}));
 
-    }, () => { /* silently swallow permission-denied on sign-out/delete */ }));
-
-    const recentQuery = query(
-      collection(db,"claims"),
-      where("userId","==",user.uid),
-      orderBy("createdAt","desc"),
-      limit(3)
+    const recentQ = query(
+      collection(db, "claims"),
+      where("userId", "==", user.uid),
+      orderBy("createdAt", "desc"),
+      limit(4)
     );
 
-    const unsubRecent = addListener(onSnapshot(recentQuery,(snapshot)=>{
+    const unsubRecent = addListener(onSnapshot(recentQ, (snapshot) => {
+      setRecent(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }) as Claim));
+    }, () => {}));
 
-      const list = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as Claim[];
-
-      setRecent(list);
-
-    }, () => { /* silently swallow permission-denied on sign-out/delete */ }));
-
-    return ()=>{
-      unsub();
-      unsubRecent();
-    }
-
-  },[user]);
-
-  /////////////////////////////////////////////////////////
-  // Progress calculation
-  /////////////////////////////////////////////////////////
+    return () => { unsub(); unsubRecent(); };
+  }, [user]);
 
   const monthlyLimit = 2000;
-
-  const progress =
-    Math.min((monthlySpend / monthlyLimit) * 100,100);
-
-  /////////////////////////////////////////////////////////
-  // UI
-  /////////////////////////////////////////////////////////
+  const progress     = Math.min((monthlySpend / monthlyLimit) * 100, 100);
 
   return (
+    <View style={[styles.root, { paddingTop: insets.top }]}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 24 }]}
+        showsVerticalScrollIndicator={false}
+      >
 
-    <ParallaxScrollView
-      headerBackgroundColor={{ light:"#0F172A", dark:"#0F172A" }}
-      contentContainerStyle={styles.container}
-      headerImage={
-        <IconSymbol
-          size={90}
-          color="#ffffff"
-          name="house.fill"
-          style={styles.headerIcon}
-        />
-      }
-    >
-
-      {/* HEADER */}
-
-      <ThemedText type="title" style={styles.title}>
-        {greeting}
-      </ThemedText>
-
-      <ThemedText style={styles.subtitle}>
-        Here's your expense overview
-      </ThemedText>
-
-
-      {/* SPENDING */}
-
-      <View style={styles.spendingCard}>
-
-        <ThemedText style={styles.spendingLabel}>
-          Monthly Spending
-        </ThemedText>
-
-        <ThemedText style={styles.spendingAmount}>
-          £{monthlySpend.toFixed(2)}
-        </ThemedText>
-
-        <View style={styles.progressBar}>
-          <View
-            style={[
-              styles.progressFill,
-              { width: `${progress}%` }
-            ]}
-          />
-        </View>
-
-        <ThemedText style={styles.progressText}>
-          £{monthlySpend.toFixed(2)} of £{monthlyLimit}
-        </ThemedText>
-
-      </View>
-
-
-      {/* ACTIONS */}
-
-      <View style={styles.actions}>
-
-        <TouchableOpacity
-          style={styles.action}
-          onPress={()=>router.push("/add-expense")}
-        >
-          <IconSymbol name="plus.circle.fill" size={26} color="#60A5FA"/>
-          <ThemedText style={styles.actionText}>Add</ThemedText>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.action}
-          onPress={()=>router.push("/claims")}
-        >
-          <IconSymbol name="doc.text.fill" size={26} color="#60A5FA"/>
-          <ThemedText style={styles.actionText}>Claims</ThemedText>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.action}
-          onPress={()=>router.push("/Analytics")}
-        >
-          <IconSymbol name="chart.bar.xaxis" size={26} color="#60A5FA"/>
-          <ThemedText style={styles.actionText}>Analytics</ThemedText>
-        </TouchableOpacity>
-
-      </View>
-
-
-      {/* STATUS */}
-
-      <View style={styles.statsRow}>
-
-        <View style={styles.statCard}>
-          <ThemedText style={styles.statLabel}>Pending</ThemedText>
-          <ThemedText style={styles.statValue}>{pending}</ThemedText>
-        </View>
-
-        <View style={styles.statCard}>
-          <ThemedText style={styles.statLabel}>Approved</ThemedText>
-          <ThemedText style={styles.statValue}>{approved}</ThemedText>
-        </View>
-
-      </View>
-
-
-      {/* RECENT */}
-
-      <ThemedText style={styles.sectionTitle}>
-        Recent Activity
-      </ThemedText>
-
-      {recent.length === 0 ? (
-
-        <View style={styles.emptyState}>
-          <IconSymbol
-            name="doc.text.fill"
-            size={40}
-            color="#334155"
-          />
-
-          <ThemedText style={styles.emptyText}>
-            No claims yet
-          </ThemedText>
-        </View>
-
-      ) : (
-
-        recent.map((claim)=>(
+        {/* ── HEADER ── */}
+        <View style={styles.headerRow}>
+          <View>
+            <ThemedText style={styles.greeting}>Good {greeting} 👋</ThemedText>
+            <ThemedText style={styles.subheading}>Here's your expense overview</ThemedText>
+          </View>
           <TouchableOpacity
-            key={claim.id}
-            style={styles.activityCard}
-            onPress={()=>router.push(`/claims/${claim.id}`)}
+            style={styles.avatarBtn}
+            onPress={() => router.push("/profile")}
+            activeOpacity={0.8}
           >
+            <Ionicons name="person" size={18} color="#38BDF8" />
+          </TouchableOpacity>
+        </View>
 
+        {/* ── TRIAL BANNER ── */}
+        {orgPlan === "trial" && (
+          <TouchableOpacity
+            style={styles.trialBanner}
+            onPress={() => router.push("/plans")}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="time-outline" size={16} color="#F59E0B" style={{ marginRight: 8 }} />
+            <ThemedText style={styles.trialText}>
+              {trialDaysLeft > 0
+                ? `Trial ends in ${trialDaysLeft} day${trialDaysLeft !== 1 ? "s" : ""} — tap to upgrade`
+                : "Trial expired — tap to upgrade"}
+            </ThemedText>
+            <Ionicons name="chevron-forward" size={14} color="#F59E0B" />
+          </TouchableOpacity>
+        )}
+
+        {/* ── SPENDING CARD ── */}
+        <View style={styles.spendingCard}>
+          <View style={styles.spendingTop}>
             <View>
-              <ThemedText style={styles.merchant}>
-                {claim.merchant}
-              </ThemedText>
-
-              <ThemedText style={styles.meta}>
-                {claim.category} • {claim.status}
+              <ThemedText style={styles.spendingLabel}>Total Spending</ThemedText>
+              <ThemedText style={styles.spendingAmount}>
+                £{monthlySpend.toFixed(2)}
               </ThemedText>
             </View>
+            <View style={styles.spendingBadge}>
+              <Ionicons name="trending-up-outline" size={16} color="#60A5FA" />
+              <ThemedText style={styles.spendingBadgeText}>All time</ThemedText>
+            </View>
+          </View>
 
-            <ThemedText style={styles.amount}>
-              £{claim.amount}
-            </ThemedText>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${progress}%` as any }]} />
+          </View>
+          <View style={styles.progressLabels}>
+            <ThemedText style={styles.progressNote}>£{monthlySpend.toFixed(2)} of £{monthlyLimit} budget</ThemedText>
+            <ThemedText style={styles.progressNote}>{Math.round(progress)}%</ThemedText>
+          </View>
+        </View>
 
+        {/* ── STAT CARDS ── */}
+        <View style={styles.statsRow}>
+          <StatCard
+            label="Pending"
+            value={pending}
+            icon="time-outline"
+            color="#F59E0B"
+            bg="#1C1208"
+          />
+          <StatCard
+            label="Approved"
+            value={approved}
+            icon="checkmark-circle-outline"
+            color="#22C55E"
+            bg="#052E16"
+          />
+        </View>
+
+        {/* ── QUICK ACTIONS ── */}
+        <ThemedText style={styles.sectionTitle}>Quick Actions</ThemedText>
+        <View style={styles.actionsGrid}>
+          <ActionBtn
+            icon="add-circle-outline"
+            label="New Claim"
+            color="#2563EB"
+            bg="#0D1F3C"
+            onPress={() => router.push("/add-expense")}
+          />
+          <ActionBtn
+            icon="document-text-outline"
+            label="My Claims"
+            color="#7C3AED"
+            bg="#1A0D3C"
+            onPress={() => router.push("/claims")}
+          />
+          <ActionBtn
+            icon="bar-chart-outline"
+            label="Analytics"
+            color="#0891B2"
+            bg="#0A1F2E"
+            onPress={() => router.push("/Analytics")}
+          />
+          {role === "admin" && (
+            <ActionBtn
+              icon="people-outline"
+              label="Admin Panel"
+              color="#F59E0B"
+              bg="#1C1208"
+              onPress={() => router.push("/admin")}
+            />
+          )}
+        </View>
+
+        {/* ── RECENT ACTIVITY ── */}
+        <View style={styles.recentHeader}>
+          <ThemedText style={styles.sectionTitle}>Recent Activity</ThemedText>
+          <TouchableOpacity onPress={() => router.push("/claims")} activeOpacity={0.7}>
+            <ThemedText style={styles.viewAllLink}>View all</ThemedText>
           </TouchableOpacity>
-        ))
+        </View>
 
-      )}
+        {recent.length === 0 ? (
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIconWrap}>
+              <Ionicons name="receipt-outline" size={32} color="#334155" />
+            </View>
+            <ThemedText style={styles.emptyTitle}>No claims yet</ThemedText>
+            <ThemedText style={styles.emptySubtitle}>
+              Submit your first expense claim to get started
+            </ThemedText>
+            <TouchableOpacity
+              style={styles.emptyBtn}
+              onPress={() => router.push("/add-expense")}
+              activeOpacity={0.85}
+            >
+              <ThemedText style={styles.emptyBtnText}>Add Expense</ThemedText>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          recent.map((claim) => (
+            <RecentClaimCard
+              key={claim.id}
+              claim={claim}
+              onPress={() => router.push(`/claims/${claim.id}`)}
+            />
+          ))
+        )}
 
-    </ParallaxScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
+//////////////////////////////////////////////////////
+// SUB-COMPONENTS
+//////////////////////////////////////////////////////
+
+function StatCard({
+  label, value, icon, color, bg
+}: {
+  label: string;
+  value: number;
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  color: string;
+  bg: string;
+}) {
+  return (
+    <View style={[styles.statCard, { borderColor: color + "33" }]}>
+      <View style={[styles.statIconWrap, { backgroundColor: bg }]}>
+        <Ionicons name={icon} size={18} color={color} />
+      </View>
+      <ThemedText style={[styles.statValue, { color }]}>{value}</ThemedText>
+      <ThemedText style={styles.statLabel}>{label}</ThemedText>
+    </View>
+  );
+}
+
+function ActionBtn({
+  icon, label, color, bg, onPress
+}: {
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  label: string;
+  color: string;
+  bg: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      style={[styles.actionBtn, { borderColor: color + "33" }]}
+      onPress={onPress}
+      activeOpacity={0.75}
+    >
+      <View style={[styles.actionIconWrap, { backgroundColor: bg }]}>
+        <Ionicons name={icon} size={22} color={color} />
+      </View>
+      <ThemedText style={styles.actionLabel}>{label}</ThemedText>
+    </TouchableOpacity>
+  );
+}
+
+function RecentClaimCard({
+  claim, onPress
+}: {
+  claim: Claim;
+  onPress: () => void;
+}) {
+  const cfg = STATUS_CONFIG[claim.status] ?? STATUS_CONFIG.pending;
+  return (
+    <TouchableOpacity style={styles.recentCard} onPress={onPress} activeOpacity={0.75}>
+      <View style={[styles.recentStatusDot, { backgroundColor: cfg.bg }]}>
+        <Ionicons name={cfg.icon} size={18} color={cfg.color} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <ThemedText style={styles.recentMerchant}>{claim.merchant}</ThemedText>
+        <ThemedText style={styles.recentMeta}>
+          {claim.category}
+          {claim.paymentStatus === "paid" ? " · Paid" : ""}
+        </ThemedText>
+      </View>
+      <View style={{ alignItems: "flex-end" }}>
+        <ThemedText style={styles.recentAmount}>£{Number(claim.amount).toFixed(2)}</ThemedText>
+        <View style={[styles.statusPill, { backgroundColor: cfg.bg }]}>
+          <ThemedText style={[styles.statusPillText, { color: cfg.color }]}>
+            {claim.status.charAt(0).toUpperCase() + claim.status.slice(1)}
+          </ThemedText>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+//////////////////////////////////////////////////////
+// STYLES
+//////////////////////////////////////////////////////
+
 const styles = StyleSheet.create({
 
-container:{
-padding:20
-},
+  root: {
+    flex: 1,
+    backgroundColor: "#0F172A"
+  },
 
-headerIcon:{
-opacity:0.15
-},
+  container: {
+    paddingHorizontal: 20,
+    paddingTop: 16
+  },
 
-title:{
-fontSize:30,
-fontWeight:"700",
-color:"#F8FAFC"
-},
+  /* Header */
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 16
+  },
 
-subtitle:{
-color:"#94A3B8",
-marginBottom:20
-},
+  greeting: {
+    color: "#F8FAFC",
+    fontSize: 24,
+    fontWeight: "700",
+    marginBottom: 2
+  },
 
-spendingCard:{
-backgroundColor:"#1E293B",
-padding:20,
-borderRadius:16,
-marginBottom:22,
-borderWidth:1,
-borderColor:"#334155"
-},
+  subheading: {
+    color: "#475569",
+    fontSize: 13
+  },
 
-spendingLabel:{
-color:"#94A3B8"
-},
+  avatarBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#1E293B",
+    borderWidth: 1,
+    borderColor: "#334155",
+    justifyContent: "center",
+    alignItems: "center"
+  },
 
-spendingAmount:{
-fontSize:32,
-lineHeight:34,
-fontWeight:"700",
-color:"#60A5FA",
-marginTop:4,
-fontVariant:["tabular-nums"]
-},
+  /* Trial banner */
+  trialBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1C1208",
+    borderWidth: 1,
+    borderColor: "#F59E0B55",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 16
+  },
 
-progressBar:{
-height:8,
-backgroundColor:"#334155",
-borderRadius:6,
-marginTop:10,
-overflow:"hidden"
-},
+  trialText: {
+    flex: 1,
+    color: "#FCD34D",
+    fontSize: 13,
+    fontWeight: "600"
+  },
 
-progressFill:{
-height:"100%",
-backgroundColor:"#60A5FA"
-},
+  /* Spending card */
+  spendingCard: {
+    backgroundColor: "#1E293B",
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#334155"
+  },
 
-progressText:{
-marginTop:6,
-fontSize:12,
-color:"#94A3B8"
-},
+  spendingTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 16
+  },
 
-actions:{
-flexDirection:"row",
-justifyContent:"space-between",
-marginBottom:24
-},
+  spendingLabel: {
+    color: "#64748B",
+    fontSize: 12,
+    marginBottom: 4
+  },
 
-action:{
-alignItems:"center",
-flex:1
-},
+  spendingAmount: {
+    fontSize: 34,
+    fontWeight: "800",
+    color: "#60A5FA",
+    fontVariant: ["tabular-nums"]
+  },
 
-actionText:{
-fontSize:12,
-color:"#E2E8F0",
-marginTop:6
-},
+  spendingBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#0D1F3C",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    gap: 4
+  },
 
-statsRow:{
-flexDirection:"row",
-gap:12,
-marginBottom:24
-},
+  spendingBadgeText: {
+    color: "#60A5FA",
+    fontSize: 11,
+    fontWeight: "600"
+  },
 
-statCard:{
-flex:1,
-backgroundColor:"#1E293B",
-padding:16,
-borderRadius:16,
-borderWidth:1,
-borderColor:"#334155"
-},
+  progressTrack: {
+    height: 6,
+    backgroundColor: "#334155",
+    borderRadius: 4,
+    overflow: "hidden",
+    marginBottom: 6
+  },
 
-statLabel:{
-color:"#94A3B8",
-fontSize:12
-},
+  progressFill: {
+    height: "100%",
+    backgroundColor: "#2563EB",
+    borderRadius: 4
+  },
 
-statValue:{
-fontSize:22,
-fontWeight:"700",
-color:"#F8FAFC",
-marginTop:4
-},
+  progressLabels: {
+    flexDirection: "row",
+    justifyContent: "space-between"
+  },
 
-sectionTitle:{
-fontSize:16,
-fontWeight:"600",
-color:"#E2E8F0",
-marginBottom:12
-},
+  progressNote: {
+    color: "#475569",
+    fontSize: 11
+  },
 
-activityCard:{
-flexDirection:"row",
-justifyContent:"space-between",
-alignItems:"center",
-backgroundColor:"#1E293B",
-padding:16,
-borderRadius:16,
-marginBottom:10,
-borderWidth:1,
-borderColor:"#334155"
-},
+  /* Stats */
+  statsRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 24
+  },
 
-merchant:{
-color:"#F8FAFC",
-fontWeight:"600"
-},
+  statCard: {
+    flex: 1,
+    backgroundColor: "#1E293B",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    alignItems: "flex-start"
+  },
 
-meta:{
-color:"#94A3B8",
-fontSize:12
-},
+  statIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 10
+  },
 
-amount:{
-color:"#60A5FA",
-fontWeight:"600"
-},
+  statValue: {
+    fontSize: 26,
+    fontWeight: "800",
+    marginBottom: 2
+  },
 
-emptyState:{
-alignItems:"center",
-padding:30
-},
+  statLabel: {
+    color: "#64748B",
+    fontSize: 12
+  },
 
-emptyText:{
-color:"#94A3B8",
-marginTop:10
-}
+  /* Quick actions */
+  sectionTitle: {
+    color: "#94A3B8",
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    marginBottom: 12
+  },
+
+  actionsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 24
+  },
+
+  actionBtn: {
+    width: "47%",
+    backgroundColor: "#1E293B",
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10
+  },
+
+  actionIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center"
+  },
+
+  actionLabel: {
+    color: "#E2E8F0",
+    fontSize: 13,
+    fontWeight: "600",
+    flex: 1
+  },
+
+  /* Recent */
+  recentHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12
+  },
+
+  viewAllLink: {
+    color: "#38BDF8",
+    fontSize: 13,
+    fontWeight: "600"
+  },
+
+  recentCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1E293B",
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#334155",
+    gap: 12
+  },
+
+  recentStatusDot: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center"
+  },
+
+  recentMerchant: {
+    color: "#F8FAFC",
+    fontWeight: "600",
+    fontSize: 14,
+    marginBottom: 2
+  },
+
+  recentMeta: {
+    color: "#64748B",
+    fontSize: 12
+  },
+
+  recentAmount: {
+    color: "#60A5FA",
+    fontWeight: "700",
+    fontSize: 15,
+    marginBottom: 4
+  },
+
+  statusPill: {
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2
+  },
+
+  statusPillText: {
+    fontSize: 10,
+    fontWeight: "700"
+  },
+
+  /* Empty state */
+  emptyState: {
+    alignItems: "center",
+    paddingVertical: 40
+  },
+
+  emptyIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 20,
+    backgroundColor: "#1E293B",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#334155"
+  },
+
+  emptyTitle: {
+    color: "#94A3B8",
+    fontSize: 16,
+    fontWeight: "600",
+    marginBottom: 6
+  },
+
+  emptySubtitle: {
+    color: "#475569",
+    fontSize: 13,
+    textAlign: "center",
+    marginBottom: 20,
+    maxWidth: 220
+  },
+
+  emptyBtn: {
+    backgroundColor: "#2563EB",
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 24
+  },
+
+  emptyBtnText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 14
+  }
 
 });

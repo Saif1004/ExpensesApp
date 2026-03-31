@@ -2,7 +2,7 @@
   "expo": {
     "name": "Claimio",
     "slug": "claimio",
-    "version": "2.1.0",
+    "version": "2.3.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "claimio",
@@ -27,7 +27,7 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.saif1004.claimio",
-      "versionCode": 3
+      "versionCode": 6
     },
     "web": {
       "output": "static",
@@ -52,6 +52,14 @@
         {
           "merchantIdentifier": "merchant.com.saif1004.claimio",
           "enableGooglePay": true
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#2563EB",
+          "defaultChannel": "default"
         }
       ]
     ],

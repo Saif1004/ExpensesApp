@@ -43,7 +43,7 @@ type Claim = {
   createdAt: Timestamp;
   receiptUrl?: string;
   approvedBy?: string;
-  adminMessage?: string;
+  adminFeedback?: string;
   paymentStatus?: string;
 };
 
@@ -303,6 +303,13 @@ export default function ClaimsScreen() {
                 {item.paymentStatus === "paid" && (
                   <View style={styles.paidBadge}>
                     <ThemedText style={styles.paidText}>💳 Reimbursed</ThemedText>
+                  </View>
+                )}
+
+                {/* Payment Failed pill */}
+                {item.paymentStatus === "failed" && (
+                  <View style={styles.failedBadge}>
+                    <ThemedText style={styles.failedText}>⚠️ Payment Failed</ThemedText>
                   </View>
                 )}
               </View>
@@ -592,6 +599,22 @@ const styles = StyleSheet.create({
 
   paidText: {
     color: "#4ADE80",
+    fontSize: 11,
+    fontWeight: "700"
+  },
+
+  /* Failed payment badge */
+  failedBadge: {
+    backgroundColor: "#7F1D1D",
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: "#991B1B"
+  },
+
+  failedText: {
+    color: "#FCA5A5",
     fontSize: 11,
     fontWeight: "700"
   },

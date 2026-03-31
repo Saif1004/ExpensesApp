@@ -40,7 +40,9 @@
         "EXPO_PUBLIC_STRIPE_CHECK_ONBOARDING_URL": "https://saifexpensewin2026.azurewebsites.net/api/stripeCheckOnboarding",
         "EXPO_PUBLIC_STRIPE_REIMBURSE_URL": "https://saifexpensewin2026.azurewebsites.net/api/stripeProcessReimbursement",
         "EXPO_PUBLIC_RC_IOS_KEY": "REMOVED",
-        "EXPO_PUBLIC_RC_ANDROID_KEY": "REMOVED"
+        "EXPO_PUBLIC_RC_ANDROID_KEY": "REMOVED",
+        "EXPO_PUBLIC_START_TRIAL_URL": "https://saifexpensewin2026.azurewebsites.net/api/startTrial",
+        "EXPO_PUBLIC_SYNC_PLAN_URL": "https://saifexpensewin2026.azurewebsites.net/api/syncPlan"
       }
     }
   },

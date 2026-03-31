@@ -110,7 +110,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   //////////////////////////////////////////////////////
 
   const initRevenueCat = useCallback(async () => {
-    if (rcConfigured || Platform.OS === "web" || isExpoGo) return;
+    // Skip RC in dev builds — billing unavailable & keys won't validate
+    if (rcConfigured || Platform.OS === "web" || isExpoGo || __DEV__) return;
     rcConfigured = true;
     try {
       const Purchases = (await import("react-native-purchases")).default;
@@ -128,7 +129,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   //////////////////////////////////////////////////////
 
   const syncRevenueCat = useCallback(async (uid: string, oid: string) => {
-    if (Platform.OS === "web" || isExpoGo) return;
+    if (Platform.OS === "web" || isExpoGo || __DEV__) return;
     const now = Date.now();
     if (now - lastRcSync < RC_SYNC_COOLDOWN_MS) return;
     lastRcSync = now;

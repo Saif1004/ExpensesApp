@@ -391,7 +391,11 @@ export default function ProfileScreen() {
         {/* ── PLAN CARD ── */}
         <TouchableOpacity
           style={styles.planCard}
-          onPress={() => router.push("/plans")}
+          onPress={() => router.push(
+            orgPlan === "pro" || orgPlan === "business"
+              ? "/manage-subscription"
+              : "/plans"
+          )}
           activeOpacity={0.8}
         >
           <View style={styles.planCardIcon}>
@@ -478,10 +482,21 @@ export default function ProfileScreen() {
                 onPress={() => router.push("../admin/manage-employees")}
               />
               <MenuRow
+                icon="pricetag-outline"
+                label="Manage Categories"
+                onPress={() => router.push("../admin/manage-categories")}
+              />
+              <MenuRow
                 icon="card-outline"
                 label="Payment Method"
                 sublabel={cardInfoLabel}
                 onPress={() => router.push("/payment-setup")}
+              />
+              <MenuRow
+                icon="wallet-outline"
+                label="Payout Account"
+                sublabel={payoutInfoLabel ?? "Set up to receive reimbursements"}
+                onPress={() => router.push("/payout-setup")}
                 isLast
               />
             </View>
@@ -509,16 +524,39 @@ export default function ProfileScreen() {
         <SectionHeader label="ACCOUNT" />
         <View style={styles.card}>
           <MenuRow
+            icon="card-outline"
+            label="Manage Subscription"
+            sublabel={`Current plan: ${planLabel}`}
+            onPress={() => router.push("/manage-subscription")}
+            isFirst
+          />
+          <MenuRow
             icon="chatbubble-ellipses-outline"
             label="AI Assistant"
             sublabel="Ask questions about claims & policy"
             onPress={() => router.push("/chatbot")}
-            isFirst
           />
           <MenuRow
             icon="lock-closed-outline"
             label="Reset Password"
             onPress={resetPassword}
+            isLast
+          />
+        </View>
+
+        {/* ── LEGAL ── */}
+        <SectionHeader label="LEGAL" />
+        <View style={styles.card}>
+          <MenuRow
+            icon="shield-checkmark-outline"
+            label="Privacy Policy"
+            onPress={() => router.push("/privacy-policy")}
+            isFirst
+          />
+          <MenuRow
+            icon="document-text-outline"
+            label="Terms & Conditions"
+            onPress={() => router.push("/terms")}
             isLast
           />
         </View>

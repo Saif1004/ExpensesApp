@@ -11,6 +11,7 @@ export const PLAN_LIMITS: Record<
     chatbotAccess: boolean;
     analyticsAccess: boolean;
     priceMonthly: string | null;
+    priceAnnual: string | null;
     rcPackageId: string | null;        // RevenueCat monthly package identifier
     rcAnnualPackageId: string | null;  // RevenueCat annual package identifier
     rcEntitlement: string | null;      // RevenueCat entitlement identifier
@@ -23,6 +24,7 @@ export const PLAN_LIMITS: Record<
     chatbotAccess: false,
     analyticsAccess: false,
     priceMonthly: null,
+    priceAnnual: null,
     rcPackageId: null,
     rcAnnualPackageId: null,
     rcEntitlement: null
@@ -34,6 +36,7 @@ export const PLAN_LIMITS: Record<
     chatbotAccess: true,
     analyticsAccess: true,
     priceMonthly: null,
+    priceAnnual: null,
     rcPackageId: null,
     rcAnnualPackageId: null,
     rcEntitlement: null
@@ -44,7 +47,8 @@ export const PLAN_LIMITS: Record<
     aiCreditsPerPeriod: 500,
     chatbotAccess: true,
     analyticsAccess: true,
-    priceMonthly: "£9.99",
+    priceMonthly: "£14.99",
+    priceAnnual: "£143.88",           // £11.99/month billed annually (~20% saving)
     rcPackageId: "pro_monthly",       // RevenueCat package identifier (monthly)
     rcAnnualPackageId: "pro_annual",  // RevenueCat package identifier (annual)
     rcEntitlement: "pro"              // RevenueCat entitlement identifier
@@ -55,7 +59,8 @@ export const PLAN_LIMITS: Record<
     aiCreditsPerPeriod: 2000,
     chatbotAccess: true,
     analyticsAccess: true,
-    priceMonthly: "£24.99",
+    priceMonthly: "£34.99",
+    priceAnnual: "£335.88",           // £27.99/month billed annually (~20% saving)
     rcPackageId: "business_monthly",
     rcAnnualPackageId: "business_annual",
     rcEntitlement: "business"

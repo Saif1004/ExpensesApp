@@ -248,11 +248,13 @@ service cloud.firestore {
       // All claim creation goes through the validateClaim Azure Function
       allow create: if false;
 
-      // Org owner can reject a claim (update status + feedback)
-      // without going through Stripe.
+      // Org owner can approve/reject a claim (update status + feedback).
+      // An admin CANNOT approve their own claim — this prevents self-approval fraud.
       // Financial and identity fields are completely locked.
       allow update: if verified()
                     && isOrgOwner(resource.data.orgId)
+                    // Self-approval prevention: admin cannot action their own claim
+                    && resource.data.userId != request.auth.uid
                     // Lock all financial and identity fields
                     && request.resource.data.userId       == resource.data.userId
                     && request.resource.data.orgId        == resource.data.orgId
@@ -282,16 +284,19 @@ service cloud.firestore {
     // COLLECTION: policies/{policyId}
     //
     // Policies are created by the parsePolicy Azure Function (Admin SDK).
-    // Clients are entirely read-only.
     //
     // Read:   any verified user (needed during claim submission to load
     //         org spending limits and receipt thresholds).
-    // Write:  blocked from client — Admin SDK only.
+    // Create: Admin SDK only (parsePolicy Azure Function).
+    // Update: Admin SDK only.
+    // Delete: org owner only (so admins can remove outdated policies).
     // ══════════════════════════════════════════════════════════════════
 
     match /policies/{policyId} {
-      allow read:  if verified();
-      allow write: if false;
+      allow read:   if verified();
+      allow create: if false;   // parsePolicy Azure Function only
+      allow update: if false;   // Azure Function only
+      allow delete: if verified() && isOrgOwner(resource.data.orgId);
     }
 
   }

@@ -1,9 +1,10 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { doc, getDoc } from "firebase/firestore";
+import { deleteDoc, doc, getDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
 
 import {
     ActivityIndicator,
+    Alert,
     Image,
     Modal,
     ScrollView,
@@ -26,6 +27,7 @@ type Claim = {
   receiptUrl?: string;
   adminFeedback?: string | null;
   approvedBy?: string | null;
+  paymentStatus?: string;
 };
 
 export default function ClaimDetailScreen() {
@@ -148,6 +150,24 @@ export default function ClaimDetailScreen() {
 
         </View>
 
+        {/* Payment Status */}
+
+        {claim.paymentStatus === "paid" && (
+          <View style={[styles.card, styles.paymentCardPaid]}>
+            <ThemedText style={styles.paymentTextPaid}>
+              💳 Reimbursed — payment sent to your account
+            </ThemedText>
+          </View>
+        )}
+
+        {claim.paymentStatus === "failed" && (
+          <View style={[styles.card, styles.paymentCardFailed]}>
+            <ThemedText style={styles.paymentTextFailed}>
+              ⚠️ Payment Failed — contact your admin
+            </ThemedText>
+          </View>
+        )}
+
         {/* Approved / Rejected by */}
 
         {!!claim.approvedBy && (
@@ -190,6 +210,33 @@ export default function ClaimDetailScreen() {
 
           </View>
 
+        )}
+
+        {/* Cancel Claim */}
+
+        {claim.status === "pending" && (
+          <TouchableOpacity
+            style={styles.cancelClaimBtn}
+            onPress={() => {
+              Alert.alert(
+                "Cancel Claim",
+                "Are you sure you want to cancel this claim? This cannot be undone.",
+                [
+                  { text: "No", style: "cancel" },
+                  {
+                    text: "Yes, Cancel",
+                    style: "destructive",
+                    onPress: async () => {
+                      await deleteDoc(doc(db, "claims", id as string));
+                      router.back();
+                    }
+                  }
+                ]
+              );
+            }}
+          >
+            <ThemedText style={styles.cancelClaimText}>Cancel Claim</ThemedText>
+          </TouchableOpacity>
         )}
 
       </ScrollView>
@@ -289,6 +336,44 @@ fontWeight:"600"
 approved:{backgroundColor:"#16A34A"},
 pending:{backgroundColor:"#F59E0B"},
 rejected:{backgroundColor:"#DC2626"},
+
+paymentCardPaid:{
+borderColor:"#166534",
+backgroundColor:"#052E16"
+},
+
+paymentTextPaid:{
+color:"#4ADE80",
+fontSize:14,
+fontWeight:"600"
+},
+
+paymentCardFailed:{
+borderColor:"#991B1B",
+backgroundColor:"#7F1D1D"
+},
+
+paymentTextFailed:{
+color:"#FCA5A5",
+fontSize:14,
+fontWeight:"600"
+},
+
+cancelClaimBtn:{
+borderWidth:2,
+borderColor:"#DC2626",
+borderRadius:12,
+paddingVertical:14,
+alignItems:"center",
+marginTop:8,
+marginBottom:24
+},
+
+cancelClaimText:{
+color:"#DC2626",
+fontWeight:"700",
+fontSize:15
+},
 
 receiptImage:{
 width:"100%",

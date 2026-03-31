@@ -43,23 +43,27 @@ type PlanPackages = {
 
 const FEATURES_FREE = [
   "Submit & track expense claims",
-  "View claim status updates",
-  "Add receipts & photos",
-  "Up to 5 employees"
+  "Receipt uploads & photo scanning",
+  "Real-time claim status updates",
+  "Up to 5 team members"
 ];
 
 const FEATURES_PRO = [
   "Everything in Free",
-  "Analytics & spending charts",
-  "AI expense assistant",
+  "AI-powered receipt OCR scanning",
+  "Analytics & spending reports",
+  "AI expense assistant chatbot",
   "500 AI credits / month",
-  "Up to 20 employees"
+  "Custom expense categories",
+  "Stripe automated reimbursements",
+  "Up to 20 team members"
 ];
 
 const FEATURES_BUSINESS = [
   "Everything in Pro",
   "2,000 AI credits / month",
-  "Up to 100 employees",
+  "Bulk expense policy management",
+  "Up to 100 team members",
   "Priority support"
 ];
 
@@ -99,7 +103,7 @@ export default function PaywallScreen() {
   //////////////////////////////////////////////////////
 
   useEffect(() => {
-    if (Platform.OS === "web" || isExpoGo) {
+    if (Platform.OS === "web" || isExpoGo || __DEV__) {
       setOfferingsLoaded(true);
       return;
     }
@@ -149,8 +153,8 @@ export default function PaywallScreen() {
       return;
     }
 
-    if (Platform.OS === "web" || isExpoGo) {
-      Alert.alert("Not available", "Subscriptions can only be purchased via the mobile app.");
+    if (Platform.OS === "web" || isExpoGo || __DEV__) {
+      Alert.alert("Not available", "Subscriptions can only be purchased in a production build.");
       return;
     }
 
@@ -229,7 +233,7 @@ export default function PaywallScreen() {
   //////////////////////////////////////////////////////
 
   const handleRestore = async () => {
-    if (!orgId || role !== "admin" || Platform.OS === "web" || isExpoGo) return;
+    if (!orgId || role !== "admin" || Platform.OS === "web" || isExpoGo || __DEV__) return;
     setRestoring(true);
     try {
       const Purchases = (await import("react-native-purchases")).default;
@@ -413,7 +417,7 @@ export default function PaywallScreen() {
             {isPurchasing("pro")
               ? <ActivityIndicator color="#fff" />
               : <ThemedText style={styles.ctaText}>
-                  {orgPlan === "business" ? "Switch to Pro" : "Start Free Trial"}
+                  {orgPlan === "business" ? "Switch to Pro" : "Subscribe to Pro"}
                 </ThemedText>
             }
           </TouchableOpacity>
@@ -445,7 +449,7 @@ export default function PaywallScreen() {
           >
             {isPurchasing("business")
               ? <ActivityIndicator color="#fff" />
-              : <ThemedText style={styles.ctaText}>Start Free Trial</ThemedText>
+              : <ThemedText style={styles.ctaText}>Subscribe to Business</ThemedText>
             }
           </TouchableOpacity>
         )}
@@ -489,7 +493,7 @@ function PriceDisplay({
     <>
       <ThemedText style={[styles.price, { color }]}>{priceString}</ThemedText>
       <ThemedText style={styles.priceNote}>
-        {period === "annual" ? "per year" : "per month"} · 7-day free trial
+        {period === "annual" ? "billed annually" : "billed monthly"}
       </ThemedText>
     </>
   );
