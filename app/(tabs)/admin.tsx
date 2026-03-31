@@ -578,6 +578,22 @@ export default function AdminScreen() {
                     <ThemedText style={styles.paymentBadgeText}>⚠️ Payment Failed</ThemedText>
                   </View>
                 )}
+
+                {item.receiptUrl ? (
+                  <TouchableOpacity
+                    style={styles.receiptWrapper}
+                    onPress={() => setSelectedImage(item.receiptUrl!)}
+                  >
+                    <Image source={{ uri: item.receiptUrl }} style={styles.receiptImage} resizeMode="cover" />
+                    <View style={styles.receiptOverlay}>
+                      <ThemedText style={styles.receiptOverlayText}>Tap to view receipt</ThemedText>
+                    </View>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.noReceiptRow}>
+                    <ThemedText style={styles.noReceipt}>No receipt attached</ThemedText>
+                  </View>
+                )}
               </ThemedView>
             )}
           />

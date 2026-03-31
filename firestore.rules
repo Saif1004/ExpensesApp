@@ -216,11 +216,10 @@ service cloud.firestore {
                     && request.resource.data.ownerId == request.auth.uid
                     && request.resource.data.plan    == 'free';
 
+      // Org owner: full update except server-managed billing fields.
       allow update: if verified()
                     && resource.data.ownerId == request.auth.uid
-                    // ownerId cannot be transferred from the client
                     && request.resource.data.ownerId == resource.data.ownerId
-                    // Block client from touching server-managed billing fields
                     && !request.resource.data.diff(resource.data)
                         .affectedKeys()
                         .hasAny([
@@ -230,6 +229,15 @@ service cloud.firestore {
                           'aiCreditsResetAt',
                           'aiUsage'
                         ]);
+
+      // Any org admin (owner OR promoted): may update only safe fields
+      // (categories, inviteCode, orgAdmins). Billing and identity locked.
+      allow update: if verified()
+                    && isOrgAdmin(orgId)
+                    && request.resource.data.ownerId == resource.data.ownerId
+                    && request.resource.data.diff(resource.data)
+                        .affectedKeys()
+                        .hasOnly(['categories', 'inviteCode', 'orgAdmins']);
 
       allow delete: if false;
     }
