@@ -46,10 +46,11 @@ app.http('stripeOnboardingLink', {
       // CREATE ACCOUNT LINK
       ////////////////////////////////////////////////////
 
+      const baseUrl = process.env.AZURE_BASE_URL || 'https://saifexpensewin2026.azurewebsites.net';
       const accountLink = await stripe.accountLinks.create({
         account: userData.stripeAccountId,
-        refresh_url: 'https://saifexpensewin2026.azurewebsites.net/api/stripe-refresh',
-        return_url: 'https://saifexpensewin2026.azurewebsites.net/api/stripe-return',
+        refresh_url: `${baseUrl}/api/stripe-refresh`,
+        return_url:  `${baseUrl}/api/stripe-return`,
         type: 'account_onboarding',
       });
 

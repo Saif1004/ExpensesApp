@@ -9,7 +9,7 @@ import {
   updateDoc,
   where
 } from "firebase/firestore";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -18,6 +18,7 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
+  ScrollView,
   StyleSheet,
   TextInput,
   TouchableOpacity,
@@ -31,7 +32,6 @@ import { ThemedView } from "../../components/themed-view";
 import { useAuth } from "../context/AuthProvider";
 import { auth, db } from "../firebase/firebaseConfig";
 import { addListener } from "../../utils/listenerStore";
-import { sendPushNotification } from "../../utils/pushNotifications";
 
 const REIMBURSE_URL = process.env.EXPO_PUBLIC_STRIPE_REIMBURSE_URL!;
 
@@ -57,27 +57,43 @@ type ConfirmModal = {
   action: "approved" | "rejected" | null;
 };
 
+type HistoryFilter = "all" | "approved" | "rejected";
+
 export default function AdminScreen() {
-  const { role, orgId, user } = useAuth();
+  const { role, orgId, user, refreshMembership } = useAuth();
   const insets = useSafeAreaInsets();
 
-  const [tab, setTab] = useState<"pending" | "history">("pending");
-  const [claims, setClaims] = useState<Claim[]>([]);
-  const [historyClaims, setHistoryClaims] = useState<Claim[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [historyLoading, setHistoryLoading] = useState(true);
-  const [selectedImage, setSelectedImage] = useState("");
-  const [adminMessage, setAdminMessage] = useState("");
-  const [confirmModal, setConfirmModal] = useState<ConfirmModal>({
-    visible: false,
-    claim: null,
-    action: null
+  const [tab, setTab]                         = useState<"pending" | "history">("pending");
+  const [claims, setClaims]                   = useState<Claim[]>([]);
+  const [historyClaims, setHistoryClaims]     = useState<Claim[]>([]);
+  const [loading, setLoading]                 = useState(true);
+  const [historyLoading, setHistoryLoading]   = useState(true);
+  const [selectedImage, setSelectedImage]     = useState("");
+  const [adminMessage, setAdminMessage]       = useState("");
+  const [confirmModal, setConfirmModal]       = useState<ConfirmModal>({
+    visible: false, claim: null, action: null
   });
 
-  // Pending claims listener
+  // Search & filter state
+  const [search, setSearch]                         = useState("");
+  const [categoryFilter, setCategoryFilter]         = useState<string | null>(null);
+  const [historyFilter, setHistoryFilter]           = useState<HistoryFilter>("all");
+
+  // Refresh role when this tab is opened — picks up promotions without needing
+  // the user to background/foreground the app.
+  useEffect(() => { refreshMembership(); }, []);
+
+  //////////////////////////////////////////////////////
+  // PENDING CLAIMS LISTENER
+  //////////////////////////////////////////////////////
+
   useEffect(() => {
-    // Must scope by orgId — unscoped queries fail Firestore rules
-    if (role !== "admin" || !orgId || !user?.emailVerified) return;
+    // Not yet an admin — reset loading flags so spinner doesn't freeze
+    if (role !== "admin" || !orgId || !user?.emailVerified) {
+      setLoading(false);
+      setHistoryLoading(false);
+      return;
+    }
 
     const q = query(
       collection(db, "claims"),
@@ -91,21 +107,23 @@ export default function AdminScreen() {
         id: docSnap.id,
         ...(docSnap.data() as Omit<Claim, "id">)
       }));
-
       setClaims(data);
       setLoading(false);
-    }, () => { /* silently swallow permission-denied on sign-out/delete */ }));
+    }, () => {}));
 
     return unsub;
   }, [role, orgId, user]);
 
-  // History claims listener
+  //////////////////////////////////////////////////////
+  // HISTORY CLAIMS LISTENER
+  //////////////////////////////////////////////////////
+
   useEffect(() => {
     if (role !== "admin" || !orgId || !user?.emailVerified) return;
 
     const q = query(
       collection(db, "claims"),
-      where("orgId", "==", orgId),
+      where("orgId",  "==", orgId),
       where("status", "in", ["approved", "rejected"]),
       orderBy("createdAt", "desc")
     );
@@ -115,15 +133,57 @@ export default function AdminScreen() {
         id: docSnap.id,
         ...(docSnap.data() as Omit<Claim, "id">)
       }));
-
       setHistoryClaims(data);
       setHistoryLoading(false);
-    }, () => { /* silently swallow permission-denied on sign-out/delete */ }));
+    }, () => {}));
 
     return unsub;
   }, [role, orgId, user]);
 
-  const openConfirmModal = (claim: Claim, action: "approved" | "rejected") => {
+  //////////////////////////////////////////////////////
+  // DERIVED — FILTERED LISTS
+  //////////////////////////////////////////////////////
+
+  const pendingCategories = useMemo(
+    () => [...new Set(claims.map((c) => c.category))].sort(),
+    [claims]
+  );
+
+  const filteredPending = useMemo(() => {
+    let list = claims;
+    if (categoryFilter) list = list.filter((c) => c.category === categoryFilter);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(
+        (c) =>
+          c.merchant.toLowerCase().includes(q) ||
+          c.userEmail.toLowerCase().includes(q) ||
+          c.category.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [claims, categoryFilter, search]);
+
+  const filteredHistory = useMemo(() => {
+    let list = historyClaims;
+    if (historyFilter !== "all") list = list.filter((c) => c.status === historyFilter);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(
+        (c) =>
+          c.merchant.toLowerCase().includes(q) ||
+          c.userEmail.toLowerCase().includes(q) ||
+          c.category.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [historyClaims, historyFilter, search]);
+
+  //////////////////////////////////////////////////////
+  // CONFIRM MODAL
+  //////////////////////////////////////////////////////
+
+  const openConfirmModal  = (claim: Claim, action: "approved" | "rejected") => {
     setAdminMessage("");
     setConfirmModal({ visible: true, claim, action });
   };
@@ -138,8 +198,8 @@ export default function AdminScreen() {
     if (!claim || !action) return;
 
     const currentUser = auth.currentUser;
-    const approvedBy = currentUser?.displayName || currentUser?.email || "Unknown";
-    const adminId = currentUser?.uid || null;
+    const approvedBy  = currentUser?.displayName || currentUser?.email || "Unknown";
+    const adminId     = currentUser?.uid || null;
 
     closeConfirmModal();
 
@@ -154,36 +214,32 @@ export default function AdminScreen() {
         : { rejectedAt: serverTimestamp() }),
     });
 
-    // Send push notification to employee
+    // Push notification to employee (fire-and-forget via Expo push API)
     try {
-      const empDoc = await getDoc(doc(db, "users", claim.userId));
+      const empDoc   = await getDoc(doc(db, "users", claim.userId));
       const empToken = empDoc.data()?.expoPushToken;
       if (empToken) {
-        if (action === "approved") {
-          await sendPushNotification(
-            empToken,
-            "Claim Approved ✅",
-            `Your £${Number(claim.amount).toFixed(2)} claim at ${claim.merchant} was approved`
-          );
-        } else {
-          await sendPushNotification(
-            empToken,
-            "Claim Rejected",
-            `Your £${Number(claim.amount).toFixed(2)} claim at ${claim.merchant} was rejected`
-          );
-        }
+        const label = `£${Number(claim.amount).toFixed(2)} claim at ${claim.merchant}`;
+        fetch("https://exp.host/--/api/v2/push/send", {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({
+            to:    empToken,
+            sound: "default",
+            title: action === "approved" ? "Claim Approved ✅" : "Claim Rejected",
+            body:  action === "approved" ? `Your ${label} was approved` : `Your ${label} was rejected`,
+          }),
+        }).catch(() => {});
       }
-    } catch {
-      // Silently fail — push notifications are non-critical
-    }
+    } catch {}
 
     if (action === "approved") {
       try {
         const token = await currentUser?.getIdToken();
-        const res = await fetch(REIMBURSE_URL, {
-          method: "POST",
+        const res   = await fetch(REIMBURSE_URL, {
+          method:  "POST",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ claimId: claim.id, orgId: claim.orgId })
+          body:    JSON.stringify({ claimId: claim.id, orgId: claim.orgId })
         });
         const data = await res.json();
         if (data.error) {
@@ -198,6 +254,10 @@ export default function AdminScreen() {
     }
   };
 
+  //////////////////////////////////////////////////////
+  // ACCESS GUARD
+  //////////////////////////////////////////////////////
+
   if (role !== "admin") {
     return (
       <ThemedView style={styles.container}>
@@ -206,18 +266,108 @@ export default function AdminScreen() {
     );
   }
 
-  if (loading && tab === "pending") {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#38BDF8" />
-      </View>
-    );
-  }
-
   const isApprove = confirmModal.action === "approved";
+
+  //////////////////////////////////////////////////////
+  // SEARCH + FILTER BAR
+  //////////////////////////////////////////////////////
+
+  const SearchBar = (
+    <View style={styles.searchWrap}>
+      <Ionicons name="search-outline" size={16} color="#64748B" style={{ marginRight: 8 }} />
+      <TextInput
+        style={styles.searchInput}
+        placeholder="Search merchant, employee, category…"
+        placeholderTextColor="#475569"
+        value={search}
+        onChangeText={setSearch}
+        autoCapitalize="none"
+        autoCorrect={false}
+        clearButtonMode="while-editing"
+      />
+      {search.trim() ? (
+        <TouchableOpacity onPress={() => setSearch("")}>
+          <Ionicons name="close-circle" size={16} color="#475569" />
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  );
+
+  //////////////////////////////////////////////////////
+  // CATEGORY FILTER CHIPS  (pending tab)
+  //////////////////////////////////////////////////////
+
+  const CategoryChips = pendingCategories.length > 0 ? (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.chipsScroll}
+    >
+      <TouchableOpacity
+        style={[styles.chip, categoryFilter === null && styles.chipActive]}
+        onPress={() => setCategoryFilter(null)}
+      >
+        <ThemedText style={[styles.chipText, categoryFilter === null && styles.chipTextActive]}>
+          All
+        </ThemedText>
+      </TouchableOpacity>
+      {pendingCategories.map((cat) => (
+        <TouchableOpacity
+          key={cat}
+          style={[styles.chip, categoryFilter === cat && styles.chipActive]}
+          onPress={() => setCategoryFilter(categoryFilter === cat ? null : cat)}
+        >
+          <ThemedText style={[styles.chipText, categoryFilter === cat && styles.chipTextActive]}>
+            {cat}
+          </ThemedText>
+        </TouchableOpacity>
+      ))}
+    </ScrollView>
+  ) : null;
+
+  //////////////////////////////////////////////////////
+  // STATUS FILTER  (history tab)
+  //////////////////////////////////////////////////////
+
+  const HistoryStatusFilter = (
+    <View style={styles.historyFilterRow}>
+      {(["all", "approved", "rejected"] as HistoryFilter[]).map((f) => (
+        <TouchableOpacity
+          key={f}
+          style={[styles.historyFilterBtn, historyFilter === f && styles.historyFilterBtnActive]}
+          onPress={() => setHistoryFilter(f)}
+          activeOpacity={0.7}
+        >
+          <ThemedText style={[
+            styles.historyFilterText,
+            historyFilter === f && styles.historyFilterTextActive
+          ]}>
+            {f === "all" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)}
+          </ThemedText>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+
+  //////////////////////////////////////////////////////
+  // EMPTY STATE
+  //////////////////////////////////////////////////////
+
+  const EmptyState = ({ message }: { message: string }) => (
+    <View style={styles.emptyState}>
+      <Ionicons name="receipt-outline" size={36} color="#334155" />
+      <ThemedText style={styles.emptyText}>{message}</ThemedText>
+    </View>
+  );
+
+  //////////////////////////////////////////////////////
+  // RENDER
+  //////////////////////////////////////////////////////
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top + 8 }]}>
+
+      {/* Header */}
       <View style={styles.headerRow}>
         <View>
           <ThemedText type="title" style={styles.title}>Admin Panel</ThemedText>
@@ -226,12 +376,13 @@ export default function AdminScreen() {
         <View style={styles.countBadge}>
           <Ionicons
             name={tab === "pending" ? "time-outline" : "checkmark-done-outline"}
-            size={12}
-            color="#94A3B8"
+            size={12} color="#94A3B8"
             style={{ marginRight: 4 }}
           />
           <ThemedText style={styles.countBadgeText}>
-            {tab === "pending" ? `${claims.length} pending` : `${historyClaims.length} processed`}
+            {tab === "pending"
+              ? `${filteredPending.length} pending`
+              : `${filteredHistory.length} processed`}
           </ThemedText>
         </View>
       </View>
@@ -240,7 +391,7 @@ export default function AdminScreen() {
       <View style={styles.tabBar}>
         <TouchableOpacity
           style={[styles.tabPill, tab === "pending" && styles.tabPillActive]}
-          onPress={() => setTab("pending")}
+          onPress={() => { setTab("pending"); setSearch(""); setCategoryFilter(null); }}
           activeOpacity={0.7}
         >
           <ThemedText style={[styles.tabPillText, tab === "pending" && styles.tabPillTextActive]}>
@@ -249,7 +400,7 @@ export default function AdminScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tabPill, tab === "history" && styles.tabPillActive]}
-          onPress={() => setTab("history")}
+          onPress={() => { setTab("history"); setSearch(""); setHistoryFilter("all"); }}
           activeOpacity={0.7}
         >
           <ThemedText style={[styles.tabPillText, tab === "history" && styles.tabPillTextActive]}>
@@ -258,123 +409,123 @@ export default function AdminScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Search bar */}
+      {SearchBar}
+
+      {/* ── PENDING TAB ── */}
       {tab === "pending" ? (
-        <FlatList
-          data={claims}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
-          showsVerticalScrollIndicator={false}
-          renderItem={({ item }) => (
-            <ThemedView style={styles.card}>
-              {/* Card header */}
-              <View style={styles.cardHeader}>
-                <View>
-                  <ThemedText style={styles.amount}>
-                    £{Number(item.amount).toFixed(2)}
-                  </ThemedText>
-                  <ThemedText style={styles.merchant}>{item.merchant}</ThemedText>
-                </View>
-                <View style={styles.categoryBadge}>
-                  <ThemedText style={styles.categoryText}>{item.category}</ThemedText>
-                </View>
-              </View>
-
-              {/* Divider */}
-              <View style={styles.divider} />
-
-              {/* Email row */}
-              <View style={styles.infoRow}>
-                <ThemedText style={styles.infoLabel}>Employee</ThemedText>
-                <ThemedText style={styles.infoValue}>{item.userEmail}</ThemedText>
-              </View>
-
-              {item.description ? (
-                <View style={styles.infoRow}>
-                  <ThemedText style={styles.infoLabel}>Note</ThemedText>
-                  <ThemedText style={styles.infoValue}>{item.description}</ThemedText>
-                </View>
-              ) : null}
-
-              {/* Payment status badge */}
-              {item.paymentStatus === "paid" && (
-                <View style={[styles.paymentBadge, styles.paymentBadgePaid]}>
-                  <ThemedText style={styles.paymentBadgeText}>💳 Paid</ThemedText>
-                </View>
-              )}
-              {item.paymentStatus === "failed" && (
-                <View style={[styles.paymentBadge, styles.paymentBadgeFailed]}>
-                  <ThemedText style={styles.paymentBadgeText}>⚠️ Payment Failed</ThemedText>
-                </View>
-              )}
-
-              {/* Receipt */}
-              {item.receiptUrl ? (
-                <TouchableOpacity
-                  style={styles.receiptWrapper}
-                  onPress={() => setSelectedImage(item.receiptUrl!)}
-                >
-                  <Image
-                    source={{ uri: item.receiptUrl }}
-                    style={styles.receiptImage}
-                    resizeMode="cover"
-                  />
-                  <View style={styles.receiptOverlay}>
-                    <ThemedText style={styles.receiptOverlayText}>Tap to view receipt</ThemedText>
-                  </View>
-                </TouchableOpacity>
-              ) : (
-                <View style={styles.noReceiptRow}>
-                  <ThemedText style={styles.noReceipt}>No receipt attached</ThemedText>
-                </View>
-              )}
-
-              {/* Action buttons */}
-              {item.userId === user?.uid ? (
-                <View style={styles.selfClaimNotice}>
-                  <Ionicons name="lock-closed-outline" size={14} color="#475569" style={{ marginRight: 6 }} />
-                  <ThemedText style={styles.selfClaimText}>
-                    You cannot approve your own claim
-                  </ThemedText>
-                </View>
-              ) : (
-                <View style={styles.buttonRow}>
-                  <TouchableOpacity
-                    style={styles.approveBtn}
-                    onPress={() => openConfirmModal(item, "approved")}
-                  >
-                    <ThemedText style={styles.btnText} numberOfLines={1}>Approve & Pay</ThemedText>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.rejectBtn}
-                    onPress={() => openConfirmModal(item, "rejected")}
-                  >
-                    <ThemedText style={styles.btnText} numberOfLines={1}>Reject</ThemedText>
-                  </TouchableOpacity>
-                </View>
-              )}
-            </ThemedView>
-          )}
-        />
-      ) : (
-        historyLoading ? (
-          <View style={styles.center}>
-            <ActivityIndicator size="large" color="#38BDF8" />
-          </View>
+        loading ? (
+          <View style={styles.center}><ActivityIndicator size="large" color="#38BDF8" /></View>
         ) : (
           <FlatList
-            data={historyClaims}
+            data={filteredPending}
             keyExtractor={(item) => item.id}
             contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
             showsVerticalScrollIndicator={false}
+            ListHeaderComponent={CategoryChips}
+            ListEmptyComponent={
+              <EmptyState message={
+                search.trim() || categoryFilter
+                  ? "No claims match your search"
+                  : "No pending claims"
+              } />
+            }
             renderItem={({ item }) => (
               <ThemedView style={styles.card}>
-                {/* Card header */}
                 <View style={styles.cardHeader}>
                   <View>
-                    <ThemedText style={styles.amount}>
-                      £{Number(item.amount).toFixed(2)}
-                    </ThemedText>
+                    <ThemedText style={styles.amount}>£{Number(item.amount).toFixed(2)}</ThemedText>
+                    <ThemedText style={styles.merchant}>{item.merchant}</ThemedText>
+                  </View>
+                  <View style={styles.categoryBadge}>
+                    <ThemedText style={styles.categoryText}>{item.category}</ThemedText>
+                  </View>
+                </View>
+
+                <View style={styles.divider} />
+
+                <View style={styles.infoRow}>
+                  <ThemedText style={styles.infoLabel}>Employee</ThemedText>
+                  <ThemedText style={styles.infoValue}>{item.userEmail}</ThemedText>
+                </View>
+
+                {item.description ? (
+                  <View style={styles.infoRow}>
+                    <ThemedText style={styles.infoLabel}>Note</ThemedText>
+                    <ThemedText style={styles.infoValue}>{item.description}</ThemedText>
+                  </View>
+                ) : null}
+
+                {item.paymentStatus === "paid" && (
+                  <View style={[styles.paymentBadge, styles.paymentBadgePaid]}>
+                    <ThemedText style={styles.paymentBadgeText}>💳 Paid</ThemedText>
+                  </View>
+                )}
+                {item.paymentStatus === "failed" && (
+                  <View style={[styles.paymentBadge, styles.paymentBadgeFailed]}>
+                    <ThemedText style={styles.paymentBadgeText}>⚠️ Payment Failed</ThemedText>
+                  </View>
+                )}
+
+                {item.receiptUrl ? (
+                  <TouchableOpacity
+                    style={styles.receiptWrapper}
+                    onPress={() => setSelectedImage(item.receiptUrl!)}
+                  >
+                    <Image source={{ uri: item.receiptUrl }} style={styles.receiptImage} resizeMode="cover" />
+                    <View style={styles.receiptOverlay}>
+                      <ThemedText style={styles.receiptOverlayText}>Tap to view receipt</ThemedText>
+                    </View>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.noReceiptRow}>
+                    <ThemedText style={styles.noReceipt}>No receipt attached</ThemedText>
+                  </View>
+                )}
+
+                {item.userId === user?.uid ? (
+                  <View style={styles.selfClaimNotice}>
+                    <Ionicons name="lock-closed-outline" size={14} color="#475569" style={{ marginRight: 6 }} />
+                    <ThemedText style={styles.selfClaimText}>You cannot approve your own claim</ThemedText>
+                  </View>
+                ) : (
+                  <View style={styles.buttonRow}>
+                    <TouchableOpacity style={styles.approveBtn} onPress={() => openConfirmModal(item, "approved")}>
+                      <ThemedText style={styles.btnText} numberOfLines={1}>Approve & Pay</ThemedText>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.rejectBtn} onPress={() => openConfirmModal(item, "rejected")}>
+                      <ThemedText style={styles.btnText} numberOfLines={1}>Reject</ThemedText>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </ThemedView>
+            )}
+          />
+        )
+      ) : (
+
+        /* ── HISTORY TAB ── */
+        historyLoading ? (
+          <View style={styles.center}><ActivityIndicator size="large" color="#38BDF8" /></View>
+        ) : (
+          <FlatList
+            data={filteredHistory}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+            showsVerticalScrollIndicator={false}
+            ListHeaderComponent={HistoryStatusFilter}
+            ListEmptyComponent={
+              <EmptyState message={
+                search.trim() || historyFilter !== "all"
+                  ? "No claims match your filter"
+                  : "No processed claims yet"
+              } />
+            }
+            renderItem={({ item }) => (
+              <ThemedView style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <View>
+                    <ThemedText style={styles.amount}>£{Number(item.amount).toFixed(2)}</ThemedText>
                     <ThemedText style={styles.merchant}>{item.merchant}</ThemedText>
                   </View>
                   <View style={[
@@ -390,13 +541,15 @@ export default function AdminScreen() {
                   </View>
                 </View>
 
-                {/* Divider */}
                 <View style={styles.divider} />
 
-                {/* Info rows */}
                 <View style={styles.infoRow}>
                   <ThemedText style={styles.infoLabel}>Employee</ThemedText>
                   <ThemedText style={styles.infoValue}>{item.userEmail}</ThemedText>
+                </View>
+                <View style={styles.infoRow}>
+                  <ThemedText style={styles.infoLabel}>Category</ThemedText>
+                  <ThemedText style={styles.infoValue}>{item.category}</ThemedText>
                 </View>
 
                 {item.approvedBy ? (
@@ -415,7 +568,6 @@ export default function AdminScreen() {
                   </View>
                 ) : null}
 
-                {/* Payment status badge */}
                 {item.paymentStatus === "paid" && (
                   <View style={[styles.paymentBadge, styles.paymentBadgePaid]}>
                     <ThemedText style={styles.paymentBadgeText}>💳 Paid</ThemedText>
@@ -444,14 +596,12 @@ export default function AdminScreen() {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
           <View style={styles.confirmModalContent}>
-            {/* Modal title */}
             <View style={[styles.confirmTitleBar, isApprove ? styles.confirmTitleBarApprove : styles.confirmTitleBarReject]}>
               <ThemedText style={styles.confirmTitle}>
                 {isApprove ? "Approve & Pay" : "Reject Claim"}
               </ThemedText>
             </View>
 
-            {/* Claim details */}
             {confirmModal.claim && (
               <View style={styles.confirmDetails}>
                 <View style={styles.confirmAmountRow}>
@@ -459,7 +609,6 @@ export default function AdminScreen() {
                     £{Number(confirmModal.claim.amount).toFixed(2)}
                   </ThemedText>
                 </View>
-
                 <View style={styles.confirmDetailRow}>
                   <ThemedText style={styles.confirmDetailLabel}>Merchant</ThemedText>
                   <ThemedText style={styles.confirmDetailValue}>{confirmModal.claim.merchant}</ThemedText>
@@ -477,7 +626,6 @@ export default function AdminScreen() {
 
             <View style={styles.confirmDivider} />
 
-            {/* Message input */}
             <TextInput
               style={styles.messageInput}
               placeholder="Message to employee (optional)"
@@ -488,12 +636,10 @@ export default function AdminScreen() {
               numberOfLines={3}
             />
 
-            {/* Action buttons */}
             <View style={styles.confirmButtonRow}>
               <TouchableOpacity style={styles.cancelBtn} onPress={closeConfirmModal}>
                 <ThemedText style={styles.cancelBtnText}>Cancel</ThemedText>
               </TouchableOpacity>
-
               <TouchableOpacity
                 style={[styles.confirmBtn, isApprove ? styles.confirmBtnApprove : styles.confirmBtnReject]}
                 onPress={handleConfirm}
@@ -512,22 +658,15 @@ export default function AdminScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.imageModalContent}>
             {selectedImage ? (
-              <Image
-                source={{ uri: selectedImage }}
-                style={styles.modalImage}
-                resizeMode="contain"
-              />
+              <Image source={{ uri: selectedImage }} style={styles.modalImage} resizeMode="contain" />
             ) : null}
-
-            <TouchableOpacity
-              style={styles.closeBtn}
-              onPress={() => setSelectedImage("")}
-            >
+            <TouchableOpacity style={styles.closeBtn} onPress={() => setSelectedImage("")}>
               <ThemedText style={styles.closeBtnText}>Close</ThemedText>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
+
     </ThemedView>
   );
 }
@@ -575,7 +714,7 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: "row",
     gap: 10,
-    marginBottom: 16
+    marginBottom: 12
   },
   tabPill: {
     flex: 1,
@@ -598,6 +737,92 @@ const styles = StyleSheet.create({
   tabPillTextActive: {
     color: "#93C5FD",
     fontWeight: "700"
+  },
+
+  /* Search */
+  searchWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1E293B",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#334155",
+    paddingHorizontal: 12,
+    marginBottom: 10,
+    height: 44
+  },
+  searchInput: {
+    flex: 1,
+    color: "#F8FAFC",
+    fontSize: 14
+  },
+
+  /* Category chips */
+  chipsScroll: {
+    paddingBottom: 10,
+    gap: 8,
+    flexDirection: "row"
+  },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: "#1E293B",
+    borderWidth: 1,
+    borderColor: "#334155"
+  },
+  chipActive: {
+    backgroundColor: "#172554",
+    borderColor: "#2563EB"
+  },
+  chipText: {
+    color: "#64748B",
+    fontSize: 13,
+    fontWeight: "600"
+  },
+  chipTextActive: {
+    color: "#93C5FD"
+  },
+
+  /* History status filter */
+  historyFilterRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12
+  },
+  historyFilterBtn: {
+    flex: 1,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: "#1E293B",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#334155"
+  },
+  historyFilterBtnActive: {
+    backgroundColor: "#172554",
+    borderColor: "#2563EB"
+  },
+  historyFilterText: {
+    color: "#64748B",
+    fontSize: 12,
+    fontWeight: "600"
+  },
+  historyFilterTextActive: {
+    color: "#93C5FD",
+    fontWeight: "700"
+  },
+
+  /* Empty state */
+  emptyState: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    paddingTop: 60
+  },
+  emptyText: {
+    color: "#475569",
+    fontSize: 14
   },
 
   /* Card */
@@ -670,24 +895,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4
   },
-  historyStatusApproved: {
-    backgroundColor: "#052E16"
-  },
-  historyStatusRejected: {
-    backgroundColor: "#450A0A"
-  },
-  historyStatusText: {
-    fontSize: 11,
-    fontWeight: "700"
-  },
-  historyStatusTextApproved: {
-    color: "#4ADE80"
-  },
-  historyStatusTextRejected: {
-    color: "#F87171"
-  },
+  historyStatusApproved: { backgroundColor: "#052E16" },
+  historyStatusRejected: { backgroundColor: "#450A0A" },
+  historyStatusText: { fontSize: 11, fontWeight: "700" },
+  historyStatusTextApproved: { color: "#4ADE80" },
+  historyStatusTextRejected: { color: "#F87171" },
 
-  /* Payment status badges */
+  /* Payment badges */
   paymentBadge: {
     marginHorizontal: 16,
     marginTop: 10,
@@ -696,12 +910,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4
   },
-  paymentBadgePaid: {
-    backgroundColor: "#14532D"
-  },
-  paymentBadgeFailed: {
-    backgroundColor: "#7F1D1D"
-  },
+  paymentBadgePaid: { backgroundColor: "#14532D" },
+  paymentBadgeFailed: { backgroundColor: "#7F1D1D" },
   paymentBadgeText: {
     fontSize: 12,
     fontWeight: "600",
@@ -770,7 +980,7 @@ const styles = StyleSheet.create({
     fontSize: 14
   },
 
-  /* Shared modal overlay */
+  /* Modal overlay */
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.75)",
@@ -791,12 +1001,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     alignItems: "center"
   },
-  confirmTitleBarApprove: {
-    backgroundColor: "#14532D"
-  },
-  confirmTitleBarReject: {
-    backgroundColor: "#7F1D1D"
-  },
+  confirmTitleBarApprove: { backgroundColor: "#14532D" },
+  confirmTitleBarReject: { backgroundColor: "#7F1D1D" },
   confirmTitle: {
     fontSize: 17,
     fontWeight: "700",
@@ -873,12 +1079,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center"
   },
-  confirmBtnApprove: {
-    backgroundColor: "#16A34A"
-  },
-  confirmBtnReject: {
-    backgroundColor: "#DC2626"
-  },
+  confirmBtnApprove: { backgroundColor: "#16A34A" },
+  confirmBtnReject: { backgroundColor: "#DC2626" },
   confirmBtnText: {
     color: "#fff",
     fontWeight: "700",
@@ -909,7 +1111,7 @@ const styles = StyleSheet.create({
     fontSize: 14
   },
 
-  /* Self-claim lock notice */
+  /* Self-claim lock */
   selfClaimNotice: {
     flexDirection: "row",
     alignItems: "center",

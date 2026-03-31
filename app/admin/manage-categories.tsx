@@ -31,7 +31,7 @@ export default function ManageCategoriesScreen() {
 
     const fetchCategories = async () => {
       try {
-        const snap = await getDoc(doc(db, "orgs", orgId));
+        const snap = await getDoc(doc(db, "organisations", orgId));
         const data = snap.data();
         if (data?.categories && Array.isArray(data.categories) && data.categories.length > 0) {
           setCategories(data.categories);
@@ -85,7 +85,7 @@ export default function ManageCategoriesScreen() {
     if (!orgId) return;
     try {
       setSaving(true);
-      await updateDoc(doc(db, "orgs", orgId), { categories: cats });
+      await updateDoc(doc(db, "organisations", orgId), { categories: cats });
     } catch {
       Alert.alert("Error", "Failed to save categories.");
     } finally {

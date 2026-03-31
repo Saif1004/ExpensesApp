@@ -320,10 +320,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (currentOrgRef.current) {
           refreshOrgPlan();
         }
+        // Refresh role in case an admin promoted/demoted this user while the app was backgrounded
+        if (currentUidRef.current) {
+          refreshMembership();
+        }
       }
     });
     return () => sub.remove();
-  }, [refreshOrgPlan]);
+  }, [refreshOrgPlan, refreshMembership]);
 
   //////////////////////////////////////////////////////
   // ROUTE PROTECTION

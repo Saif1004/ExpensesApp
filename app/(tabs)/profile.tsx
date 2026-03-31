@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -136,7 +137,9 @@ export default function ProfileScreen() {
 
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { role, orgPlan, trialDaysLeft, orgId } = useAuth();
+  const { role, orgPlan, trialDaysLeft, orgId, refreshMembership } = useAuth();
+  const [refreshingRole, setRefreshingRole] = useState(false);
+  const spinAnim = useRef(new Animated.Value(0)).current;
 
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(true);
@@ -275,6 +278,21 @@ export default function ProfileScreen() {
   // SHARE INVITE CODE
   //////////////////////////////////////////////////////
 
+  // Hard refresh role
+  const hardRefresh = async () => {
+    setRefreshingRole(true);
+    Animated.loop(
+      Animated.timing(spinAnim, { toValue: 1, duration: 700, useNativeDriver: true })
+    ).start();
+    try {
+      await refreshMembership();
+    } finally {
+      setRefreshingRole(false);
+      spinAnim.stopAnimation();
+      spinAnim.setValue(0);
+    }
+  };
+
   const [generatingCode, setGeneratingCode] = useState(false);
 
   const generateCode = async () => {
@@ -385,6 +403,22 @@ export default function ProfileScreen() {
             <View style={styles.planBadge}>
               <ThemedText style={styles.planBadgeText}>{planLabel}</ThemedText>
             </View>
+
+            {/* Hard refresh button */}
+            <TouchableOpacity
+              style={styles.refreshBtn}
+              onPress={hardRefresh}
+              disabled={refreshingRole}
+              activeOpacity={0.75}
+            >
+              <Animated.View style={{
+                transform: [{
+                  rotate: spinAnim.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] })
+                }]
+              }}>
+                <Ionicons name="refresh-outline" size={14} color={refreshingRole ? "#38BDF8" : "#64748B"} />
+              </Animated.View>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -785,6 +819,17 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 0.8
+  },
+
+  refreshBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "#1E293B",
+    borderWidth: 1,
+    borderColor: "#334155",
+    justifyContent: "center",
+    alignItems: "center"
   },
 
   /* ── Plan card ── */

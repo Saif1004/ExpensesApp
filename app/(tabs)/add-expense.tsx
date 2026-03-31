@@ -43,7 +43,7 @@ export default function AddExpenseScreen() {
 
     const fetchCategories = async () => {
       try {
-        const snap = await getDoc(doc(db, "orgs", orgId));
+        const snap = await getDoc(doc(db, "organisations", orgId));
         const data = snap.data();
         if (data?.categories && Array.isArray(data.categories) && data.categories.length > 0) {
           setDynamicCategories(data.categories);

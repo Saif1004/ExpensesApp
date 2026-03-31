@@ -31,6 +31,17 @@ service cloud.firestore {
                .data.ownerId == request.auth.uid;
     }
 
+    // True if the calling user is an admin of the given org — either the
+    // original owner OR a member explicitly promoted via the orgAdmins array.
+    // The orgAdmins array is maintained client-side by manage-employees and
+    // can only be written by the org owner (enforced by the organisations rule).
+    function isOrgAdmin(orgId) {
+      // .get('orgAdmins', []) returns [] when the field is absent, avoiding
+      // the 'key in map' operator which can be unreliable on missing fields.
+      return get(/databases/$(database)/documents/organisations/$(orgId)).data.ownerId == request.auth.uid
+          || request.auth.uid in get(/databases/$(database)/documents/organisations/$(orgId)).data.get('orgAdmins', []);
+    }
+
     // ══════════════════════════════════════════════════════════════════
     // COLLECTION: users/{uid}
     //
@@ -154,8 +165,8 @@ service cloud.firestore {
       allow read: if verified() && (
         // Employee reads their own membership
         resource.data.userId == request.auth.uid
-        // Org owner reads all memberships in their org (admin panel)
-        || isOrgOwner(resource.data.orgId)
+        // Any org admin reads all memberships in their org (admin panel)
+        || isOrgAdmin(resource.data.orgId)
       );
 
       // (a) Employee joins via invite code (email not yet verified at sign-up)
@@ -170,14 +181,15 @@ service cloud.firestore {
                     && request.resource.data.role   == 'admin'
                     && request.resource.data.status == 'approved';
 
-      // Org owner approves / rejects / changes role.
+      // Any org admin may approve/reject/change role.
       // Core identity fields (userId, orgId) are locked after creation.
       allow update: if verified()
-                    && isOrgOwner(resource.data.orgId)
+                    && isOrgAdmin(resource.data.orgId)
                     && request.resource.data.userId == resource.data.userId
                     && request.resource.data.orgId  == resource.data.orgId;
 
-      allow delete: if false;
+      // Org owner can remove members (delete membership doc)
+      allow delete: if verified() && isOrgOwner(resource.data.orgId);
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -242,17 +254,17 @@ service cloud.firestore {
 
       allow read: if verified() && (
         resource.data.userId == request.auth.uid
-        || isOrgOwner(resource.data.orgId)
+        || isOrgAdmin(resource.data.orgId)
       );
 
       // All claim creation goes through the validateClaim Azure Function
       allow create: if false;
 
-      // Org owner can approve/reject a claim (update status + feedback).
+      // Any org admin can approve/reject a claim (update status + feedback).
       // An admin CANNOT approve their own claim — this prevents self-approval fraud.
       // Financial and identity fields are completely locked.
       allow update: if verified()
-                    && isOrgOwner(resource.data.orgId)
+                    && isOrgAdmin(resource.data.orgId)
                     // Self-approval prevention: admin cannot action their own claim
                     && resource.data.userId != request.auth.uid
                     // Lock all financial and identity fields
@@ -296,7 +308,7 @@ service cloud.firestore {
       allow read:   if verified();
       allow create: if false;   // parsePolicy Azure Function only
       allow update: if false;   // Azure Function only
-      allow delete: if verified() && isOrgOwner(resource.data.orgId);
+      allow delete: if verified() && isOrgAdmin(resource.data.orgId);
     }
 
   }

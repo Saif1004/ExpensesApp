@@ -1,7 +1,29 @@
 const { app } = require("@azure/functions");
-const { BlobServiceClient } = require("@azure/storage-blob");
+const {
+  BlobServiceClient,
+  StorageSharedKeyCredential,
+  generateBlobSASQueryParameters,
+  BlobSASPermissions,
+} = require("@azure/storage-blob");
 const { authAndLimit } = require("./rateLimit");
 const { secureResponse } = require("./security");
+
+//////////////////////////////////////////////////////
+// Parse AccountName and AccountKey from connection string
+//////////////////////////////////////////////////////
+function parseConnectionString(connStr) {
+  const parts = {};
+  connStr.split(";").forEach((segment) => {
+    const idx = segment.indexOf("=");
+    if (idx > 0) {
+      parts[segment.substring(0, idx)] = segment.substring(idx + 1);
+    }
+  });
+  return {
+    accountName: parts["AccountName"] ?? "",
+    accountKey:  parts["AccountKey"]  ?? "",
+  };
+}
 
 app.http("uploadReceipt", {
   methods: ["POST"],
@@ -50,7 +72,31 @@ app.http("uploadReceipt", {
 
       context.log("Receipt uploaded successfully:", blockBlobClient.url);
 
-      return secureResponse({ url: blockBlobClient.url }, 200);
+      //////////////////////////////////////////////////////
+      // Generate a read-only SAS URL (10-year expiry) so the
+      // receipt image is accessible from the mobile app without
+      // requiring the Blob container to be publicly accessible.
+      //////////////////////////////////////////////////////
+
+      const { accountName, accountKey } = parseConnectionString(connectionString);
+      const sharedKeyCredential = new StorageSharedKeyCredential(accountName, accountKey);
+
+      const expiresOn = new Date();
+      expiresOn.setFullYear(expiresOn.getFullYear() + 10);
+
+      const sasToken = generateBlobSASQueryParameters(
+        {
+          containerName: "receipts",
+          blobName:       fileName,
+          permissions:    BlobSASPermissions.parse("r"), // read-only
+          expiresOn,
+        },
+        sharedKeyCredential
+      ).toString();
+
+      const sasUrl = `${blockBlobClient.url}?${sasToken}`;
+
+      return secureResponse({ url: sasUrl }, 200);
 
     } catch (error) {
       context.log("UPLOAD ERROR:", error?.message || error);
