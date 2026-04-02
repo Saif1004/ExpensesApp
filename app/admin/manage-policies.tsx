@@ -22,9 +22,9 @@ import {
 } from "firebase/firestore";
 
 import { useRouter } from "expo-router";
+import { useTheme } from "../../hooks/useTheme";
 import { useAuth } from "../context/AuthProvider";
 import { auth, db } from "../firebase/firebaseConfig";
-import { useTheme } from "../../hooks/useTheme";
 
 //////////////////////////////////////////////////////
 // CONFIG

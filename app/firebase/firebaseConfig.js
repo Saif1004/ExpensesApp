@@ -36,5 +36,6 @@ try {
 // Firestore
 export const db = getFirestore(app);
 
+
 export { auth };
 export default firebaseConfig;

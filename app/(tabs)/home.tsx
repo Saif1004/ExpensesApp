@@ -586,7 +586,19 @@ export default function HomeScreen() {
 // SUB-COMPONENTS
 //////////////////////////////////////////////////////
 
-function StatCard({ label, value, icon, color, bg }) {
+function StatCard({
+  label,
+  value,
+  icon,
+  color,
+  bg,
+}: {
+  label: string;
+  value: number;
+  icon: React.ComponentProps<typeof Ionicons>["name"];
+  color: string;
+  bg: string;
+}) {
   const { tokens: t } = useTheme();
 
   return (
