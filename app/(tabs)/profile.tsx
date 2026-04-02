@@ -438,6 +438,7 @@ export default function ProfileScreen() {
       backgroundColor: t.accentSurface,
       justifyContent: "center",
       alignItems: "center",
+      marginBottom: 20,
     },
 
     avatarText: {
