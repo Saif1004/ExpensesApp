@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -9,6 +9,7 @@ import {
   ScrollView,
   Share,
   StyleSheet,
+  Switch,
   TextInput,
   TouchableOpacity,
   View
@@ -31,6 +32,7 @@ import { auth, db } from "../../app/firebase/firebaseConfig";
 import { ThemedText } from "../../components/themed-text";
 import { useAuth } from "../context/AuthProvider";
 import { unsubscribeAll } from "../../utils/listenerStore";
+import { useTheme } from "../../hooks/useTheme";
 
 const DELETE_URL = process.env.EXPO_PUBLIC_DELETE_ACCOUNT_URL!;
 
@@ -59,8 +61,21 @@ function formatCard(brand?: string, last4?: string): string | null {
 //////////////////////////////////////////////////////
 
 function SectionHeader({ label }: { label: string }) {
+  const { tokens: t } = useTheme();
+  const style = useMemo(() => StyleSheet.create({
+    sectionHeader: {
+      color: t.textTertiary,
+      fontSize: 11,
+      fontWeight: "700",
+      letterSpacing: 1.4,
+      textTransform: "uppercase",
+      marginBottom: 8,
+      marginTop: 4,
+      marginLeft: 4,
+    }
+  }), [t]);
   return (
-    <ThemedText style={styles.sectionHeader}>{label}</ThemedText>
+    <ThemedText style={style.sectionHeader}>{label}</ThemedText>
   );
 }
 
@@ -87,6 +102,56 @@ function MenuRow({
   isFirst = false,
   isLast = false
 }: MenuRowProps) {
+  const { tokens: t } = useTheme();
+  const styles = useMemo(() => StyleSheet.create({
+    menuRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 18,
+      paddingVertical: 15,
+      gap: 14,
+    },
+    menuRowFirst: {
+      borderTopLeftRadius: 16,
+      borderTopRightRadius: 16
+    },
+    menuRowLast: {
+      borderBottomLeftRadius: 16,
+      borderBottomRightRadius: 16
+    },
+    menuRowBorder: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: t.border
+    },
+    iconWrap: {
+      width: 38,
+      height: 38,
+      borderRadius: 12,
+      backgroundColor: t.surface,
+      justifyContent: "center",
+      alignItems: "center"
+    },
+    iconWrapDanger: {
+      backgroundColor: t.errorSurface,
+    },
+    menuLabelBlock: {
+      flex: 1,
+      gap: 2
+    },
+    menuLabel: {
+      color: t.text,
+      fontSize: 15,
+      fontWeight: "500"
+    },
+    menuLabelDanger: {
+      color: t.error
+    },
+    menuSublabel: {
+      color: t.textSecondary,
+      fontSize: 12
+    },
+  }), [t]);
+
   return (
     <TouchableOpacity
       style={[
@@ -104,7 +169,7 @@ function MenuRow({
         <Ionicons
           name={icon}
           size={18}
-          color={danger ? "#F87171" : "#38BDF8"}
+          color={danger ? t.error : t.accent}
         />
       </View>
 
@@ -122,7 +187,7 @@ function MenuRow({
       {rightElement
         ? rightElement
         : chevron && (
-          <Ionicons name="chevron-forward" size={16} color="#475569" />
+          <Ionicons name="chevron-forward" size={16} color={t.textTertiary} />
         )
       }
     </TouchableOpacity>
@@ -138,6 +203,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { role, orgPlan, trialDaysLeft, orgId, refreshMembership } = useAuth();
+  const { tokens: t, mode, toggleTheme } = useTheme();
   const [refreshingRole, setRefreshingRole] = useState(false);
   const spinAnim = useRef(new Animated.Value(0)).current;
 
@@ -325,13 +391,368 @@ export default function ProfileScreen() {
   };
 
   //////////////////////////////////////////////////////
+  // STYLES
+  //////////////////////////////////////////////////////
+
+  const styles = useMemo(() => StyleSheet.create({
+
+    root: {
+      flex: 1,
+      backgroundColor: t.bg
+    },
+
+    container: {
+      paddingHorizontal: 20,
+      paddingTop: 12
+    },
+
+    loading: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: t.bg
+    },
+
+    /* ── Avatar ── */
+    avatarSection: {
+      alignItems: "center",
+      paddingVertical: 28,
+      marginBottom: 8
+    },
+
+    avatarRing: {
+      width: 96,
+      height: 96,
+      borderRadius: 48,
+      backgroundColor: t.accentSurface,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 16,
+    },
+
+    avatar: {
+      width: 96,
+      height: 96,
+      borderRadius: 48,
+      backgroundColor: t.accentSurface,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+
+    avatarText: {
+      color: t.accent,
+      fontSize: 38,
+      fontWeight: "800",
+    },
+
+    name: {
+      color: t.text,
+      fontSize: 24,
+      fontWeight: "800",
+      letterSpacing: -0.3,
+    },
+
+    email: {
+      color: t.textSecondary,
+      marginTop: 4,
+      fontSize: 14,
+    },
+
+    badgeRow: {
+      flexDirection: "row",
+      gap: 8,
+      marginTop: 12
+    },
+
+    roleBadge: {
+      borderRadius: 20,
+      paddingHorizontal: 12,
+      paddingVertical: 4
+    },
+
+    roleBadgeAdmin: {
+      backgroundColor: t.warningSurface,
+      borderWidth: 1,
+      borderColor: t.warning
+    },
+
+    roleBadgeEmployee: {
+      backgroundColor: t.accentSurface,
+      borderWidth: 1,
+      borderColor: t.accent
+    },
+
+    roleBadgeText: {
+      fontSize: 11,
+      fontWeight: "800",
+      letterSpacing: 1
+    },
+
+    roleBadgeTextAdmin:    { color: t.warning },
+    roleBadgeTextEmployee: { color: t.accent },
+
+    planBadge: {
+      borderRadius: 20,
+      paddingHorizontal: 12,
+      paddingVertical: 4,
+      backgroundColor: t.surface,
+      borderWidth: 1,
+      borderColor: t.border
+    },
+
+    planBadgeText: {
+      color: t.textSecondary,
+      fontSize: 11,
+      fontWeight: "700",
+      textTransform: "uppercase",
+      letterSpacing: 0.8
+    },
+
+    refreshBtn: {
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      backgroundColor: t.surface,
+      borderWidth: 1,
+      borderColor: t.border,
+      justifyContent: "center",
+      alignItems: "center"
+    },
+
+    /* ── Plan card ── */
+    planCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: t.surface,
+      borderRadius: t.radius.lg,
+      padding: 18,
+      marginBottom: 24,
+      gap: 14,
+    },
+
+    planCardIcon: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      backgroundColor: t.successSurface,
+      justifyContent: "center",
+      alignItems: "center"
+    },
+
+    planCardTitle: {
+      color: t.success,
+      fontSize: 15,
+      fontWeight: "700",
+      marginBottom: 2
+    },
+
+    planCardSub: {
+      color: t.textSecondary,
+      fontSize: 12
+    },
+
+    /* ── Menu card ── */
+    card: {
+      backgroundColor: t.surface,
+      borderRadius: t.radius.lg,
+      marginBottom: 24,
+      overflow: "hidden",
+    },
+
+    /* ── Invite code card ── */
+    inviteCard: {
+      backgroundColor: t.accentSurface,
+      borderWidth: 1,
+      borderColor: t.accent + "33",
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 14
+    },
+
+    inviteCardLabel: {
+      color: t.textSecondary,
+      fontSize: 10,
+      fontWeight: "700",
+      letterSpacing: 1.2,
+      textTransform: "uppercase",
+      marginBottom: 10
+    },
+
+    inviteCodeText: {
+      color: t.accent,
+      fontSize: 28,
+      fontWeight: "800",
+      fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+      letterSpacing: 4,
+      marginBottom: 8
+    },
+
+    inviteCardHint: {
+      color: t.textTertiary,
+      fontSize: 12,
+      marginBottom: 14
+    },
+
+    inviteBtnRow: {
+      flexDirection: "row",
+      gap: 10,
+    },
+
+    shareBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: t.accentSurface,
+      borderWidth: 1,
+      borderColor: t.accent + "55",
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+    },
+    shareBtnText: {
+      color: t.accent,
+      fontSize: 13,
+      fontWeight: "600",
+    },
+
+    regenBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: t.warningSurface,
+      borderWidth: 1,
+      borderColor: t.warning + "44",
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+    },
+    regenBtnText: {
+      color: t.warning,
+      fontSize: 13,
+      fontWeight: "600",
+    },
+
+    /* ── Modal ── */
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.75)",
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: 20
+    },
+
+    modalBox: {
+      width: "100%",
+      backgroundColor: t.surface,
+      borderRadius: 20,
+      padding: 24,
+      borderWidth: 1,
+      borderColor: t.border
+    },
+
+    modalIconRow: {
+      alignItems: "center",
+      marginBottom: 14
+    },
+
+    modalIconWrap: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      backgroundColor: t.errorSurface,
+      justifyContent: "center",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: t.error
+    },
+
+    modalTitle: {
+      color: t.text,
+      fontSize: 20,
+      fontWeight: "700",
+      marginBottom: 10,
+      textAlign: "center"
+    },
+
+    modalBody: {
+      color: t.textSecondary,
+      fontSize: 14,
+      lineHeight: 21,
+      marginBottom: 18,
+      textAlign: "center"
+    },
+
+    modalLabel: {
+      color: t.text,
+      fontSize: 13,
+      fontWeight: "600",
+      marginBottom: 8
+    },
+
+    passwordInput: {
+      backgroundColor: t.surfaceAlt,
+      borderWidth: 1,
+      borderColor: t.border,
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      paddingVertical: Platform.OS === "ios" ? 14 : 10,
+      color: t.text,
+      fontSize: 15,
+      marginBottom: 8
+    },
+
+    errorText: {
+      color: t.error,
+      fontSize: 13,
+      marginBottom: 12
+    },
+
+    modalButtons: {
+      flexDirection: "row",
+      gap: 10,
+      marginTop: 8
+    },
+
+    cancelBtn: {
+      flex: 1,
+      paddingVertical: 13,
+      borderRadius: 10,
+      backgroundColor: t.border,
+      alignItems: "center"
+    },
+
+    cancelText: {
+      color: t.text,
+      fontWeight: "600",
+      fontSize: 15
+    },
+
+    confirmDeleteBtn: {
+      flex: 1,
+      paddingVertical: 13,
+      borderRadius: 10,
+      backgroundColor: t.error,
+      alignItems: "center"
+    },
+
+    deleteText: {
+      color: "#FFF",
+      fontWeight: "700",
+      fontSize: 15
+    },
+
+    btnDisabled: {
+      opacity: 0.6
+    }
+
+  }), [t]);
+
+  //////////////////////////////////////////////////////
   // LOADING STATE
   //////////////////////////////////////////////////////
 
   if (loading) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator size="large" color="#38BDF8" />
+        <ActivityIndicator size="large" color={t.accent} />
       </View>
     );
   }
@@ -376,10 +797,8 @@ export default function ProfileScreen() {
 
         {/* ── AVATAR SECTION ── */}
         <View style={styles.avatarSection}>
-          <View style={styles.avatarRing}>
-            <View style={styles.avatar}>
-              <ThemedText style={styles.avatarText}>{initials}</ThemedText>
-            </View>
+          <View style={styles.avatar}>
+            <ThemedText style={styles.avatarText}>{initials}</ThemedText>
           </View>
 
           <ThemedText style={styles.name}>{username || "User"}</ThemedText>
@@ -416,7 +835,7 @@ export default function ProfileScreen() {
                   rotate: spinAnim.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] })
                 }]
               }}>
-                <Ionicons name="refresh-outline" size={14} color={refreshingRole ? "#38BDF8" : "#64748B"} />
+                <Ionicons name="refresh-outline" size={14} color={refreshingRole ? t.accent : t.textSecondary} />
               </Animated.View>
             </TouchableOpacity>
           </View>
@@ -433,13 +852,13 @@ export default function ProfileScreen() {
           activeOpacity={0.8}
         >
           <View style={styles.planCardIcon}>
-            <Ionicons name="flash" size={18} color="#22C55E" />
+            <Ionicons name="flash" size={18} color={t.success} />
           </View>
           <View style={{ flex: 1 }}>
             <ThemedText style={styles.planCardTitle}>{planCardTitle}</ThemedText>
             <ThemedText style={styles.planCardSub}>{planCardSub}</ThemedText>
           </View>
-          <Ionicons name="chevron-forward" size={18} color="#22C55E" />
+          <Ionicons name="chevron-forward" size={18} color={t.success} />
         </TouchableOpacity>
 
         {/* ── ADMIN TOOLS ── */}
@@ -461,7 +880,7 @@ export default function ProfileScreen() {
                   </ThemedText>
                   <View style={styles.inviteBtnRow}>
                     <TouchableOpacity style={styles.shareBtn} onPress={shareCode} activeOpacity={0.8}>
-                      <Ionicons name="share-outline" size={15} color="#38BDF8" style={{ marginRight: 6 }} />
+                      <Ionicons name="share-outline" size={15} color={t.accent} style={{ marginRight: 6 }} />
                       <ThemedText style={styles.shareBtnText}>Share</ThemedText>
                     </TouchableOpacity>
                     <TouchableOpacity
@@ -471,9 +890,9 @@ export default function ProfileScreen() {
                       activeOpacity={0.8}
                     >
                       {generatingCode
-                        ? <ActivityIndicator size="small" color="#F97316" />
+                        ? <ActivityIndicator size="small" color={t.warning} />
                         : <>
-                            <Ionicons name="refresh-outline" size={15} color="#F97316" style={{ marginRight: 6 }} />
+                            <Ionicons name="refresh-outline" size={15} color={t.warning} style={{ marginRight: 6 }} />
                             <ThemedText style={styles.regenBtnText}>New Code</ThemedText>
                           </>
                       }
@@ -492,9 +911,9 @@ export default function ProfileScreen() {
                     activeOpacity={0.8}
                   >
                     {generatingCode
-                      ? <ActivityIndicator size="small" color="#38BDF8" />
+                      ? <ActivityIndicator size="small" color={t.accent} />
                       : <>
-                          <Ionicons name="key-outline" size={15} color="#38BDF8" style={{ marginRight: 6 }} />
+                          <Ionicons name="key-outline" size={15} color={t.accent} style={{ marginRight: 6 }} />
                           <ThemedText style={styles.shareBtnText}>Generate Code</ThemedText>
                         </>
                     }
@@ -558,11 +977,26 @@ export default function ProfileScreen() {
         <SectionHeader label="ACCOUNT" />
         <View style={styles.card}>
           <MenuRow
+            icon={mode === 'dark' ? "moon-outline" : "sunny-outline"}
+            label="Appearance"
+            sublabel={mode === 'dark' ? "Dark mode" : "Light mode"}
+            onPress={toggleTheme}
+            isFirst
+            rightElement={
+              <Switch
+                value={mode === 'dark'}
+                onValueChange={toggleTheme}
+                trackColor={{ false: t.border, true: t.accent }}
+                thumbColor="#FFFFFF"
+                ios_backgroundColor={t.border}
+              />
+            }
+          />
+          <MenuRow
             icon="card-outline"
             label="Manage Subscription"
             sublabel={`Current plan: ${planLabel}`}
             onPress={() => router.push("/manage-subscription")}
-            isFirst
           />
           <MenuRow
             icon="chatbubble-ellipses-outline"
@@ -612,7 +1046,7 @@ export default function ProfileScreen() {
             danger
             chevron={!loggingOut}
             rightElement={loggingOut
-              ? <ActivityIndicator color="#F87171" size="small" />
+              ? <ActivityIndicator color={t.error} size="small" />
               : undefined
             }
             isLast
@@ -643,7 +1077,7 @@ export default function ProfileScreen() {
 
             <View style={styles.modalIconRow}>
               <View style={styles.modalIconWrap}>
-                <Ionicons name="warning-outline" size={22} color="#F87171" />
+                <Ionicons name="warning-outline" size={22} color={t.error} />
               </View>
             </View>
 
@@ -661,7 +1095,7 @@ export default function ProfileScreen() {
               value={deletePassword}
               onChangeText={text => { setDeletePassword(text); setDeleteError(""); }}
               placeholder="Password"
-              placeholderTextColor="#475569"
+              placeholderTextColor={t.textTertiary}
               secureTextEntry
               autoFocus={Platform.OS === "ios"}
               style={styles.passwordInput}
@@ -701,430 +1135,3 @@ export default function ProfileScreen() {
     </View>
   );
 }
-
-//////////////////////////////////////////////////////
-// STYLES
-//////////////////////////////////////////////////////
-
-const styles = StyleSheet.create({
-
-  root: {
-    flex: 1,
-    backgroundColor: "#0F172A"
-  },
-
-  container: {
-    paddingHorizontal: 20,
-    paddingTop: 12
-  },
-
-  loading: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#0F172A"
-  },
-
-  /* ── Avatar ── */
-  avatarSection: {
-    alignItems: "center",
-    paddingVertical: 28,
-    marginBottom: 8
-  },
-
-  avatarRing: {
-    width: 108,
-    height: 108,
-    borderRadius: 54,
-    borderWidth: 3,
-    borderColor: "#38BDF8",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 14
-  },
-
-  avatar: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: "#1E3A5F",
-    justifyContent: "center",
-    alignItems: "center"
-  },
-
-  avatarText: {
-    color: "#38BDF8",
-    fontSize: 38,
-    fontWeight: "800"
-  },
-
-  name: {
-    color: "#F8FAFC",
-    fontSize: 22,
-    fontWeight: "700",
-    letterSpacing: 0.3
-  },
-
-  email: {
-    color: "#64748B",
-    marginTop: 4,
-    fontSize: 14
-  },
-
-  badgeRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 12
-  },
-
-  roleBadge: {
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 4
-  },
-
-  roleBadgeAdmin: {
-    backgroundColor: "#1C1917",
-    borderWidth: 1,
-    borderColor: "#F59E0B"
-  },
-
-  roleBadgeEmployee: {
-    backgroundColor: "#0C1A2E",
-    borderWidth: 1,
-    borderColor: "#38BDF8"
-  },
-
-  roleBadgeText: {
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 1
-  },
-
-  roleBadgeTextAdmin:    { color: "#F59E0B" },
-  roleBadgeTextEmployee: { color: "#38BDF8" },
-
-  planBadge: {
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    backgroundColor: "#1E293B",
-    borderWidth: 1,
-    borderColor: "#334155"
-  },
-
-  planBadgeText: {
-    color: "#94A3B8",
-    fontSize: 11,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.8
-  },
-
-  refreshBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "#1E293B",
-    borderWidth: 1,
-    borderColor: "#334155",
-    justifyContent: "center",
-    alignItems: "center"
-  },
-
-  /* ── Plan card ── */
-  planCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#052E16",
-    borderWidth: 1.5,
-    borderColor: "#166534",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 24,
-    gap: 12
-  },
-
-  planCardIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: "#0A3D1A",
-    justifyContent: "center",
-    alignItems: "center"
-  },
-
-  planCardTitle: {
-    color: "#4ADE80",
-    fontSize: 15,
-    fontWeight: "700",
-    marginBottom: 2
-  },
-
-  planCardSub: {
-    color: "#4B7A59",
-    fontSize: 12
-  },
-
-  /* ── Section header ── */
-  sectionHeader: {
-    color: "#475569",
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 1.2,
-    marginBottom: 8,
-    marginLeft: 4
-  },
-
-  /* ── Menu card ── */
-  card: {
-    backgroundColor: "#1E293B",
-    borderRadius: 16,
-    marginBottom: 24,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#334155"
-  },
-
-  /* ── Invite code card ── */
-  inviteCard: {
-    backgroundColor: "#0D2137",
-    borderWidth: 1,
-    borderColor: "#2563EB33",
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 14
-  },
-
-  inviteCardLabel: {
-    color: "#64748B",
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-    marginBottom: 10
-  },
-
-  inviteCodeText: {
-    color: "#38BDF8",
-    fontSize: 28,
-    fontWeight: "800",
-    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
-    letterSpacing: 4,
-    marginBottom: 8
-  },
-
-  inviteCardHint: {
-    color: "#475569",
-    fontSize: 12,
-    marginBottom: 14
-  },
-
-  inviteBtnRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
-
-  shareBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#0F2A3D",
-    borderWidth: 1,
-    borderColor: "#2563EB55",
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  shareBtnText: {
-    color: "#38BDF8",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-
-  regenBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#1A1208",
-    borderWidth: 1,
-    borderColor: "#F9741644",
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  regenBtnText: {
-    color: "#F97316",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-
-  /* ── Menu row ── */
-  menuRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 14
-  },
-
-  menuRowFirst: {
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16
-  },
-
-  menuRowLast: {
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16
-  },
-
-  menuRowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#334155"
-  },
-
-  iconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: "#0F2A3D",
-    justifyContent: "center",
-    alignItems: "center"
-  },
-
-  iconWrapDanger: {
-    backgroundColor: "#2D0A0A"
-  },
-
-  menuLabelBlock: {
-    flex: 1,
-    gap: 2
-  },
-
-  menuLabel: {
-    color: "#F1F5F9",
-    fontSize: 15,
-    fontWeight: "500"
-  },
-
-  menuLabelDanger: {
-    color: "#F87171"
-  },
-
-  menuSublabel: {
-    color: "#64748B",
-    fontSize: 12
-  },
-
-  /* ── Modal ── */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.75)",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 20
-  },
-
-  modalBox: {
-    width: "100%",
-    backgroundColor: "#1E293B",
-    borderRadius: 20,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: "#334155"
-  },
-
-  modalIconRow: {
-    alignItems: "center",
-    marginBottom: 14
-  },
-
-  modalIconWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: "#2D0A0A",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#7F1D1D"
-  },
-
-  modalTitle: {
-    color: "#F8FAFC",
-    fontSize: 20,
-    fontWeight: "700",
-    marginBottom: 10,
-    textAlign: "center"
-  },
-
-  modalBody: {
-    color: "#94A3B8",
-    fontSize: 14,
-    lineHeight: 21,
-    marginBottom: 18,
-    textAlign: "center"
-  },
-
-  modalLabel: {
-    color: "#CBD5E1",
-    fontSize: 13,
-    fontWeight: "600",
-    marginBottom: 8
-  },
-
-  passwordInput: {
-    backgroundColor: "#0F172A",
-    borderWidth: 1,
-    borderColor: "#334155",
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: Platform.OS === "ios" ? 14 : 10,
-    color: "#F8FAFC",
-    fontSize: 15,
-    marginBottom: 8
-  },
-
-  errorText: {
-    color: "#F87171",
-    fontSize: 13,
-    marginBottom: 12
-  },
-
-  modalButtons: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 8
-  },
-
-  cancelBtn: {
-    flex: 1,
-    paddingVertical: 13,
-    borderRadius: 10,
-    backgroundColor: "#334155",
-    alignItems: "center"
-  },
-
-  cancelText: {
-    color: "#CBD5E1",
-    fontWeight: "600",
-    fontSize: 15
-  },
-
-  confirmDeleteBtn: {
-    flex: 1,
-    paddingVertical: 13,
-    borderRadius: 10,
-    backgroundColor: "#DC2626",
-    alignItems: "center"
-  },
-
-  deleteText: {
-    color: "#FFF",
-    fontWeight: "700",
-    fontSize: 15
-  },
-
-  btnDisabled: {
-    opacity: 0.6
-  }
-
-});

@@ -1,4 +1,5 @@
 import type { PropsWithChildren, ReactElement } from "react";
+import { useMemo } from "react";
 import type { StyleProp, ViewStyle } from "react-native";
 import { StyleSheet } from "react-native";
 import Animated, {
@@ -10,6 +11,7 @@ import Animated, {
 
 import { ThemedView } from "../components/themed-view";
 import { useColorScheme } from "../hooks/use-color-scheme";
+import { useTheme } from "../hooks/useTheme";
 
 const HEADER_HEIGHT = 125;
 
@@ -27,6 +29,7 @@ export default function ParallaxScrollView({
 }: Props) {
 
   const colorScheme = useColorScheme() ?? "dark";
+  const { tokens: t } = useTheme();
 
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const scrollOffset = useScrollOffset(scrollRef);
@@ -51,6 +54,28 @@ export default function ParallaxScrollView({
       ],
     };
   });
+
+  const styles = useMemo(() => StyleSheet.create({
+
+    scroll:{
+      flex:1,
+      backgroundColor: t.bg
+    },
+
+    header:{
+      height:HEADER_HEIGHT,
+      justifyContent:"flex-end",
+      alignItems:"flex-end",
+      paddingRight:20,
+      paddingBottom:10
+    },
+
+    content:{
+      backgroundColor: t.bg,
+      paddingBottom:120
+    }
+
+  }), [t]);
 
   return (
     <Animated.ScrollView
@@ -80,25 +105,3 @@ export default function ParallaxScrollView({
     </Animated.ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-
-  scroll:{
-    flex:1,
-    backgroundColor:"#0F172A"
-  },
-
-  header:{
-    height:HEADER_HEIGHT,
-    justifyContent:"flex-end",
-    alignItems:"flex-end",
-    paddingRight:20,
-    paddingBottom:10
-  },
-
-  content:{
-    backgroundColor:"#0F172A",
-    paddingBottom:120
-  }
-
-});

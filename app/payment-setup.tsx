@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, Alert,
   ActivityIndicator, SafeAreaView, ScrollView,
@@ -8,6 +8,7 @@ import { auth, db } from "./firebase/firebaseConfig";
 import { doc, onSnapshot } from "firebase/firestore";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useTheme } from "../hooks/useTheme";
 
 const SETUP_URL = process.env.EXPO_PUBLIC_STRIPE_SETUP_PAYMENT_URL!;
 const SAVE_URL = process.env.EXPO_PUBLIC_STRIPE_SAVE_PAYMENT_URL!;
@@ -15,6 +16,7 @@ const SAVE_URL = process.env.EXPO_PUBLIC_STRIPE_SAVE_PAYMENT_URL!;
 export default function PaymentSetupScreen() {
   const router = useRouter();
   const { confirmSetupIntent } = useStripe();
+  const { tokens: t } = useTheme();
   const [loading, setLoading] = useState(false);
   const [cardComplete, setCardComplete] = useState(false);
   const [savedCard, setSavedCard] = useState<{ last4: string; brand: string } | null>(null);
@@ -69,10 +71,57 @@ export default function PaymentSetupScreen() {
     }
   };
 
+  const styles = useMemo(() => StyleSheet.create({
+    safe: { flex: 1, backgroundColor: t.bg },
+    backBtn: { padding: 16, alignSelf: "flex-start" },
+    container: { padding: 24 },
+    title: { fontSize: 24, fontWeight: "700", color: t.text, marginBottom: 8 },
+    subtitle: { fontSize: 14, color: t.textSecondary, marginBottom: 24, lineHeight: 20 },
+    savedCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: t.surface,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 24,
+      borderWidth: 1,
+      borderColor: "#4CAF5033",
+    },
+    savedLabel: { fontSize: 11, color: t.textSecondary, marginBottom: 2 },
+    savedCardText: { fontSize: 16, color: t.text, fontWeight: "600" },
+    sectionLabel: { fontSize: 13, color: t.textSecondary, marginBottom: 10 },
+    cardField: { height: 50, marginBottom: 24 },
+    button: {
+      backgroundColor: t.accent,
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: "center",
+      marginBottom: 20,
+    },
+    buttonDisabled: { opacity: 0.5 },
+    buttonText: { color: t.accentText, fontWeight: "700", fontSize: 16 },
+    infoBox: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 8,
+      backgroundColor: t.surface,
+      borderRadius: 10,
+      padding: 14,
+    },
+    infoText: { color: t.textSecondary, fontSize: 12, lineHeight: 18, flex: 1 },
+  }), [t]);
+
+  const cardStyle = useMemo(() => ({
+    backgroundColor: t.surface,
+    textColor: t.text,
+    placeholderColor: t.textTertiary,
+    borderRadius: 10,
+  }), [t]);
+
   return (
     <SafeAreaView style={styles.safe}>
       <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-        <Ionicons name="arrow-back" size={24} color="#fff" />
+        <Ionicons name="arrow-back" size={24} color={t.text} />
       </TouchableOpacity>
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.title}>Payment Method</Text>
@@ -97,7 +146,7 @@ export default function PaymentSetupScreen() {
         <CardField
           postalCodeEnabled={false}
           style={styles.cardField}
-          cardStyle={styles.cardStyle}
+          cardStyle={cardStyle}
           onCardChange={(details) => setCardComplete(details.complete)}
         />
 
@@ -107,14 +156,14 @@ export default function PaymentSetupScreen() {
           disabled={!cardComplete || loading}
         >
           {loading ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={t.accentText} />
           ) : (
             <Text style={styles.buttonText}>{savedCard ? "Update Card" : "Save Card"}</Text>
           )}
         </TouchableOpacity>
 
         <View style={styles.infoBox}>
-          <Ionicons name="lock-closed" size={14} color="#888" />
+          <Ionicons name="lock-closed" size={14} color={t.textSecondary} />
           <Text style={styles.infoText}>
             Payments are processed securely via Stripe. Your card details are never stored on Claimio servers.
           </Text>
@@ -123,49 +172,3 @@ export default function PaymentSetupScreen() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#0f1923" },
-  backBtn: { padding: 16, alignSelf: "flex-start" },
-  container: { padding: 24 },
-  title: { fontSize: 24, fontWeight: "700", color: "#fff", marginBottom: 8 },
-  subtitle: { fontSize: 14, color: "#888", marginBottom: 24, lineHeight: 20 },
-  savedCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#1a2636",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: "#4CAF5033",
-  },
-  savedLabel: { fontSize: 11, color: "#888", marginBottom: 2 },
-  savedCardText: { fontSize: 16, color: "#fff", fontWeight: "600" },
-  sectionLabel: { fontSize: 13, color: "#888", marginBottom: 10 },
-  cardField: { height: 50, marginBottom: 24 },
-  cardStyle: {
-    backgroundColor: "#1a2636",
-    textColor: "#ffffff",
-    placeholderColor: "#666666",
-    borderRadius: 10,
-  },
-  button: {
-    backgroundColor: "#2196F3",
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  buttonDisabled: { opacity: 0.5 },
-  buttonText: { color: "#fff", fontWeight: "700", fontSize: 16 },
-  infoBox: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 8,
-    backgroundColor: "#1a2636",
-    borderRadius: 10,
-    padding: 14,
-  },
-  infoText: { color: "#666", fontSize: 12, lineHeight: 18, flex: 1 },
-});

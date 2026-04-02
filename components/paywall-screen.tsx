@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -18,6 +18,7 @@ const SYNC_PLAN_URL   = process.env.EXPO_PUBLIC_SYNC_PLAN_URL!;
 import { PLAN_LIMITS, OrgPlan } from "../constants/planLimits";
 import { useAuth } from "../app/context/AuthProvider";
 import { ThemedText } from "./themed-text";
+import { useTheme } from "../hooks/useTheme";
 
 //////////////////////////////////////////////////////
 // TYPES
@@ -83,6 +84,8 @@ export default function PaywallScreen() {
     trialDaysLeft,
     refreshOrgPlan
   } = useAuth();
+
+  const { tokens: t } = useTheme();
 
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>("monthly");
   const [startingTrial, setStartingTrial] = useState(false);
@@ -281,6 +284,276 @@ export default function PaywallScreen() {
   const isCurrentPlan = (plan: OrgPlan) => orgPlan === plan;
 
   //////////////////////////////////////////////////////
+  // STYLES
+  //////////////////////////////////////////////////////
+
+  const styles = useMemo(() => StyleSheet.create({
+
+    container: {
+      alignItems: "center",
+      paddingHorizontal: 20,
+      paddingTop: 32,
+      paddingBottom: 40
+    },
+
+    freeTrialCard: {
+      width: "100%",
+      backgroundColor: t.successSurface,
+      borderWidth: 1.5,
+      borderColor: t.success,
+      borderRadius: 14,
+      padding: 18,
+      marginBottom: 20,
+      alignItems: "center"
+    },
+
+    freeTrialTitle: {
+      color: t.success,
+      fontSize: 17,
+      fontWeight: "700",
+      marginBottom: 6,
+      textAlign: "center"
+    },
+
+    freeTrialSub: {
+      color: t.textSecondary,
+      fontSize: 12,
+      textAlign: "center",
+      lineHeight: 18,
+      marginBottom: 14
+    },
+
+    freeTrialBtn: {
+      backgroundColor: t.success,
+      paddingVertical: 13,
+      paddingHorizontal: 28,
+      borderRadius: 12,
+      alignItems: "center",
+      width: "100%"
+    },
+
+    trialBanner: {
+      backgroundColor: t.warningSurface,
+      borderWidth: 1,
+      borderColor: t.warning,
+      borderRadius: 10,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      marginBottom: 20,
+      width: "100%"
+    },
+
+    trialText: {
+      color: t.warning,
+      fontSize: 13,
+      textAlign: "center",
+      fontWeight: "600"
+    },
+
+    badge: {
+      backgroundColor: t.accent,
+      paddingHorizontal: 14,
+      paddingVertical: 4,
+      borderRadius: 20,
+      marginBottom: 14
+    },
+
+    badgeText: {
+      color: t.accentText,
+      fontWeight: "700",
+      fontSize: 11,
+      letterSpacing: 1.5
+    },
+
+    headline: {
+      fontSize: 24,
+      fontWeight: "700",
+      color: t.text,
+      textAlign: "center",
+      marginBottom: 8
+    },
+
+    sub: {
+      fontSize: 13,
+      color: t.textSecondary,
+      textAlign: "center",
+      marginBottom: 20,
+      lineHeight: 19
+    },
+
+    // BILLING TOGGLE
+    toggle: {
+      flexDirection: "row",
+      backgroundColor: t.surface,
+      borderRadius: 12,
+      padding: 4,
+      marginBottom: 24,
+      width: "100%"
+    },
+
+    toggleBtn: {
+      flex: 1,
+      paddingVertical: 10,
+      borderRadius: 10,
+      alignItems: "center",
+      flexDirection: "row",
+      justifyContent: "center",
+      gap: 6
+    },
+
+    toggleBtnActive: {
+      backgroundColor: t.accent
+    },
+
+    toggleText: {
+      color: t.textSecondary,
+      fontWeight: "600",
+      fontSize: 14
+    },
+
+    toggleTextActive: {
+      color: t.accentText
+    },
+
+    saveBadge: {
+      backgroundColor: t.success,
+      borderRadius: 6,
+      paddingHorizontal: 6,
+      paddingVertical: 2
+    },
+
+    saveText: {
+      color: t.accentText,
+      fontSize: 10,
+      fontWeight: "700"
+    },
+
+    // CARDS
+    card: {
+      width: "100%",
+      backgroundColor: t.surface,
+      borderRadius: 16,
+      padding: 18,
+      borderWidth: 1,
+      borderColor: t.border,
+      marginBottom: 16
+    },
+
+    proCard: {
+      borderColor: t.accent,
+      borderWidth: 2
+    },
+
+    businessCard: {
+      borderColor: "#7C3AED",
+      borderWidth: 2
+    },
+
+    cardHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 4
+    },
+
+    currentBadge: {
+      borderRadius: 8,
+      paddingHorizontal: 8,
+      paddingVertical: 2
+    },
+
+    currentBadgeText: {
+      color: t.accentText,
+      fontSize: 10,
+      fontWeight: "700"
+    },
+
+    planLabel: {
+      color: t.textSecondary,
+      fontSize: 13,
+      fontWeight: "700",
+      textTransform: "uppercase",
+      letterSpacing: 1
+    },
+
+    price: {
+      fontSize: 26,
+      fontWeight: "700",
+      color: t.text,
+      marginTop: 4
+    },
+
+    priceNote: {
+      fontSize: 11,
+      color: t.textSecondary,
+      marginBottom: 4
+    },
+
+    divider: {
+      height: 1,
+      backgroundColor: t.border,
+      marginVertical: 12
+    },
+
+    featureRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 6,
+      marginBottom: 6
+    },
+
+    check: {
+      fontSize: 13,
+      fontWeight: "700"
+    },
+
+    featureText: {
+      color: t.text,
+      fontSize: 12,
+      flex: 1,
+      lineHeight: 18
+    },
+
+    cta: {
+      paddingVertical: 14,
+      borderRadius: 12,
+      alignItems: "center",
+      marginTop: 14
+    },
+
+    ctaDisabled: {
+      opacity: 0.6
+    },
+
+    ctaText: {
+      color: t.accentText,
+      fontWeight: "700",
+      fontSize: 15
+    },
+
+    restoreBtn: {
+      marginTop: 4,
+      padding: 10
+    },
+
+    restoreText: {
+      color: t.textSecondary,
+      fontSize: 13,
+      textAlign: "center",
+      textDecorationLine: "underline"
+    },
+
+    legal: {
+      fontSize: 11,
+      color: t.textTertiary,
+      textAlign: "center",
+      marginTop: 12,
+      lineHeight: 16
+    }
+
+  }), [t]);
+
+  //////////////////////////////////////////////////////
   // EMPLOYEE GATE
   //////////////////////////////////////////////////////
 
@@ -305,7 +578,7 @@ export default function PaywallScreen() {
 
   return (
     <ScrollView
-      style={{ flex: 1, backgroundColor: "#0F172A" }}
+      style={{ flex: 1, backgroundColor: t.bg }}
       contentContainerStyle={styles.container}
       showsVerticalScrollIndicator={false}
     >
@@ -324,7 +597,7 @@ export default function PaywallScreen() {
               disabled={startingTrial}
             >
               {startingTrial
-                ? <ActivityIndicator color="#fff" />
+                ? <ActivityIndicator color={t.accentText} />
                 : <ThemedText style={styles.ctaText}>Start 7-Day Free Trial</ThemedText>
               }
             </TouchableOpacity>
@@ -381,41 +654,42 @@ export default function PaywallScreen() {
       <View style={styles.card}>
         <View style={styles.cardHeader}>
           <ThemedText style={styles.planLabel}>Free</ThemedText>
-          {orgPlan === "free" && <CurrentBadge />}
+          {orgPlan === "free" && <CurrentBadge styles={styles} t={t} />}
         </View>
         <ThemedText style={styles.price}>£0</ThemedText>
         <ThemedText style={styles.priceNote}>forever</ThemedText>
-        <Divider />
-        {FEATURES_FREE.map(f => <FeatureRow key={f} text={f} color="#64748B" />)}
+        <Divider styles={styles} />
+        {FEATURES_FREE.map(f => <FeatureRow key={f} text={f} color={t.textSecondary} styles={styles} />)}
       </View>
 
       {/* PRO CARD */}
       <View style={[styles.card, styles.proCard]}>
         <View style={styles.cardHeader}>
-          <ThemedText style={[styles.planLabel, { color: "#60A5FA" }]}>Pro</ThemedText>
+          <ThemedText style={[styles.planLabel, { color: t.accent }]}>Pro</ThemedText>
           {(orgPlan === "pro" || (orgPlan === "trial" && isPro)) && (
-            <CurrentBadge color="#2563EB" label={orgPlan === "trial" ? "Trial" : "Current"} />
+            <CurrentBadge color={t.accent} label={orgPlan === "trial" ? "Trial" : "Current"} styles={styles} t={t} />
           )}
         </View>
 
         <PriceDisplay
           priceString={getPriceLabel("pro")}
           period={billingPeriod}
-          color="#60A5FA"
+          color={t.accent}
           loading={!offeringsLoaded}
+          styles={styles}
         />
 
-        <Divider />
-        {FEATURES_PRO.map(f => <FeatureRow key={f} text={f} color="#22C55E" />)}
+        <Divider styles={styles} />
+        {FEATURES_PRO.map(f => <FeatureRow key={f} text={f} color={t.success} styles={styles} />)}
 
         {orgPlan !== "pro" && (
           <TouchableOpacity
-            style={[styles.cta, { backgroundColor: "#2563EB" }, isPurchasing("pro") && styles.ctaDisabled]}
+            style={[styles.cta, { backgroundColor: t.accent }, isPurchasing("pro") && styles.ctaDisabled]}
             onPress={() => handlePurchase("pro")}
             disabled={purchasing !== null}
           >
             {isPurchasing("pro")
-              ? <ActivityIndicator color="#fff" />
+              ? <ActivityIndicator color={t.accentText} />
               : <ThemedText style={styles.ctaText}>
                   {orgPlan === "business" ? "Switch to Pro" : "Subscribe to Pro"}
                 </ThemedText>
@@ -428,7 +702,7 @@ export default function PaywallScreen() {
       <View style={[styles.card, styles.businessCard]}>
         <View style={styles.cardHeader}>
           <ThemedText style={[styles.planLabel, { color: "#A78BFA" }]}>Business</ThemedText>
-          {isCurrentPlan("business") && <CurrentBadge color="#7C3AED" />}
+          {isCurrentPlan("business") && <CurrentBadge color="#7C3AED" styles={styles} t={t} />}
         </View>
 
         <PriceDisplay
@@ -436,10 +710,11 @@ export default function PaywallScreen() {
           period={billingPeriod}
           color="#A78BFA"
           loading={!offeringsLoaded}
+          styles={styles}
         />
 
-        <Divider />
-        {FEATURES_BUSINESS.map(f => <FeatureRow key={f} text={f} color="#A78BFA" />)}
+        <Divider styles={styles} />
+        {FEATURES_BUSINESS.map(f => <FeatureRow key={f} text={f} color="#A78BFA" styles={styles} />)}
 
         {orgPlan !== "business" && (
           <TouchableOpacity
@@ -448,7 +723,7 @@ export default function PaywallScreen() {
             disabled={purchasing !== null}
           >
             {isPurchasing("business")
-              ? <ActivityIndicator color="#fff" />
+              ? <ActivityIndicator color={t.accentText} />
               : <ThemedText style={styles.ctaText}>Subscribe to Business</ThemedText>
             }
           </TouchableOpacity>
@@ -459,7 +734,7 @@ export default function PaywallScreen() {
       {role === "admin" && Platform.OS !== "web" && !isExpoGo && (
         <TouchableOpacity onPress={handleRestore} disabled={restoring} style={styles.restoreBtn}>
           {restoring
-            ? <ActivityIndicator color="#64748B" size="small" />
+            ? <ActivityIndicator color={t.textSecondary} size="small" />
             : <ThemedText style={styles.restoreText}>Restore Purchases</ThemedText>
           }
         </TouchableOpacity>
@@ -481,12 +756,14 @@ function PriceDisplay({
   priceString,
   period,
   color,
-  loading
+  loading,
+  styles
 }: {
   priceString: string;
   period: BillingPeriod;
   color: string;
   loading: boolean;
+  styles: any;
 }) {
   if (loading) return <ActivityIndicator color={color} style={{ marginVertical: 8 }} />;
   return (
@@ -499,7 +776,7 @@ function PriceDisplay({
   );
 }
 
-function FeatureRow({ text, color }: { text: string; color: string }) {
+function FeatureRow({ text, color, styles }: { text: string; color: string; styles: any }) {
   return (
     <View style={styles.featureRow}>
       <ThemedText style={[styles.check, { color }]}>✓</ThemedText>
@@ -508,284 +785,15 @@ function FeatureRow({ text, color }: { text: string; color: string }) {
   );
 }
 
-function CurrentBadge({ color = "#334155", label = "Current" }: { color?: string; label?: string }) {
+function CurrentBadge({ color, label = "Current", styles, t }: { color?: string; label?: string; styles: any; t: any }) {
+  const badgeColor = color ?? t.border;
   return (
-    <View style={[styles.currentBadge, { backgroundColor: color }]}>
+    <View style={[styles.currentBadge, { backgroundColor: badgeColor }]}>
       <ThemedText style={styles.currentBadgeText}>{label}</ThemedText>
     </View>
   );
 }
 
-function Divider() {
+function Divider({ styles }: { styles: any }) {
   return <View style={styles.divider} />;
 }
-
-//////////////////////////////////////////////////////
-// STYLES
-//////////////////////////////////////////////////////
-
-const styles = StyleSheet.create({
-
-  container: {
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: 32,
-    paddingBottom: 40
-  },
-
-  freeTrialCard: {
-    width: "100%",
-    backgroundColor: "#0F2A1A",
-    borderWidth: 1.5,
-    borderColor: "#22C55E",
-    borderRadius: 14,
-    padding: 18,
-    marginBottom: 20,
-    alignItems: "center"
-  },
-
-  freeTrialTitle: {
-    color: "#22C55E",
-    fontSize: 17,
-    fontWeight: "700",
-    marginBottom: 6,
-    textAlign: "center"
-  },
-
-  freeTrialSub: {
-    color: "#94A3B8",
-    fontSize: 12,
-    textAlign: "center",
-    lineHeight: 18,
-    marginBottom: 14
-  },
-
-  freeTrialBtn: {
-    backgroundColor: "#16A34A",
-    paddingVertical: 13,
-    paddingHorizontal: 28,
-    borderRadius: 12,
-    alignItems: "center",
-    width: "100%"
-  },
-
-  trialBanner: {
-    backgroundColor: "#F59E0B22",
-    borderWidth: 1,
-    borderColor: "#F59E0B",
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 20,
-    width: "100%"
-  },
-
-  trialText: {
-    color: "#FCD34D",
-    fontSize: 13,
-    textAlign: "center",
-    fontWeight: "600"
-  },
-
-  badge: {
-    backgroundColor: "#2563EB",
-    paddingHorizontal: 14,
-    paddingVertical: 4,
-    borderRadius: 20,
-    marginBottom: 14
-  },
-
-  badgeText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 11,
-    letterSpacing: 1.5
-  },
-
-  headline: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: "#F8FAFC",
-    textAlign: "center",
-    marginBottom: 8
-  },
-
-  sub: {
-    fontSize: 13,
-    color: "#94A3B8",
-    textAlign: "center",
-    marginBottom: 20,
-    lineHeight: 19
-  },
-
-  // BILLING TOGGLE
-  toggle: {
-    flexDirection: "row",
-    backgroundColor: "#1E293B",
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 24,
-    width: "100%"
-  },
-
-  toggleBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 6
-  },
-
-  toggleBtnActive: {
-    backgroundColor: "#2563EB"
-  },
-
-  toggleText: {
-    color: "#64748B",
-    fontWeight: "600",
-    fontSize: 14
-  },
-
-  toggleTextActive: {
-    color: "#fff"
-  },
-
-  saveBadge: {
-    backgroundColor: "#22C55E",
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2
-  },
-
-  saveText: {
-    color: "#fff",
-    fontSize: 10,
-    fontWeight: "700"
-  },
-
-  // CARDS
-  card: {
-    width: "100%",
-    backgroundColor: "#1E293B",
-    borderRadius: 16,
-    padding: 18,
-    borderWidth: 1,
-    borderColor: "#334155",
-    marginBottom: 16
-  },
-
-  proCard: {
-    borderColor: "#2563EB",
-    borderWidth: 2
-  },
-
-  businessCard: {
-    borderColor: "#7C3AED",
-    borderWidth: 2
-  },
-
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 4
-  },
-
-  currentBadge: {
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 2
-  },
-
-  currentBadgeText: {
-    color: "#fff",
-    fontSize: 10,
-    fontWeight: "700"
-  },
-
-  planLabel: {
-    color: "#94A3B8",
-    fontSize: 13,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 1
-  },
-
-  price: {
-    fontSize: 26,
-    fontWeight: "700",
-    color: "#F8FAFC",
-    marginTop: 4
-  },
-
-  priceNote: {
-    fontSize: 11,
-    color: "#64748B",
-    marginBottom: 4
-  },
-
-  divider: {
-    height: 1,
-    backgroundColor: "#334155",
-    marginVertical: 12
-  },
-
-  featureRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 6,
-    marginBottom: 6
-  },
-
-  check: {
-    fontSize: 13,
-    fontWeight: "700"
-  },
-
-  featureText: {
-    color: "#CBD5E1",
-    fontSize: 12,
-    flex: 1,
-    lineHeight: 18
-  },
-
-  cta: {
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 14
-  },
-
-  ctaDisabled: {
-    opacity: 0.6
-  },
-
-  ctaText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 15
-  },
-
-  restoreBtn: {
-    marginTop: 4,
-    padding: 10
-  },
-
-  restoreText: {
-    color: "#64748B",
-    fontSize: 13,
-    textAlign: "center",
-    textDecorationLine: "underline"
-  },
-
-  legal: {
-    fontSize: 11,
-    color: "#475569",
-    textAlign: "center",
-    marginTop: 12,
-    lineHeight: 16
-  }
-
-});

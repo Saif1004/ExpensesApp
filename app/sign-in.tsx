@@ -8,7 +8,7 @@ import {
   signOut,
 } from "firebase/auth";
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore"; // getDocs/query/where used by checkMembership
-import { useRef, useState } from "react";
+import { useRef, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -22,6 +22,7 @@ import {
   View,
 } from "react-native";
 import { auth, db } from "./firebase/firebaseConfig";
+import { useTheme } from "../hooks/useTheme";
 
 //////////////////////////////////////////////////////
 // RATE LIMIT CONSTANTS
@@ -32,6 +33,7 @@ const LOCKOUT_MS      = 15 * 60 * 1000; // 15 minutes
 
 export default function SignIn() {
   const router = useRouter();
+  const { tokens: t } = useTheme();
 
   const [identifier, setIdentifier]       = useState("");
   const [password, setPassword]           = useState("");
@@ -233,13 +235,157 @@ export default function SignIn() {
   };
 
   //////////////////////////////////////////////////////
+  // STYLES
+  //////////////////////////////////////////////////////
+
+  const styles = useMemo(() => StyleSheet.create({
+    gradient: { flex: 1 },
+    kav: { flex: 1 },
+    scroll: {
+      flexGrow: 1,
+      justifyContent: "center",
+      paddingHorizontal: 24,
+      paddingVertical: 48,
+    },
+
+    brandRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 28,
+      gap: 10,
+    },
+    logoBox: {
+      width: 48,
+      height: 48,
+      borderRadius: 14,
+      backgroundColor: t.accentSurface,
+      borderWidth: 1,
+      borderColor: t.accent + "44",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    brandName: {
+      color: t.text,
+      fontSize: 26,
+      fontWeight: "800",
+      letterSpacing: 0.5,
+    },
+
+    heading: {
+      color: t.text,
+      fontSize: 28,
+      fontWeight: "700",
+      marginBottom: 6,
+    },
+    subheading: {
+      color: t.textSecondary,
+      fontSize: 15,
+      marginBottom: 28,
+    },
+
+    card: {
+      backgroundColor: t.surface,
+      borderRadius: 20,
+      padding: 20,
+      borderWidth: 1,
+      borderColor: t.border,
+      marginBottom: 24,
+    },
+
+    label: {
+      color: t.textSecondary,
+      fontSize: 12,
+      fontWeight: "600",
+      marginBottom: 6,
+      textTransform: "uppercase",
+      letterSpacing: 0.6,
+    },
+
+    inputWrapper: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: t.surfaceAlt,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: t.border,
+      marginBottom: 16,
+      paddingHorizontal: 12,
+    },
+    inputIcon: {
+      marginRight: 8,
+    },
+    input: {
+      flex: 1,
+      color: t.text,
+      fontSize: 15,
+      paddingVertical: 13,
+    },
+    eyeBtn: {
+      padding: 4,
+    },
+
+    forgotBtn: {
+      alignSelf: "flex-end",
+      marginBottom: 20,
+      marginTop: -8,
+    },
+    forgotText: {
+      color: t.accent,
+      fontSize: 13,
+      fontWeight: "500",
+    },
+
+    lockoutBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: t.errorSurface,
+      borderRadius: 10,
+      padding: 10,
+      marginBottom: 14,
+      gap: 8,
+      borderWidth: 1,
+      borderColor: t.errorSurface,
+    },
+    lockoutText: {
+      color: t.error,
+      fontSize: 13,
+      flex: 1,
+    },
+
+    signInBtn: {
+      backgroundColor: t.accent,
+      borderRadius: 12,
+      paddingVertical: 15,
+      alignItems: "center",
+    },
+    btnDisabled: { opacity: 0.6 },
+    signInBtnText: {
+      color: t.accentText,
+      fontSize: 16,
+      fontWeight: "700",
+    },
+
+    signUpRow: {
+      alignItems: "center",
+    },
+    signUpText: {
+      color: t.textSecondary,
+      fontSize: 14,
+    },
+    signUpLink: {
+      color: t.accent,
+      fontWeight: "600",
+    },
+  }), [t]);
+
+  //////////////////////////////////////////////////////
   // UI
   //////////////////////////////////////////////////////
 
   const isLocked = !!(lockedUntil && Date.now() < lockedUntil);
 
   return (
-    <LinearGradient colors={["#020617", "#0F172A"]} style={styles.gradient}>
+    <LinearGradient colors={[t.bg, t.surface]} style={styles.gradient}>
       <KeyboardAvoidingView
         style={styles.kav}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -252,7 +398,7 @@ export default function SignIn() {
           {/* Logo / branding */}
           <View style={styles.brandRow}>
             <View style={styles.logoBox}>
-              <Ionicons name="receipt-outline" size={28} color="#38BDF8" />
+              <Ionicons name="receipt-outline" size={28} color={t.accent} />
             </View>
             <Text style={styles.brandName}>Claimio</Text>
           </View>
@@ -266,12 +412,12 @@ export default function SignIn() {
             {/* Identifier */}
             <Text style={styles.label}>Email or Username</Text>
             <View style={styles.inputWrapper}>
-              <Ionicons name="person-outline" size={18} color="#475569" style={styles.inputIcon} />
+              <Ionicons name="person-outline" size={18} color={t.textTertiary} style={styles.inputIcon} />
               <TextInput
                 value={identifier}
                 onChangeText={setIdentifier}
                 placeholder="email or username"
-                placeholderTextColor="#475569"
+                placeholderTextColor={t.textTertiary}
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
@@ -283,12 +429,12 @@ export default function SignIn() {
             {/* Password */}
             <Text style={styles.label}>Password</Text>
             <View style={styles.inputWrapper}>
-              <Ionicons name="lock-closed-outline" size={18} color="#475569" style={styles.inputIcon} />
+              <Ionicons name="lock-closed-outline" size={18} color={t.textTertiary} style={styles.inputIcon} />
               <TextInput
                 value={password}
                 onChangeText={setPassword}
                 placeholder="••••••••"
-                placeholderTextColor="#475569"
+                placeholderTextColor={t.textTertiary}
                 secureTextEntry={!showPassword}
                 style={[styles.input, { flex: 1 }]}
                 editable={!isLocked}
@@ -297,7 +443,7 @@ export default function SignIn() {
                 <Ionicons
                   name={showPassword ? "eye-off-outline" : "eye-outline"}
                   size={18}
-                  color="#475569"
+                  color={t.textTertiary}
                 />
               </TouchableOpacity>
             </View>
@@ -310,7 +456,7 @@ export default function SignIn() {
             {/* Lockout warning */}
             {isLocked && (
               <View style={styles.lockoutBanner}>
-                <Ionicons name="lock-closed" size={14} color="#F87171" />
+                <Ionicons name="lock-closed" size={14} color={t.error} />
                 <Text style={styles.lockoutText}>
                   Too many failed attempts. Try again in{" "}
                   {Math.ceil(((lockedUntil ?? 0) - Date.now()) / 60_000)} min.
@@ -326,7 +472,7 @@ export default function SignIn() {
               activeOpacity={0.85}
             >
               {loading
-                ? <ActivityIndicator color="#fff" />
+                ? <ActivityIndicator color={t.accentText} />
                 : <Text style={styles.signInBtnText}>Sign In</Text>
               }
             </TouchableOpacity>
@@ -346,147 +492,3 @@ export default function SignIn() {
     </LinearGradient>
   );
 }
-
-//////////////////////////////////////////////////////
-// STYLES
-//////////////////////////////////////////////////////
-
-const styles = StyleSheet.create({
-  gradient: { flex: 1 },
-  kav: { flex: 1 },
-  scroll: {
-    flexGrow: 1,
-    justifyContent: "center",
-    paddingHorizontal: 24,
-    paddingVertical: 48,
-  },
-
-  brandRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 28,
-    gap: 10,
-  },
-  logoBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: "#0F2A3D",
-    borderWidth: 1,
-    borderColor: "#2563EB44",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  brandName: {
-    color: "#F8FAFC",
-    fontSize: 26,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-  },
-
-  heading: {
-    color: "#F8FAFC",
-    fontSize: 28,
-    fontWeight: "700",
-    marginBottom: 6,
-  },
-  subheading: {
-    color: "#64748B",
-    fontSize: 15,
-    marginBottom: 28,
-  },
-
-  card: {
-    backgroundColor: "#1E293B",
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: "#334155",
-    marginBottom: 24,
-  },
-
-  label: {
-    color: "#94A3B8",
-    fontSize: 12,
-    fontWeight: "600",
-    marginBottom: 6,
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-  },
-
-  inputWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#0F172A",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#334155",
-    marginBottom: 16,
-    paddingHorizontal: 12,
-  },
-  inputIcon: {
-    marginRight: 8,
-  },
-  input: {
-    flex: 1,
-    color: "#F8FAFC",
-    fontSize: 15,
-    paddingVertical: 13,
-  },
-  eyeBtn: {
-    padding: 4,
-  },
-
-  forgotBtn: {
-    alignSelf: "flex-end",
-    marginBottom: 20,
-    marginTop: -8,
-  },
-  forgotText: {
-    color: "#38BDF8",
-    fontSize: 13,
-    fontWeight: "500",
-  },
-
-  lockoutBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#450A0A",
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 14,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: "#7F1D1D",
-  },
-  lockoutText: {
-    color: "#F87171",
-    fontSize: 13,
-    flex: 1,
-  },
-
-  signInBtn: {
-    backgroundColor: "#2563EB",
-    borderRadius: 12,
-    paddingVertical: 15,
-    alignItems: "center",
-  },
-  btnDisabled: { opacity: 0.6 },
-  signInBtnText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-
-  signUpRow: {
-    alignItems: "center",
-  },
-  signUpText: {
-    color: "#64748B",
-    fontSize: 14,
-  },
-  signUpLink: {
-    color: "#38BDF8",
-    fontWeight: "600",
-  },
-});

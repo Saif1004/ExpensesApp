@@ -7,7 +7,7 @@ import {
   updateProfile,
 } from "firebase/auth";
 import { collection, doc, getDoc, getDocs, query, serverTimestamp, where, writeBatch } from "firebase/firestore";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -23,6 +23,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "./context/AuthProvider";
 import { auth, db } from "./firebase/firebaseConfig";
 import { setIsSigningUp } from "./utils/signUpFlag";
+import { useTheme } from "../hooks/useTheme";
 
 //////////////////////////////////////////////////////
 // Helpers
@@ -65,6 +66,7 @@ type Mode = "choose" | "create" | "join";
 export default function SignUp() {
   const router = useRouter();
   const { refreshMembership } = useAuth();
+  const { tokens: t } = useTheme();
 
   const [mode, setMode] = useState<Mode>("choose");
 
@@ -320,12 +322,191 @@ export default function SignUp() {
   };
 
   //////////////////////////////////////////////////////
+  // STYLES
+  //////////////////////////////////////////////////////
+
+  const styles = useMemo(() => StyleSheet.create({
+
+    flex: { flex: 1 },
+
+    // ── Choose screen ──
+
+    chooseContainer: {
+      flexGrow: 1,
+      justifyContent: "center",
+      paddingHorizontal: 24,
+      paddingVertical: 60,
+    },
+
+    logoWrap: {
+      alignItems: "center",
+      marginBottom: 48,
+    },
+
+    logoIcon: {
+      width: 80,
+      height: 80,
+      borderRadius: 24,
+      backgroundColor: t.accentSurface,
+      borderWidth: 1.5,
+      borderColor: t.accent + "33",
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 16,
+    },
+
+    appTitle: {
+      color: t.text,
+      fontSize: 34,
+      fontWeight: "800",
+      letterSpacing: 0.5,
+      marginBottom: 6,
+    },
+
+    appSubtitle: {
+      color: t.textSecondary,
+      fontSize: 15,
+      textAlign: "center",
+    },
+
+    chooseCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      borderRadius: 18,
+      padding: 18,
+      marginBottom: 14,
+      borderWidth: 1.5,
+      gap: 14,
+    },
+
+    chooseCardBlue: {
+      backgroundColor: t.accentSurface,
+      borderColor: t.accent,
+    },
+
+    chooseCardSlate: {
+      backgroundColor: "#111827",
+      borderColor: t.border,
+    },
+
+    chooseCardIcon: {
+      width: 52,
+      height: 52,
+      borderRadius: 14,
+      justifyContent: "center",
+      alignItems: "center",
+    },
+
+    chooseCardIconBlue:  { backgroundColor: t.accentSurface },
+    chooseCardIconSlate: { backgroundColor: t.surface },
+
+    chooseCardText: { flex: 1 },
+
+    chooseCardTitle: {
+      color: t.text,
+      fontSize: 16,
+      fontWeight: "700",
+      marginBottom: 3,
+    },
+
+    chooseCardSub: {
+      color: t.textSecondary,
+      fontSize: 13,
+    },
+
+    signInLink: {
+      marginTop: 32,
+      alignItems: "center",
+    },
+
+    signInText:     { color: t.textSecondary, fontSize: 14 },
+    signInTextBold: { color: t.accent, fontWeight: "600" },
+
+    // ── Form screens ──
+
+    formContainer: {
+      flexGrow: 1,
+      paddingHorizontal: 24,
+      paddingTop: 60,
+      paddingBottom: 40,
+    },
+
+    backBtn: {
+      width: 40,
+      height: 40,
+      justifyContent: "center",
+      marginBottom: 24,
+    },
+
+    formHeader: { marginBottom: 32 },
+
+    formTitle: {
+      color: t.text,
+      fontSize: 28,
+      fontWeight: "800",
+      marginBottom: 6,
+    },
+
+    formSubtitle: {
+      color: t.textSecondary,
+      fontSize: 15,
+    },
+
+    fieldGroup: { marginBottom: 16 },
+
+    fieldLabel: {
+      color: t.textSecondary,
+      fontSize: 12,
+      fontWeight: "600",
+      textTransform: "uppercase",
+      letterSpacing: 0.8,
+      marginBottom: 8,
+    },
+
+    input: {
+      backgroundColor: t.surface,
+      borderWidth: 1,
+      borderColor: t.border,
+      borderRadius: 14,
+      paddingHorizontal: 16,
+      paddingVertical: Platform.OS === "ios" ? 15 : 11,
+      color: t.text,
+      fontSize: 15,
+    },
+
+    inviteCodeInput: {
+      fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+      fontSize: 22,
+      fontWeight: "700",
+      letterSpacing: 4,
+      color: t.accent,
+      textAlign: "center",
+    },
+
+    primaryBtn: {
+      backgroundColor: t.accent,
+      borderRadius: 14,
+      paddingVertical: 16,
+      alignItems: "center",
+      marginTop: 8,
+    },
+
+    primaryBtnText: {
+      color: t.accentText,
+      fontSize: 16,
+      fontWeight: "700",
+    },
+
+    btnDisabled: { opacity: 0.6 },
+  }), [t]);
+
+  //////////////////////////////////////////////////////
   // CHOOSE SCREEN
   //////////////////////////////////////////////////////
 
   if (mode === "choose") {
     return (
-      <LinearGradient colors={["#020617", "#0F172A"]} style={styles.flex}>
+      <LinearGradient colors={[t.bg, t.surface]} style={styles.flex}>
         <ScrollView
           contentContainerStyle={styles.chooseContainer}
           showsVerticalScrollIndicator={false}
@@ -333,7 +514,7 @@ export default function SignUp() {
           {/* Logo / Title */}
           <View style={styles.logoWrap}>
             <View style={styles.logoIcon}>
-              <Ionicons name="receipt-outline" size={36} color="#38BDF8" />
+              <Ionicons name="receipt-outline" size={36} color={t.accent} />
             </View>
             <Text style={styles.appTitle}>Claimio</Text>
             <Text style={styles.appSubtitle}>Expense management made simple</Text>
@@ -346,13 +527,13 @@ export default function SignUp() {
             activeOpacity={0.8}
           >
             <View style={[styles.chooseCardIcon, styles.chooseCardIconBlue]}>
-              <Ionicons name="briefcase-outline" size={26} color="#2563EB" />
+              <Ionicons name="briefcase-outline" size={26} color={t.accent} />
             </View>
             <View style={styles.chooseCardText}>
               <Text style={styles.chooseCardTitle}>Create Organisation</Text>
               <Text style={styles.chooseCardSub}>I'm setting up my company</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#2563EB" />
+            <Ionicons name="chevron-forward" size={20} color={t.accent} />
           </TouchableOpacity>
 
           {/* Join card */}
@@ -362,13 +543,13 @@ export default function SignUp() {
             activeOpacity={0.8}
           >
             <View style={[styles.chooseCardIcon, styles.chooseCardIconSlate]}>
-              <Ionicons name="person-add-outline" size={26} color="#94A3B8" />
+              <Ionicons name="person-add-outline" size={26} color={t.textSecondary} />
             </View>
             <View style={styles.chooseCardText}>
               <Text style={styles.chooseCardTitle}>Join Organisation</Text>
               <Text style={styles.chooseCardSub}>I have an invite code</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#64748B" />
+            <Ionicons name="chevron-forward" size={20} color={t.textSecondary} />
           </TouchableOpacity>
 
           {/* Sign in link */}
@@ -388,7 +569,7 @@ export default function SignUp() {
 
   if (mode === "create") {
     return (
-      <LinearGradient colors={["#020617", "#0F172A"]} style={styles.flex}>
+      <LinearGradient colors={[t.bg, t.surface]} style={styles.flex}>
         <KeyboardAvoidingView
           style={styles.flex}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -401,7 +582,7 @@ export default function SignUp() {
           >
             {/* Back */}
             <TouchableOpacity onPress={() => goTo("choose")} style={styles.backBtn}>
-              <Ionicons name="arrow-back" size={22} color="#94A3B8" />
+              <Ionicons name="arrow-back" size={22} color={t.textSecondary} />
             </TouchableOpacity>
 
             {/* Header */}
@@ -417,7 +598,7 @@ export default function SignUp() {
                 value={organisation}
                 onChangeText={setOrganisation}
                 placeholder="e.g. Acme Corp"
-                placeholderTextColor="#475569"
+                placeholderTextColor={t.textTertiary}
                 style={styles.input}
                 autoCapitalize="words"
               />
@@ -429,7 +610,7 @@ export default function SignUp() {
                 value={username}
                 onChangeText={setUsername}
                 placeholder="e.g. johndoe"
-                placeholderTextColor="#475569"
+                placeholderTextColor={t.textTertiary}
                 style={styles.input}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -442,7 +623,7 @@ export default function SignUp() {
                 value={email}
                 onChangeText={setEmail}
                 placeholder="you@example.com"
-                placeholderTextColor="#475569"
+                placeholderTextColor={t.textTertiary}
                 style={styles.input}
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -456,7 +637,7 @@ export default function SignUp() {
                 value={password}
                 onChangeText={setPassword}
                 placeholder="Min. 8 chars, 1 uppercase, 1 number"
-                placeholderTextColor="#475569"
+                placeholderTextColor={t.textTertiary}
                 style={styles.input}
                 secureTextEntry
                 autoCapitalize="none"
@@ -469,7 +650,7 @@ export default function SignUp() {
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 placeholder="Repeat password"
-                placeholderTextColor="#475569"
+                placeholderTextColor={t.textTertiary}
                 style={styles.input}
                 secureTextEntry
                 autoCapitalize="none"
@@ -497,7 +678,7 @@ export default function SignUp() {
   //////////////////////////////////////////////////////
 
   return (
-    <LinearGradient colors={["#020617", "#0F172A"]} style={styles.flex}>
+    <LinearGradient colors={[t.bg, t.surface]} style={styles.flex}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -510,7 +691,7 @@ export default function SignUp() {
         >
           {/* Back */}
           <TouchableOpacity onPress={() => goTo("choose")} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={22} color="#94A3B8" />
+            <Ionicons name="arrow-back" size={22} color={t.textSecondary} />
           </TouchableOpacity>
 
           {/* Header */}
@@ -526,7 +707,7 @@ export default function SignUp() {
               value={inviteCode}
               onChangeText={(t) => setInviteCode(t.toUpperCase())}
               placeholder="e.g. ABC4X7"
-              placeholderTextColor="#475569"
+              placeholderTextColor={t.textTertiary}
               style={[styles.input, styles.inviteCodeInput]}
               autoCapitalize="characters"
               autoCorrect={false}
@@ -540,7 +721,7 @@ export default function SignUp() {
               value={username}
               onChangeText={setUsername}
               placeholder="e.g. janedoe"
-              placeholderTextColor="#475569"
+              placeholderTextColor={t.textTertiary}
               style={styles.input}
               autoCapitalize="none"
               autoCorrect={false}
@@ -553,7 +734,7 @@ export default function SignUp() {
               value={email}
               onChangeText={setEmail}
               placeholder="you@example.com"
-              placeholderTextColor="#475569"
+              placeholderTextColor={t.textTertiary}
               style={styles.input}
               keyboardType="email-address"
               autoCapitalize="none"
@@ -567,7 +748,7 @@ export default function SignUp() {
               value={password}
               onChangeText={setPassword}
               placeholder="Min. 8 chars, 1 uppercase, 1 number"
-              placeholderTextColor="#475569"
+              placeholderTextColor={t.textTertiary}
               style={styles.input}
               secureTextEntry
               autoCapitalize="none"
@@ -580,7 +761,7 @@ export default function SignUp() {
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               placeholder="Repeat password"
-              placeholderTextColor="#475569"
+              placeholderTextColor={t.textTertiary}
               style={styles.input}
               secureTextEntry
               autoCapitalize="none"
@@ -602,182 +783,3 @@ export default function SignUp() {
     </LinearGradient>
   );
 }
-
-//////////////////////////////////////////////////////
-// STYLES
-//////////////////////////////////////////////////////
-
-const styles = StyleSheet.create({
-
-  flex: { flex: 1 },
-
-  // ── Choose screen ──
-
-  chooseContainer: {
-    flexGrow: 1,
-    justifyContent: "center",
-    paddingHorizontal: 24,
-    paddingVertical: 60,
-  },
-
-  logoWrap: {
-    alignItems: "center",
-    marginBottom: 48,
-  },
-
-  logoIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 24,
-    backgroundColor: "#0C2340",
-    borderWidth: 1.5,
-    borderColor: "#38BDF833",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-
-  appTitle: {
-    color: "#F8FAFC",
-    fontSize: 34,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-    marginBottom: 6,
-  },
-
-  appSubtitle: {
-    color: "#64748B",
-    fontSize: 15,
-    textAlign: "center",
-  },
-
-  chooseCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 14,
-    borderWidth: 1.5,
-    gap: 14,
-  },
-
-  chooseCardBlue: {
-    backgroundColor: "#0D1F3C",
-    borderColor: "#2563EB",
-  },
-
-  chooseCardSlate: {
-    backgroundColor: "#111827",
-    borderColor: "#334155",
-  },
-
-  chooseCardIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 14,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  chooseCardIconBlue:  { backgroundColor: "#1E3A8A22" },
-  chooseCardIconSlate: { backgroundColor: "#1E293B" },
-
-  chooseCardText: { flex: 1 },
-
-  chooseCardTitle: {
-    color: "#F1F5F9",
-    fontSize: 16,
-    fontWeight: "700",
-    marginBottom: 3,
-  },
-
-  chooseCardSub: {
-    color: "#64748B",
-    fontSize: 13,
-  },
-
-  signInLink: {
-    marginTop: 32,
-    alignItems: "center",
-  },
-
-  signInText:     { color: "#64748B", fontSize: 14 },
-  signInTextBold: { color: "#38BDF8", fontWeight: "600" },
-
-  // ── Form screens ──
-
-  formContainer: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: 60,
-    paddingBottom: 40,
-  },
-
-  backBtn: {
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    marginBottom: 24,
-  },
-
-  formHeader: { marginBottom: 32 },
-
-  formTitle: {
-    color: "#F8FAFC",
-    fontSize: 28,
-    fontWeight: "800",
-    marginBottom: 6,
-  },
-
-  formSubtitle: {
-    color: "#64748B",
-    fontSize: 15,
-  },
-
-  fieldGroup: { marginBottom: 16 },
-
-  fieldLabel: {
-    color: "#94A3B8",
-    fontSize: 12,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-    marginBottom: 8,
-  },
-
-  input: {
-    backgroundColor: "#1E293B",
-    borderWidth: 1,
-    borderColor: "#334155",
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: Platform.OS === "ios" ? 15 : 11,
-    color: "#F8FAFC",
-    fontSize: 15,
-  },
-
-  inviteCodeInput: {
-    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
-    fontSize: 22,
-    fontWeight: "700",
-    letterSpacing: 4,
-    color: "#38BDF8",
-    textAlign: "center",
-  },
-
-  primaryBtn: {
-    backgroundColor: "#2563EB",
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: "center",
-    marginTop: 8,
-  },
-
-  primaryBtnText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-
-  btnDisabled: { opacity: 0.6 },
-});

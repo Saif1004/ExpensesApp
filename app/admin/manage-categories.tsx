@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -15,11 +15,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ThemedText } from "../../components/themed-text";
 import { db } from "../firebase/firebaseConfig";
 import { useAuth } from "../context/AuthProvider";
+import { useTheme } from "../../hooks/useTheme";
 
 const DEFAULT_CATEGORIES = ["Meals", "Travel", "Technology", "Office"];
 
 export default function ManageCategoriesScreen() {
   const { orgId } = useAuth();
+  const { tokens: t } = useTheme();
 
   const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,10 +95,130 @@ export default function ManageCategoriesScreen() {
     }
   };
 
+  const styles = useMemo(() => StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: t.bg,
+      padding: 20
+    },
+    center: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center",
+      backgroundColor: t.bg
+    },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      marginBottom: 6
+    },
+    backBtn: {
+      paddingVertical: 4
+    },
+    backBtnText: {
+      color: t.accent,
+      fontSize: 15,
+      fontWeight: "600"
+    },
+    title: {
+      color: t.text,
+      fontSize: 26,
+      fontWeight: "bold"
+    },
+    subtitle: {
+      color: t.textSecondary,
+      fontSize: 13,
+      marginBottom: 20
+    },
+    card: {
+      backgroundColor: t.surface,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: t.border
+    },
+    sectionLabel: {
+      color: t.textSecondary,
+      fontSize: 12,
+      fontWeight: "600",
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: 12
+    },
+    chipsWrap: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8
+    },
+    chip: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: t.bg,
+      borderRadius: 20,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderWidth: 1,
+      borderColor: t.border,
+      gap: 6
+    },
+    chipText: {
+      color: t.text,
+      fontSize: 13,
+      fontWeight: "500"
+    },
+    chipRemove: {
+      width: 18,
+      height: 18,
+      borderRadius: 9,
+      backgroundColor: t.errorSurface,
+      alignItems: "center",
+      justifyContent: "center"
+    },
+    chipRemoveText: {
+      color: t.error,
+      fontSize: 10,
+      fontWeight: "700"
+    },
+    emptyText: {
+      color: t.textTertiary,
+      fontSize: 13
+    },
+    addRow: {
+      flexDirection: "row",
+      gap: 10,
+      alignItems: "center"
+    },
+    input: {
+      flex: 1,
+      backgroundColor: t.surfaceAlt,
+      color: t.text,
+      padding: 12,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: t.border,
+      fontSize: 14
+    },
+    addBtn: {
+      backgroundColor: t.accent,
+      paddingHorizontal: 18,
+      paddingVertical: 12,
+      borderRadius: 10,
+      alignItems: "center",
+      justifyContent: "center"
+    },
+    addBtnText: {
+      color: t.accentText,
+      fontWeight: "700",
+      fontSize: 14
+    }
+  }), [t]);
+
   if (loading) {
     return (
       <SafeAreaView style={styles.center}>
-        <ActivityIndicator size="large" color="#38BDF8" />
+        <ActivityIndicator size="large" color={t.accent} />
       </SafeAreaView>
     );
   }
@@ -146,7 +268,7 @@ export default function ManageCategoriesScreen() {
             <TextInput
               style={styles.input}
               placeholder="Category name"
-              placeholderTextColor="#475569"
+              placeholderTextColor={t.textTertiary}
               value={newCategory}
               onChangeText={setNewCategory}
               autoCapitalize="words"
@@ -160,7 +282,7 @@ export default function ManageCategoriesScreen() {
               activeOpacity={0.8}
             >
               {saving ? (
-                <ActivityIndicator color="#fff" size="small" />
+                <ActivityIndicator color={t.accentText} size="small" />
               ) : (
                 <ThemedText style={styles.addBtnText}>Add</ThemedText>
               )}
@@ -172,123 +294,3 @@ export default function ManageCategoriesScreen() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0F172A",
-    padding: 20
-  },
-  center: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#0F172A"
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 6
-  },
-  backBtn: {
-    paddingVertical: 4
-  },
-  backBtnText: {
-    color: "#38BDF8",
-    fontSize: 15,
-    fontWeight: "600"
-  },
-  title: {
-    color: "#F8FAFC",
-    fontSize: 26,
-    fontWeight: "bold"
-  },
-  subtitle: {
-    color: "#64748B",
-    fontSize: 13,
-    marginBottom: 20
-  },
-  card: {
-    backgroundColor: "#1E293B",
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: "#334155"
-  },
-  sectionLabel: {
-    color: "#94A3B8",
-    fontSize: 12,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 12
-  },
-  chipsWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8
-  },
-  chip: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#0F172A",
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: "#334155",
-    gap: 6
-  },
-  chipText: {
-    color: "#F8FAFC",
-    fontSize: 13,
-    fontWeight: "500"
-  },
-  chipRemove: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: "#7F1D1D",
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  chipRemoveText: {
-    color: "#FCA5A5",
-    fontSize: 10,
-    fontWeight: "700"
-  },
-  emptyText: {
-    color: "#475569",
-    fontSize: 13
-  },
-  addRow: {
-    flexDirection: "row",
-    gap: 10,
-    alignItems: "center"
-  },
-  input: {
-    flex: 1,
-    backgroundColor: "#0F172A",
-    color: "#F8FAFC",
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#334155",
-    fontSize: 14
-  },
-  addBtn: {
-    backgroundColor: "#38BDF8",
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  addBtnText: {
-    color: "#0F172A",
-    fontWeight: "700",
-    fontSize: 14
-  }
-});

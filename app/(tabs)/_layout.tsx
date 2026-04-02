@@ -8,10 +8,11 @@ import {
   where,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "../context/AuthProvider";
+import { useTheme } from "../../hooks/useTheme";
 import { db } from "../firebase/firebaseConfig";
 import { addListener } from "../../utils/listenerStore";
 
@@ -19,24 +20,25 @@ const LAST_SEEN_CLAIMS = "claims_last_seen";
 
 // Raised centre Add button
 function AddIcon() {
+  const { tokens: t } = useTheme();
   return (
     <View
       style={{
-        width: 52,
-        height: 52,
-        backgroundColor: "#2563EB",
-        borderRadius: 16,
+        width: 56,
+        height: 56,
+        backgroundColor: t.accent,
+        borderRadius: 18,
         justifyContent: "center",
         alignItems: "center",
-        marginBottom: 6,
-        shadowColor: "#2563EB",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.45,
-        shadowRadius: 8,
-        elevation: 8,
+        marginBottom: 8,
+        shadowColor: t.accent,
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.5,
+        shadowRadius: 12,
+        elevation: 10,
       }}
     >
-      <Ionicons name="add" size={30} color="#fff" />
+      <Ionicons name="add" size={32} color="#fff" />
     </View>
   );
 }
@@ -44,6 +46,7 @@ function AddIcon() {
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const { role, authLoaded, user, orgId } = useAuth();
+  const { tokens: t } = useTheme();
 
   const [claimsBadge, setClaimsBadge] = useState(0);
   const [usersBadge, setUsersBadge] = useState(0);
@@ -122,27 +125,28 @@ export default function TabLayout() {
 
   if (!authLoaded) return null;
 
-  const TAB_HEIGHT = 64;
+  const TAB_HEIGHT = 70;
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: "#38BDF8",
-        tabBarInactiveTintColor: "#475569",
+        tabBarActiveTintColor: t.tabBarActive,
+        tabBarInactiveTintColor: t.tabBarInactive,
         tabBarShowLabel: true,
         tabBarStyle: {
-          backgroundColor: "#0A1628",
-          borderTopWidth: 1,
-          borderTopColor: "#1E293B",
+          backgroundColor: t.tabBar,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: t.tabBarBorder,
           height: TAB_HEIGHT + insets.bottom,
           paddingBottom: insets.bottom,
-          paddingTop: 8,
+          paddingTop: 10,
         },
         tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: "600",
+          fontSize: 10,
+          fontWeight: "700",
           marginTop: 2,
+          letterSpacing: 0.2,
         },
         tabBarItemStyle: {
           justifyContent: "center",

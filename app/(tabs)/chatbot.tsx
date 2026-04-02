@@ -1,5 +1,5 @@
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Animated,
@@ -15,6 +15,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import PaywallScreen from "../../components/paywall-screen";
 import { ThemedText } from "../../components/themed-text";
 import { useAuth } from "../context/AuthProvider";
+import { useTheme } from "../../hooks/useTheme";
 
 const CHATBOT_URL = process.env.EXPO_PUBLIC_CHATBOT_URL!;
 
@@ -34,6 +35,7 @@ const QUICK_QUESTIONS = [
 export default function ChatbotScreen() {
 
   const { user, isPro } = useAuth();
+  const { tokens: t } = useTheme();
 
   if(!isPro) return <PaywallScreen />;
   const flatListRef = useRef<FlatList>(null);
@@ -178,6 +180,108 @@ export default function ChatbotScreen() {
   };
 
   /////////////////////////////////////////////////////////
+  // STYLES
+  /////////////////////////////////////////////////////////
+
+  const styles = useMemo(() => StyleSheet.create({
+
+    safe: { flex: 1, backgroundColor: t.bg },
+
+    container: { flex: 1, paddingTop: 16, paddingHorizontal: 16, backgroundColor: t.bg },
+
+    title: {
+      fontSize: 28,
+      fontWeight: "bold",
+      color: t.text,
+      marginBottom: 16
+    },
+
+    credits: {
+      textAlign: "center",
+      marginBottom: 8,
+      fontSize: 12,
+      color: t.success
+    },
+
+    quickRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginBottom: 12
+    },
+
+    quickBtn: {
+      backgroundColor: t.surface,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 12
+    },
+
+    quickText: {
+      color: t.accent,
+      fontSize: 12
+    },
+
+    messageBubble: {
+      padding: 12,
+      borderRadius: 14,
+      marginBottom: 10,
+      maxWidth: "80%"
+    },
+
+    userBubble: {
+      alignSelf: "flex-end",
+      backgroundColor: t.accent
+    },
+
+    botBubble: {
+      alignSelf: "flex-start",
+      backgroundColor: t.surface
+    },
+
+    userMessageText: {
+      color: t.accentText
+    },
+
+    botMessageText: {
+      color: t.text
+    },
+
+    inputWrapper: {
+      flexDirection: "row",
+      gap: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      backgroundColor: t.bg,
+      borderTopWidth: 1,
+      borderTopColor: t.surface,
+    },
+
+    input: {
+      flex: 1,
+      backgroundColor: t.surface,
+      color: t.text,
+      borderRadius: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 12,
+      maxHeight: 120
+    },
+
+    sendButton: {
+      backgroundColor: t.accent,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderRadius: 12
+    },
+
+    sendText: {
+      color: t.accentText,
+      fontWeight: "600"
+    }
+
+  }), [t]);
+
+  /////////////////////////////////////////////////////////
   // MESSAGE BUBBLE
   /////////////////////////////////////////////////////////
 
@@ -203,7 +307,7 @@ export default function ChatbotScreen() {
           { opacity: fade }
         ]}
       >
-        <ThemedText style={styles.messageText}>
+        <ThemedText style={item.sender === "user" ? styles.userMessageText : styles.botMessageText}>
           {item.text}
         </ThemedText>
       </Animated.View>
@@ -232,8 +336,8 @@ export default function ChatbotScreen() {
           {remainingAI !== null && creditLimit !== null && (
             <ThemedText style={[
               styles.credits,
-              remainingAI <= 5 && { color: "#F97316" },
-              remainingAI === 0 && { color: "#DC2626" }
+              remainingAI <= 5 && { color: t.warning },
+              remainingAI === 0 && { color: t.error }
             ]}>
               AI Credits: {remainingAI} / {creditLimit}
             </ThemedText>
@@ -270,7 +374,7 @@ export default function ChatbotScreen() {
             ListFooterComponent={
               botTyping ? (
                 <View style={[styles.messageBubble, styles.botBubble]}>
-                  <ThemedText style={styles.messageText}>
+                  <ThemedText style={styles.botMessageText}>
                     ...
                   </ThemedText>
                 </View>
@@ -285,7 +389,7 @@ export default function ChatbotScreen() {
               value={input}
               onChangeText={setInput}
               placeholder="Ask something..."
-              placeholderTextColor="#64748B"
+              placeholderTextColor={t.textTertiary}
               style={styles.input}
               multiline
             />
@@ -312,101 +416,3 @@ export default function ChatbotScreen() {
     </SafeAreaView>
   );
 }
-
-/////////////////////////////////////////////////////////
-// STYLES
-/////////////////////////////////////////////////////////
-
-const styles = StyleSheet.create({
-
-  safe: { flex: 1, backgroundColor: "#0F172A" },
-
-  container: { flex: 1, paddingTop: 16, paddingHorizontal: 16, backgroundColor: "#0F172A" },
-
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "#F8FAFC",
-    marginBottom: 16
-  },
-
-  credits: {
-    textAlign: "center",
-    marginBottom: 8,
-    fontSize: 12,
-    color: "#22C55E"
-  },
-
-  quickRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 12
-  },
-
-  quickBtn: {
-    backgroundColor: "#1E293B",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12
-  },
-
-  quickText: {
-    color: "#38BDF8",
-    fontSize: 12
-  },
-
-  messageBubble: {
-    padding: 12,
-    borderRadius: 14,
-    marginBottom: 10,
-    maxWidth: "80%"
-  },
-
-  userBubble: {
-    alignSelf: "flex-end",
-    backgroundColor: "#2563EB"
-  },
-
-  botBubble: {
-    alignSelf: "flex-start",
-    backgroundColor: "#1E293B"
-  },
-
-  messageText: {
-    color: "#FFFFFF"
-  },
-
-  inputWrapper: {
-    flexDirection: "row",
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: "#0F172A",
-    borderTopWidth: 1,
-    borderTopColor: "#1E293B",
-  },
-
-  input: {
-    flex: 1,
-    backgroundColor: "#1E293B",
-    color: "#F8FAFC",
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    maxHeight: 120
-  },
-
-  sendButton: {
-    backgroundColor: "#2563EB",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 12
-  },
-
-  sendText: {
-    color: "#FFFFFF",
-    fontWeight: "600"
-  }
-
-});

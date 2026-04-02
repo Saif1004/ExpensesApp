@@ -1,20 +1,113 @@
+import { useMemo } from "react";
 import { Linking, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ThemedText } from "../components/themed-text";
+import { useTheme } from "../hooks/useTheme";
 
 const TERMS_URL = "https://doc-hosting.flycricket.io/claimio-terms-of-use/862d3297-eafe-45a3-baea-403993b72e76/terms";
 
 export default function TermsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { tokens: t } = useTheme();
+
+  const styles = useMemo(() => StyleSheet.create({
+    root: {
+      flex: 1,
+      backgroundColor: t.bg
+    },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: t.border
+    },
+    headerTitle: {
+      color: t.text,
+      fontSize: 17,
+      fontWeight: "700"
+    },
+    backBtn: {
+      width: 40,
+      height: 40,
+      justifyContent: "center"
+    },
+    container: {
+      paddingHorizontal: 20,
+      paddingTop: 28,
+      alignItems: "center"
+    },
+    iconWrap: {
+      width: 88,
+      height: 88,
+      borderRadius: 24,
+      backgroundColor: t.accentSurface,
+      borderWidth: 1,
+      borderColor: t.accent + "55",
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 20
+    },
+    title: {
+      color: t.text,
+      fontSize: 24,
+      fontWeight: "700",
+      marginBottom: 6,
+      textAlign: "center"
+    },
+    subtitle: {
+      color: t.textTertiary,
+      fontSize: 13,
+      marginBottom: 28,
+      textAlign: "center"
+    },
+    card: {
+      width: "100%",
+      backgroundColor: t.surface,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: t.border
+    },
+    sectionHeading: {
+      color: t.accent,
+      fontSize: 14,
+      fontWeight: "700",
+      marginBottom: 8
+    },
+    body: {
+      color: t.textSecondary,
+      fontSize: 13,
+      lineHeight: 20
+    },
+    fullTermsBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginTop: 8,
+      paddingVertical: 12,
+      paddingHorizontal: 20,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: t.accent + "55"
+    },
+    fullTermsText: {
+      color: t.accent,
+      fontSize: 14,
+      fontWeight: "600"
+    }
+  }), [t]);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="chevron-back" size={24} color="#38BDF8" />
+          <Ionicons name="chevron-back" size={24} color={t.accent} />
         </TouchableOpacity>
         <ThemedText style={styles.headerTitle}>Terms & Conditions</ThemedText>
         <View style={{ width: 40 }} />
@@ -25,7 +118,7 @@ export default function TermsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.iconWrap}>
-          <Ionicons name="document-text" size={48} color="#A78BFA" />
+          <Ionicons name="document-text" size={48} color={t.accent} />
         </View>
 
         <ThemedText style={styles.title}>Terms & Conditions</ThemedText>
@@ -85,7 +178,7 @@ export default function TermsScreen() {
           onPress={() => Linking.openURL(TERMS_URL)}
           activeOpacity={0.8}
         >
-          <Ionicons name="open-outline" size={16} color="#A78BFA" style={{ marginRight: 8 }} />
+          <Ionicons name="open-outline" size={16} color={t.accent} style={{ marginRight: 8 }} />
           <ThemedText style={styles.fullTermsText}>View Full Terms & Conditions</ThemedText>
         </TouchableOpacity>
 
@@ -93,93 +186,3 @@ export default function TermsScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: "#0F172A"
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#1E293B"
-  },
-  headerTitle: {
-    color: "#F8FAFC",
-    fontSize: 17,
-    fontWeight: "700"
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    justifyContent: "center"
-  },
-  container: {
-    paddingHorizontal: 20,
-    paddingTop: 28,
-    alignItems: "center"
-  },
-  iconWrap: {
-    width: 88,
-    height: 88,
-    borderRadius: 24,
-    backgroundColor: "#1A0D3C",
-    borderWidth: 1,
-    borderColor: "#3B1D6E",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 20
-  },
-  title: {
-    color: "#F8FAFC",
-    fontSize: 24,
-    fontWeight: "700",
-    marginBottom: 6,
-    textAlign: "center"
-  },
-  subtitle: {
-    color: "#475569",
-    fontSize: 13,
-    marginBottom: 28,
-    textAlign: "center"
-  },
-  card: {
-    width: "100%",
-    backgroundColor: "#1E293B",
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#334155"
-  },
-  sectionHeading: {
-    color: "#A78BFA",
-    fontSize: 14,
-    fontWeight: "700",
-    marginBottom: 8
-  },
-  body: {
-    color: "#94A3B8",
-    fontSize: 13,
-    lineHeight: 20
-  },
-  fullTermsBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#3B1D6E"
-  },
-  fullTermsText: {
-    color: "#A78BFA",
-    fontSize: 14,
-    fontWeight: "600"
-  }
-});

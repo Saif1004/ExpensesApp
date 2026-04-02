@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { deleteDoc, doc, getDoc } from "firebase/firestore";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
     ActivityIndicator,
@@ -18,6 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ThemedText } from "../../../components/themed-text";
 import { IconSymbol } from "../../../components/ui/icon-symbol";
 import { db } from "../../firebase/firebaseConfig";
+import { useTheme } from "../../../hooks/useTheme";
 
 type Claim = {
   merchant: string;
@@ -33,6 +34,7 @@ type Claim = {
 export default function ClaimDetailScreen() {
 
   const { id } = useLocalSearchParams();
+  const { tokens: t } = useTheme();
 
   const [claim,setClaim] = useState<Claim | null>(null);
   const [loading,setLoading] = useState(true);
@@ -59,6 +61,147 @@ export default function ClaimDetailScreen() {
 
   },[id]);
 
+  const styles = useMemo(() => StyleSheet.create({
+
+    container:{
+      flex:1,
+      padding:20,
+      backgroundColor: t.bg
+    },
+
+    header:{
+      flexDirection:"row",
+      alignItems:"center",
+      marginBottom:20
+    },
+
+    backButton:{
+      marginRight:10
+    },
+
+    title:{
+      color: t.text
+    },
+
+    card:{
+      backgroundColor: t.surface,
+      padding:16,
+      borderRadius:14,
+      marginBottom:14,
+      borderWidth:1,
+      borderColor: t.border
+    },
+
+    receiptCard:{
+      backgroundColor: t.surface,
+      padding:16,
+      borderRadius:14,
+      marginTop:10,
+      borderWidth:1,
+      borderColor: t.border
+    },
+
+    label:{
+      color: t.textSecondary,
+      fontSize:12,
+      marginBottom:6
+    },
+
+    value:{
+      color: t.text,
+      fontSize:16
+    },
+
+    statusBadge:{
+      alignSelf:"flex-start",
+      paddingHorizontal:12,
+      paddingVertical:6,
+      borderRadius:8
+    },
+
+    statusText:{
+      color: t.accentText,
+      fontSize:12,
+      fontWeight:"600"
+    },
+
+    approved:{backgroundColor: t.success},
+    pending:{backgroundColor: t.warning},
+    rejected:{backgroundColor: t.error},
+
+    paymentCardPaid:{
+      borderColor: t.success + "66",
+      backgroundColor: t.successSurface
+    },
+
+    paymentTextPaid:{
+      color: t.success,
+      fontSize:14,
+      fontWeight:"600"
+    },
+
+    paymentCardFailed:{
+      borderColor: t.errorSurface,
+      backgroundColor: t.errorSurface
+    },
+
+    paymentTextFailed:{
+      color: t.error,
+      fontSize:14,
+      fontWeight:"600"
+    },
+
+    cancelClaimBtn:{
+      borderWidth:2,
+      borderColor: t.error,
+      borderRadius:12,
+      paddingVertical:14,
+      alignItems:"center",
+      marginTop:8,
+      marginBottom:24
+    },
+
+    cancelClaimText:{
+      color: t.error,
+      fontWeight:"700",
+      fontSize:15
+    },
+
+    receiptImage:{
+      width:"100%",
+      height:220,
+      borderRadius:12,
+      marginTop:10
+    },
+
+    viewerContainer:{
+      flex:1,
+      backgroundColor:"rgba(0,0,0,0.95)",
+      justifyContent:"center",
+      alignItems:"center"
+    },
+
+    closeArea:{
+      flex:1,
+      justifyContent:"center",
+      alignItems:"center",
+      width:"100%"
+    },
+
+    viewerImage:{
+      width:"100%",
+      height:"80%"
+    },
+
+    center:{
+      flex:1,
+      justifyContent:"center",
+      alignItems:"center",
+      backgroundColor: t.bg
+    }
+
+  }), [t]);
+
   const getStatusStyle=(status:string)=>{
 
     switch(status){
@@ -73,7 +216,7 @@ export default function ClaimDetailScreen() {
   if(loading){
     return(
       <SafeAreaView style={styles.center}>
-        <ActivityIndicator size="large" color="#60A5FA"/>
+        <ActivityIndicator size="large" color={t.accent}/>
       </SafeAreaView>
     );
   }
@@ -103,7 +246,7 @@ export default function ClaimDetailScreen() {
             <IconSymbol
               name="chevron.left"
               size={26}
-              color="#60A5FA"
+              color={t.accent}
             />
           </TouchableOpacity>
 
@@ -268,144 +411,3 @@ export default function ClaimDetailScreen() {
 
   );
 }
-
-const styles = StyleSheet.create({
-
-container:{
-flex:1,
-padding:20,
-backgroundColor:"#0F172A"
-},
-
-header:{
-flexDirection:"row",
-alignItems:"center",
-marginBottom:20
-},
-
-backButton:{
-marginRight:10
-},
-
-title:{
-color:"#F8FAFC"
-},
-
-card:{
-backgroundColor:"#1E293B",
-padding:16,
-borderRadius:14,
-marginBottom:14,
-borderWidth:1,
-borderColor:"#334155"
-},
-
-receiptCard:{
-backgroundColor:"#1E293B",
-padding:16,
-borderRadius:14,
-marginTop:10,
-borderWidth:1,
-borderColor:"#334155"
-},
-
-label:{
-color:"#94A3B8",
-fontSize:12,
-marginBottom:6
-},
-
-value:{
-color:"#F8FAFC",
-fontSize:16
-},
-
-statusBadge:{
-alignSelf:"flex-start",
-paddingHorizontal:12,
-paddingVertical:6,
-borderRadius:8
-},
-
-statusText:{
-color:"#FFFFFF",
-fontSize:12,
-fontWeight:"600"
-},
-
-approved:{backgroundColor:"#16A34A"},
-pending:{backgroundColor:"#F59E0B"},
-rejected:{backgroundColor:"#DC2626"},
-
-paymentCardPaid:{
-borderColor:"#166534",
-backgroundColor:"#052E16"
-},
-
-paymentTextPaid:{
-color:"#4ADE80",
-fontSize:14,
-fontWeight:"600"
-},
-
-paymentCardFailed:{
-borderColor:"#991B1B",
-backgroundColor:"#7F1D1D"
-},
-
-paymentTextFailed:{
-color:"#FCA5A5",
-fontSize:14,
-fontWeight:"600"
-},
-
-cancelClaimBtn:{
-borderWidth:2,
-borderColor:"#DC2626",
-borderRadius:12,
-paddingVertical:14,
-alignItems:"center",
-marginTop:8,
-marginBottom:24
-},
-
-cancelClaimText:{
-color:"#DC2626",
-fontWeight:"700",
-fontSize:15
-},
-
-receiptImage:{
-width:"100%",
-height:220,
-borderRadius:12,
-marginTop:10
-},
-
-viewerContainer:{
-flex:1,
-backgroundColor:"rgba(0,0,0,0.95)",
-justifyContent:"center",
-alignItems:"center"
-},
-
-closeArea:{
-flex:1,
-justifyContent:"center",
-alignItems:"center",
-width:"100%"
-},
-
-viewerImage:{
-width:"100%",
-height:"80%"
-},
-
-center:{
-flex:1,
-justifyContent:"center",
-alignItems:"center",
-backgroundColor:"#0F172A"
-}
-
-});

@@ -32,6 +32,7 @@ import { ThemedView } from "../../components/themed-view";
 import { useAuth } from "../context/AuthProvider";
 import { auth, db } from "../firebase/firebaseConfig";
 import { addListener } from "../../utils/listenerStore";
+import { useTheme } from "../../hooks/useTheme";
 
 const REIMBURSE_URL = process.env.EXPO_PUBLIC_STRIPE_REIMBURSE_URL!;
 
@@ -62,6 +63,7 @@ type HistoryFilter = "all" | "approved" | "rejected";
 export default function AdminScreen() {
   const { role, orgId, user, refreshMembership } = useAuth();
   const insets = useSafeAreaInsets();
+  const { tokens: t } = useTheme();
 
   const [tab, setTab]                         = useState<"pending" | "history">("pending");
   const [claims, setClaims]                   = useState<Claim[]>([]);
@@ -258,6 +260,478 @@ export default function AdminScreen() {
   // ACCESS GUARD
   //////////////////////////////////////////////////////
 
+  const styles = useMemo(() => StyleSheet.create({
+    container: {
+      flex: 1,
+      paddingHorizontal: 20,
+      paddingTop: 20,
+      backgroundColor: t.bg
+    },
+    headerRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      justifyContent: "space-between",
+      marginBottom: 16
+    },
+    title: {
+      fontSize: 26,
+      fontWeight: "800",
+      color: t.text,
+      marginBottom: 2
+    },
+    subtitle: {
+      color: t.textTertiary,
+      fontSize: 13
+    },
+    countBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: t.surface,
+      borderRadius: 20,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderWidth: 1,
+      borderColor: t.border
+    },
+    countBadgeText: {
+      color: t.textSecondary,
+      fontSize: 12,
+      fontWeight: "600"
+    },
+
+    /* Tab bar */
+    tabBar: {
+      flexDirection: "row",
+      gap: 10,
+      marginBottom: 12
+    },
+    tabPill: {
+      flex: 1,
+      paddingVertical: 9,
+      borderRadius: 10,
+      backgroundColor: t.surface,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: t.border
+    },
+    tabPillActive: {
+      backgroundColor: t.accentSurface,
+      borderColor: t.accent
+    },
+    tabPillText: {
+      color: t.textSecondary,
+      fontSize: 13,
+      fontWeight: "600"
+    },
+    tabPillTextActive: {
+      color: t.accent,
+      fontWeight: "700"
+    },
+
+    /* Search */
+    searchWrap: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: t.surface,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: t.border,
+      paddingHorizontal: 12,
+      marginBottom: 10,
+      height: 44
+    },
+    searchInput: {
+      flex: 1,
+      color: t.text,
+      fontSize: 14
+    },
+
+    /* Category chips */
+    chipsScroll: {
+      paddingBottom: 10,
+      gap: 8,
+      flexDirection: "row"
+    },
+    chip: {
+      paddingHorizontal: 14,
+      paddingVertical: 6,
+      borderRadius: 20,
+      backgroundColor: t.surface,
+      borderWidth: 1,
+      borderColor: t.border
+    },
+    chipActive: {
+      backgroundColor: t.accentSurface,
+      borderColor: t.accent
+    },
+    chipText: {
+      color: t.textSecondary,
+      fontSize: 13,
+      fontWeight: "600"
+    },
+    chipTextActive: {
+      color: t.accent
+    },
+
+    /* History status filter */
+    historyFilterRow: {
+      flexDirection: "row",
+      gap: 8,
+      marginBottom: 12
+    },
+    historyFilterBtn: {
+      flex: 1,
+      paddingVertical: 7,
+      borderRadius: 10,
+      backgroundColor: t.surface,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: t.border
+    },
+    historyFilterBtnActive: {
+      backgroundColor: t.accentSurface,
+      borderColor: t.accent
+    },
+    historyFilterText: {
+      color: t.textSecondary,
+      fontSize: 12,
+      fontWeight: "600"
+    },
+    historyFilterTextActive: {
+      color: t.accent,
+      fontWeight: "700"
+    },
+
+    /* Empty state */
+    emptyState: {
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 12,
+      paddingTop: 60
+    },
+    emptyText: {
+      color: t.textTertiary,
+      fontSize: 14
+    },
+
+    /* Card */
+    card: {
+      backgroundColor: t.surface,
+      borderRadius: 16,
+      marginBottom: 16,
+      overflow: "hidden",
+      borderWidth: 1,
+      borderColor: t.border
+    },
+    cardHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+      padding: 16
+    },
+    amount: {
+      fontSize: 22,
+      fontWeight: "bold",
+      color: t.text
+    },
+    merchant: {
+      marginTop: 2,
+      fontSize: 14,
+      color: t.textSecondary
+    },
+    categoryBadge: {
+      backgroundColor: t.bg,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderWidth: 1,
+      borderColor: t.accent
+    },
+    categoryText: {
+      color: t.accent,
+      fontSize: 12,
+      fontWeight: "600"
+    },
+    divider: {
+      height: 1,
+      backgroundColor: t.border,
+      marginHorizontal: 16
+    },
+    infoRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      paddingHorizontal: 16,
+      paddingTop: 10
+    },
+    infoLabel: {
+      color: t.textSecondary,
+      fontSize: 12,
+      fontWeight: "600",
+      textTransform: "uppercase",
+      letterSpacing: 0.5
+    },
+    infoValue: {
+      color: t.text,
+      fontSize: 12,
+      flexShrink: 1,
+      textAlign: "right",
+      maxWidth: "70%"
+    },
+
+    /* History status badges */
+    historyStatusBadge: {
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 4
+    },
+    historyStatusApproved: { backgroundColor: t.successSurface },
+    historyStatusRejected: { backgroundColor: t.errorSurface },
+    historyStatusText: { fontSize: 11, fontWeight: "700" },
+    historyStatusTextApproved: { color: t.success },
+    historyStatusTextRejected: { color: t.error },
+
+    /* Payment badges */
+    paymentBadge: {
+      marginHorizontal: 16,
+      marginTop: 10,
+      alignSelf: "flex-start",
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 4
+    },
+    paymentBadgePaid: { backgroundColor: t.successSurface },
+    paymentBadgeFailed: { backgroundColor: t.errorSurface },
+    paymentBadgeText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: t.text
+    },
+
+    /* Receipt */
+    receiptWrapper: {
+      marginHorizontal: 16,
+      marginTop: 12,
+      borderRadius: 10,
+      overflow: "hidden",
+      position: "relative"
+    },
+    receiptImage: {
+      width: "100%",
+      height: 160,
+      borderRadius: 10
+    },
+    receiptOverlay: {
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      backgroundColor: "rgba(0,0,0,0.45)",
+      padding: 6,
+      alignItems: "center"
+    },
+    receiptOverlayText: {
+      color: t.text,
+      fontSize: 12,
+      fontWeight: "500"
+    },
+    noReceiptRow: {
+      marginHorizontal: 16,
+      marginTop: 10
+    },
+    noReceipt: {
+      color: t.warning,
+      fontSize: 12
+    },
+
+    /* Action buttons */
+    buttonRow: {
+      flexDirection: "row",
+      margin: 16,
+      gap: 10
+    },
+    approveBtn: {
+      flex: 2,
+      backgroundColor: t.success,
+      paddingVertical: 12,
+      borderRadius: 12,
+      alignItems: "center"
+    },
+    rejectBtn: {
+      flex: 1,
+      backgroundColor: t.error,
+      paddingVertical: 12,
+      borderRadius: 12,
+      alignItems: "center"
+    },
+    btnText: {
+      color: "#fff",
+      fontWeight: "700",
+      fontSize: 14
+    },
+
+    /* Modal overlay */
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.75)",
+      justifyContent: "center",
+      padding: 20
+    },
+
+    /* Confirmation modal */
+    confirmModalContent: {
+      backgroundColor: t.surface,
+      borderRadius: 20,
+      overflow: "hidden",
+      borderWidth: 1,
+      borderColor: t.border
+    },
+    confirmTitleBar: {
+      paddingVertical: 16,
+      paddingHorizontal: 20,
+      alignItems: "center"
+    },
+    confirmTitleBarApprove: { backgroundColor: t.successSurface },
+    confirmTitleBarReject: { backgroundColor: t.errorSurface },
+    confirmTitle: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: t.text
+    },
+    confirmDetails: {
+      padding: 20,
+      gap: 10
+    },
+    confirmAmountRow: {
+      alignItems: "center",
+      marginBottom: 6
+    },
+    confirmAmount: {
+      fontSize: 32,
+      fontWeight: "bold",
+      color: t.text
+    },
+    confirmDetailRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center"
+    },
+    confirmDetailLabel: {
+      color: t.textSecondary,
+      fontSize: 13,
+      fontWeight: "600"
+    },
+    confirmDetailValue: {
+      color: t.text,
+      fontSize: 13,
+      flexShrink: 1,
+      textAlign: "right",
+      maxWidth: "65%"
+    },
+    confirmDivider: {
+      height: 1,
+      backgroundColor: t.border,
+      marginHorizontal: 20
+    },
+    messageInput: {
+      margin: 20,
+      backgroundColor: t.surfaceAlt,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: t.border,
+      padding: 12,
+      color: t.text,
+      fontSize: 14,
+      textAlignVertical: "top",
+      minHeight: 72
+    },
+    confirmButtonRow: {
+      flexDirection: "row",
+      paddingHorizontal: 20,
+      paddingBottom: 20,
+      gap: 10
+    },
+    cancelBtn: {
+      flex: 1,
+      backgroundColor: t.border,
+      paddingVertical: 13,
+      borderRadius: 12,
+      alignItems: "center"
+    },
+    cancelBtnText: {
+      color: t.textSecondary,
+      fontWeight: "700",
+      fontSize: 14
+    },
+    confirmBtn: {
+      flex: 2,
+      paddingVertical: 13,
+      borderRadius: 12,
+      alignItems: "center"
+    },
+    confirmBtnApprove: { backgroundColor: t.success },
+    confirmBtnReject: { backgroundColor: t.error },
+    confirmBtnText: {
+      color: "#fff",
+      fontWeight: "700",
+      fontSize: 14
+    },
+
+    /* Receipt image modal */
+    imageModalContent: {
+      backgroundColor: t.surface,
+      borderRadius: 16,
+      padding: 16
+    },
+    modalImage: {
+      width: "100%",
+      height: 400,
+      borderRadius: 12
+    },
+    closeBtn: {
+      marginTop: 16,
+      backgroundColor: t.accent,
+      padding: 13,
+      borderRadius: 12,
+      alignItems: "center"
+    },
+    closeBtnText: {
+      color: t.accentText,
+      fontWeight: "600",
+      fontSize: 14
+    },
+
+    /* Self-claim lock */
+    selfClaimNotice: {
+      flexDirection: "row",
+      alignItems: "center",
+      margin: 16,
+      marginTop: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      backgroundColor: t.surface,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: t.border
+    },
+    selfClaimText: {
+      color: t.textTertiary,
+      fontSize: 13,
+      fontStyle: "italic"
+    },
+
+    /* Misc */
+    center: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center"
+    },
+    denied: {
+      marginTop: 40,
+      color: t.error,
+      fontSize: 18
+    }
+  }), [t]);
+
   if (role !== "admin") {
     return (
       <ThemedView style={styles.container}>
@@ -274,11 +748,11 @@ export default function AdminScreen() {
 
   const SearchBar = (
     <View style={styles.searchWrap}>
-      <Ionicons name="search-outline" size={16} color="#64748B" style={{ marginRight: 8 }} />
+      <Ionicons name="search-outline" size={16} color={t.textSecondary} style={{ marginRight: 8 }} />
       <TextInput
         style={styles.searchInput}
         placeholder="Search merchant, employee, category…"
-        placeholderTextColor="#475569"
+        placeholderTextColor={t.textTertiary}
         value={search}
         onChangeText={setSearch}
         autoCapitalize="none"
@@ -287,7 +761,7 @@ export default function AdminScreen() {
       />
       {search.trim() ? (
         <TouchableOpacity onPress={() => setSearch("")}>
-          <Ionicons name="close-circle" size={16} color="#475569" />
+          <Ionicons name="close-circle" size={16} color={t.textTertiary} />
         </TouchableOpacity>
       ) : null}
     </View>
@@ -355,7 +829,7 @@ export default function AdminScreen() {
 
   const EmptyState = ({ message }: { message: string }) => (
     <View style={styles.emptyState}>
-      <Ionicons name="receipt-outline" size={36} color="#334155" />
+      <Ionicons name="receipt-outline" size={36} color={t.border} />
       <ThemedText style={styles.emptyText}>{message}</ThemedText>
     </View>
   );
@@ -376,7 +850,7 @@ export default function AdminScreen() {
         <View style={styles.countBadge}>
           <Ionicons
             name={tab === "pending" ? "time-outline" : "checkmark-done-outline"}
-            size={12} color="#94A3B8"
+            size={12} color={t.textSecondary}
             style={{ marginRight: 4 }}
           />
           <ThemedText style={styles.countBadgeText}>
@@ -415,7 +889,7 @@ export default function AdminScreen() {
       {/* ── PENDING TAB ── */}
       {tab === "pending" ? (
         loading ? (
-          <View style={styles.center}><ActivityIndicator size="large" color="#38BDF8" /></View>
+          <View style={styles.center}><ActivityIndicator size="large" color={t.accent} /></View>
         ) : (
           <FlatList
             data={filteredPending}
@@ -447,6 +921,11 @@ export default function AdminScreen() {
                 <View style={styles.infoRow}>
                   <ThemedText style={styles.infoLabel}>Employee</ThemedText>
                   <ThemedText style={styles.infoValue}>{item.userEmail}</ThemedText>
+                </View>
+
+                <View style={styles.infoRow}>
+                  <ThemedText style={styles.infoLabel}>Category</ThemedText>
+                  <ThemedText style={styles.infoValue}>{item.category}</ThemedText>
                 </View>
 
                 {item.description ? (
@@ -485,7 +964,7 @@ export default function AdminScreen() {
 
                 {item.userId === user?.uid ? (
                   <View style={styles.selfClaimNotice}>
-                    <Ionicons name="lock-closed-outline" size={14} color="#475569" style={{ marginRight: 6 }} />
+                    <Ionicons name="lock-closed-outline" size={14} color={t.textTertiary} style={{ marginRight: 6 }} />
                     <ThemedText style={styles.selfClaimText}>You cannot approve your own claim</ThemedText>
                   </View>
                 ) : (
@@ -506,7 +985,7 @@ export default function AdminScreen() {
 
         /* ── HISTORY TAB ── */
         historyLoading ? (
-          <View style={styles.center}><ActivityIndicator size="large" color="#38BDF8" /></View>
+          <View style={styles.center}><ActivityIndicator size="large" color={t.accent} /></View>
         ) : (
           <FlatList
             data={filteredHistory}
@@ -645,7 +1124,7 @@ export default function AdminScreen() {
             <TextInput
               style={styles.messageInput}
               placeholder="Message to employee (optional)"
-              placeholderTextColor="#475569"
+              placeholderTextColor={t.textTertiary}
               value={adminMessage}
               onChangeText={setAdminMessage}
               multiline
@@ -686,475 +1165,3 @@ export default function AdminScreen() {
     </ThemedView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    backgroundColor: "#0F172A"
-  },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    marginBottom: 16
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: "800",
-    color: "#F8FAFC",
-    marginBottom: 2
-  },
-  subtitle: {
-    color: "#475569",
-    fontSize: 13
-  },
-  countBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#1E293B",
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: "#334155"
-  },
-  countBadgeText: {
-    color: "#94A3B8",
-    fontSize: 12,
-    fontWeight: "600"
-  },
-
-  /* Tab bar */
-  tabBar: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 12
-  },
-  tabPill: {
-    flex: 1,
-    paddingVertical: 9,
-    borderRadius: 10,
-    backgroundColor: "#1E293B",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#334155"
-  },
-  tabPillActive: {
-    backgroundColor: "#172554",
-    borderColor: "#2563EB"
-  },
-  tabPillText: {
-    color: "#64748B",
-    fontSize: 13,
-    fontWeight: "600"
-  },
-  tabPillTextActive: {
-    color: "#93C5FD",
-    fontWeight: "700"
-  },
-
-  /* Search */
-  searchWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#1E293B",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#334155",
-    paddingHorizontal: 12,
-    marginBottom: 10,
-    height: 44
-  },
-  searchInput: {
-    flex: 1,
-    color: "#F8FAFC",
-    fontSize: 14
-  },
-
-  /* Category chips */
-  chipsScroll: {
-    paddingBottom: 10,
-    gap: 8,
-    flexDirection: "row"
-  },
-  chip: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: "#1E293B",
-    borderWidth: 1,
-    borderColor: "#334155"
-  },
-  chipActive: {
-    backgroundColor: "#172554",
-    borderColor: "#2563EB"
-  },
-  chipText: {
-    color: "#64748B",
-    fontSize: 13,
-    fontWeight: "600"
-  },
-  chipTextActive: {
-    color: "#93C5FD"
-  },
-
-  /* History status filter */
-  historyFilterRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 12
-  },
-  historyFilterBtn: {
-    flex: 1,
-    paddingVertical: 7,
-    borderRadius: 10,
-    backgroundColor: "#1E293B",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#334155"
-  },
-  historyFilterBtnActive: {
-    backgroundColor: "#172554",
-    borderColor: "#2563EB"
-  },
-  historyFilterText: {
-    color: "#64748B",
-    fontSize: 12,
-    fontWeight: "600"
-  },
-  historyFilterTextActive: {
-    color: "#93C5FD",
-    fontWeight: "700"
-  },
-
-  /* Empty state */
-  emptyState: {
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-    paddingTop: 60
-  },
-  emptyText: {
-    color: "#475569",
-    fontSize: 14
-  },
-
-  /* Card */
-  card: {
-    backgroundColor: "#1E293B",
-    borderRadius: 16,
-    marginBottom: 16,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#334155"
-  },
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    padding: 16
-  },
-  amount: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: "#F8FAFC"
-  },
-  merchant: {
-    marginTop: 2,
-    fontSize: 14,
-    color: "#94A3B8"
-  },
-  categoryBadge: {
-    backgroundColor: "#0F172A",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: "#2563EB"
-  },
-  categoryText: {
-    color: "#38BDF8",
-    fontSize: 12,
-    fontWeight: "600"
-  },
-  divider: {
-    height: 1,
-    backgroundColor: "#334155",
-    marginHorizontal: 16
-  },
-  infoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingTop: 10
-  },
-  infoLabel: {
-    color: "#64748B",
-    fontSize: 12,
-    fontWeight: "600",
-    textTransform: "uppercase",
-    letterSpacing: 0.5
-  },
-  infoValue: {
-    color: "#CBD5E1",
-    fontSize: 12,
-    flexShrink: 1,
-    textAlign: "right",
-    maxWidth: "70%"
-  },
-
-  /* History status badges */
-  historyStatusBadge: {
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4
-  },
-  historyStatusApproved: { backgroundColor: "#052E16" },
-  historyStatusRejected: { backgroundColor: "#450A0A" },
-  historyStatusText: { fontSize: 11, fontWeight: "700" },
-  historyStatusTextApproved: { color: "#4ADE80" },
-  historyStatusTextRejected: { color: "#F87171" },
-
-  /* Payment badges */
-  paymentBadge: {
-    marginHorizontal: 16,
-    marginTop: 10,
-    alignSelf: "flex-start",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4
-  },
-  paymentBadgePaid: { backgroundColor: "#14532D" },
-  paymentBadgeFailed: { backgroundColor: "#7F1D1D" },
-  paymentBadgeText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#F8FAFC"
-  },
-
-  /* Receipt */
-  receiptWrapper: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    borderRadius: 10,
-    overflow: "hidden",
-    position: "relative"
-  },
-  receiptImage: {
-    width: "100%",
-    height: 160,
-    borderRadius: 10
-  },
-  receiptOverlay: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    padding: 6,
-    alignItems: "center"
-  },
-  receiptOverlayText: {
-    color: "#F8FAFC",
-    fontSize: 12,
-    fontWeight: "500"
-  },
-  noReceiptRow: {
-    marginHorizontal: 16,
-    marginTop: 10
-  },
-  noReceipt: {
-    color: "#F97316",
-    fontSize: 12
-  },
-
-  /* Action buttons */
-  buttonRow: {
-    flexDirection: "row",
-    margin: 16,
-    gap: 10
-  },
-  approveBtn: {
-    flex: 2,
-    backgroundColor: "#16A34A",
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: "center"
-  },
-  rejectBtn: {
-    flex: 1,
-    backgroundColor: "#DC2626",
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: "center"
-  },
-  btnText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 14
-  },
-
-  /* Modal overlay */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.75)",
-    justifyContent: "center",
-    padding: 20
-  },
-
-  /* Confirmation modal */
-  confirmModalContent: {
-    backgroundColor: "#1E293B",
-    borderRadius: 20,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#334155"
-  },
-  confirmTitleBar: {
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    alignItems: "center"
-  },
-  confirmTitleBarApprove: { backgroundColor: "#14532D" },
-  confirmTitleBarReject: { backgroundColor: "#7F1D1D" },
-  confirmTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#F8FAFC"
-  },
-  confirmDetails: {
-    padding: 20,
-    gap: 10
-  },
-  confirmAmountRow: {
-    alignItems: "center",
-    marginBottom: 6
-  },
-  confirmAmount: {
-    fontSize: 32,
-    fontWeight: "bold",
-    color: "#F8FAFC"
-  },
-  confirmDetailRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center"
-  },
-  confirmDetailLabel: {
-    color: "#64748B",
-    fontSize: 13,
-    fontWeight: "600"
-  },
-  confirmDetailValue: {
-    color: "#CBD5E1",
-    fontSize: 13,
-    flexShrink: 1,
-    textAlign: "right",
-    maxWidth: "65%"
-  },
-  confirmDivider: {
-    height: 1,
-    backgroundColor: "#334155",
-    marginHorizontal: 20
-  },
-  messageInput: {
-    margin: 20,
-    backgroundColor: "#0F172A",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#334155",
-    padding: 12,
-    color: "#F8FAFC",
-    fontSize: 14,
-    textAlignVertical: "top",
-    minHeight: 72
-  },
-  confirmButtonRow: {
-    flexDirection: "row",
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    gap: 10
-  },
-  cancelBtn: {
-    flex: 1,
-    backgroundColor: "#334155",
-    paddingVertical: 13,
-    borderRadius: 12,
-    alignItems: "center"
-  },
-  cancelBtnText: {
-    color: "#94A3B8",
-    fontWeight: "700",
-    fontSize: 14
-  },
-  confirmBtn: {
-    flex: 2,
-    paddingVertical: 13,
-    borderRadius: 12,
-    alignItems: "center"
-  },
-  confirmBtnApprove: { backgroundColor: "#16A34A" },
-  confirmBtnReject: { backgroundColor: "#DC2626" },
-  confirmBtnText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 14
-  },
-
-  /* Receipt image modal */
-  imageModalContent: {
-    backgroundColor: "#1E293B",
-    borderRadius: 16,
-    padding: 16
-  },
-  modalImage: {
-    width: "100%",
-    height: 400,
-    borderRadius: 12
-  },
-  closeBtn: {
-    marginTop: 16,
-    backgroundColor: "#2563EB",
-    padding: 13,
-    borderRadius: 12,
-    alignItems: "center"
-  },
-  closeBtnText: {
-    color: "#fff",
-    fontWeight: "600",
-    fontSize: 14
-  },
-
-  /* Self-claim lock */
-  selfClaimNotice: {
-    flexDirection: "row",
-    alignItems: "center",
-    margin: 16,
-    marginTop: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    backgroundColor: "#1E293B",
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#334155"
-  },
-  selfClaimText: {
-    color: "#475569",
-    fontSize: 13,
-    fontStyle: "italic"
-  },
-
-  /* Misc */
-  center: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center"
-  },
-  denied: {
-    marginTop: 40,
-    color: "#EF4444",
-    fontSize: 18
-  }
-});

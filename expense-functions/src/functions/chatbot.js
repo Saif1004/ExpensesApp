@@ -66,6 +66,25 @@ app.http("chatbot", {
       const { message, history = [] } = await request.json();
 
       ////////////////////////////////////////////////////
+      // INPUT VALIDATION
+      ////////////////////////////////////////////////////
+
+      if (message !== "__getCredits__") {
+        if (typeof message !== "string" || message.trim().length === 0) {
+          return secureResponse({ success: false, error: "message is required" }, 400);
+        }
+        if (message.length > 1000) {
+          return secureResponse({ success: false, error: "message must be under 1000 characters" }, 400);
+        }
+        if (!Array.isArray(history)) {
+          return secureResponse({ success: false, error: "history must be an array" }, 400);
+        }
+        if (history.length > 20) {
+          return secureResponse({ success: false, error: "history must not exceed 20 messages" }, 400);
+        }
+      }
+
+      ////////////////////////////////////////////////////
       // RBAC — org membership lookup
       ////////////////////////////////////////////////////
 

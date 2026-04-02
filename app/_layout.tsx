@@ -1,6 +1,8 @@
 import { Stack } from "expo-router";
 import { useEffect } from "react";
+import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "./context/AuthProvider";
+import { ThemeProvider, useThemeContext } from "./context/ThemeContext";
 import { StripeProvider } from "@stripe/stripe-react-native";
 import { registerForPushNotifications } from "../utils/pushNotifications";
 
@@ -18,13 +20,26 @@ function PushNotificationRegistrar() {
   return null;
 }
 
-export default function RootLayout() {
+function AppShell() {
+  const { tokens, isLoaded } = useThemeContext();
+  if (!isLoaded) return null;
   return (
-    <StripeProvider publishableKey={STRIPE_PK} merchantIdentifier="merchant.com.saif1004.claimio">
+    <>
+      <StatusBar style={tokens.statusBar === 'dark-content' ? 'dark' : 'light'} />
       <AuthProvider>
         <PushNotificationRegistrar />
         <Stack screenOptions={{ headerShown: false }} />
       </AuthProvider>
+    </>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <StripeProvider publishableKey={STRIPE_PK} merchantIdentifier="merchant.com.saif1004.claimio">
+      <ThemeProvider>
+        <AppShell />
+      </ThemeProvider>
     </StripeProvider>
   );
 }

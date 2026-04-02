@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -24,6 +24,7 @@ import {
 import { useRouter } from "expo-router";
 import { useAuth } from "../context/AuthProvider";
 import { auth, db } from "../firebase/firebaseConfig";
+import { useTheme } from "../../hooks/useTheme";
 
 //////////////////////////////////////////////////////
 // CONFIG
@@ -53,6 +54,7 @@ export default function ManagePolicies(){
 
   const router = useRouter();
   const { role, authLoaded } = useAuth();
+  const { tokens: t } = useTheme();
 
   const [policies,setPolicies] = useState<Policy[]>([]);
   const [title,setTitle] = useState("");
@@ -268,13 +270,83 @@ const formatPolicy = (policy:Policy)=>{
 };
 
 //////////////////////////////////////////////////////
+// STYLES
+//////////////////////////////////////////////////////
+
+const styles = useMemo(() => StyleSheet.create({
+
+  safe:{flex:1,backgroundColor: t.bg},
+  container:{flex:1,padding:20},
+
+  header:{
+    flexDirection:"row",
+    alignItems:"center",
+    justifyContent:"space-between",
+    marginBottom:20
+  },
+
+  back:{color: t.accent,fontSize:16,width:60},
+
+  title:{
+    fontSize:24,
+    color: t.text,
+    fontWeight:"600",
+    textAlign:"center",
+    flex:1
+  },
+
+  input:{
+    backgroundColor: t.surface,
+    padding:12,
+    color: t.text,
+    borderRadius:8
+  },
+
+  addBtn:{
+    backgroundColor: t.accent,
+    padding:12,
+    marginTop:10,
+    borderRadius:8
+  },
+
+  btnText:{color: t.accentText, textAlign:"center"},
+
+  policyCard:{
+    flexDirection:"row",
+    justifyContent:"space-between",
+    padding:14,
+    backgroundColor: t.surface,
+    marginTop:10,
+    borderRadius:10
+  },
+
+  policyText:{color: t.text, flex:1, paddingRight:10},
+
+  remove:{color: t.error, fontWeight:"600"},
+
+  empty:{
+    color: t.textSecondary,
+    marginTop:20,
+    textAlign:"center"
+  },
+
+  loading:{
+    flex:1,
+    justifyContent:"center",
+    alignItems:"center",
+    backgroundColor: t.bg
+  }
+
+}), [t]);
+
+//////////////////////////////////////////////////////
 // LOADING
 //////////////////////////////////////////////////////
 
 if(loading){
   return(
     <SafeAreaView style={styles.loading}>
-      <ActivityIndicator size="large" color="#3B82F6"/>
+      <ActivityIndicator size="large" color={t.accent}/>
     </SafeAreaView>
   );
 }
@@ -303,7 +375,7 @@ return(
 
 <TextInput
 placeholder="Enter Here"
-placeholderTextColor="#94A3B8"
+placeholderTextColor={t.textSecondary}
 value={title}
 onChangeText={setTitle}
 style={styles.input}
@@ -360,73 +432,3 @@ onPress={()=>confirmDelete(item.id)}
 );
 
 }
-
-//////////////////////////////////////////////////////
-// STYLES
-//////////////////////////////////////////////////////
-
-const styles = StyleSheet.create({
-
-safe:{flex:1,backgroundColor:"#0F172A"},
-container:{flex:1,padding:20},
-
-header:{
-flexDirection:"row",
-alignItems:"center",
-justifyContent:"space-between",
-marginBottom:20
-},
-
-back:{color:"#38BDF8",fontSize:16,width:60},
-
-title:{
-fontSize:24,
-color:"#FFF",
-fontWeight:"600",
-textAlign:"center",
-flex:1
-},
-
-input:{
-backgroundColor:"#1E293B",
-padding:12,
-color:"#FFF",
-borderRadius:8
-},
-
-addBtn:{
-backgroundColor:"#2563EB",
-padding:12,
-marginTop:10,
-borderRadius:8
-},
-
-btnText:{color:"#FFF",textAlign:"center"},
-
-policyCard:{
-flexDirection:"row",
-justifyContent:"space-between",
-padding:14,
-backgroundColor:"#1E293B",
-marginTop:10,
-borderRadius:10
-},
-
-policyText:{color:"#FFF",flex:1,paddingRight:10},
-
-remove:{color:"#EF4444",fontWeight:"600"},
-
-empty:{
-color:"#94A3B8",
-marginTop:20,
-textAlign:"center"
-},
-
-loading:{
-flex:1,
-justifyContent:"center",
-alignItems:"center",
-backgroundColor:"#0F172A"
-}
-
-});

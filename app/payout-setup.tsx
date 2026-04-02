@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, Alert,
   ActivityIndicator, SafeAreaView, ScrollView, Linking,
@@ -7,6 +7,7 @@ import { auth, db } from "./firebase/firebaseConfig";
 import { doc, onSnapshot } from "firebase/firestore";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
+import { useTheme } from "../hooks/useTheme";
 
 const CREATE_URL = process.env.EXPO_PUBLIC_STRIPE_CREATE_ACCOUNT_URL!;
 const ONBOARDING_URL = process.env.EXPO_PUBLIC_STRIPE_ONBOARDING_LINK_URL!;
@@ -14,6 +15,7 @@ const CHECK_URL = process.env.EXPO_PUBLIC_STRIPE_CHECK_ONBOARDING_URL!;
 
 export default function PayoutSetupScreen() {
   const router = useRouter();
+  const { tokens: t } = useTheme();
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(false);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
@@ -89,10 +91,60 @@ export default function PayoutSetupScreen() {
     }
   };
 
+  const styles = useMemo(() => StyleSheet.create({
+    safe: { flex: 1, backgroundColor: t.bg },
+    backBtn: { padding: 16, alignSelf: "flex-start" },
+    container: { padding: 24 },
+    title: { fontSize: 24, fontWeight: "700", color: t.text, marginBottom: 8 },
+    subtitle: { fontSize: 14, color: t.textSecondary, marginBottom: 24, lineHeight: 20 },
+    stepsContainer: {
+      backgroundColor: t.surface,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 24,
+    },
+    stepsTitle: { fontSize: 13, color: t.textSecondary, marginBottom: 14, fontWeight: "600" },
+    step: { flexDirection: "row", alignItems: "center", marginBottom: 14 },
+    stepNumber: {
+      width: 24, height: 24, borderRadius: 12,
+      backgroundColor: t.accentSurface, alignItems: "center", justifyContent: "center",
+    },
+    stepNumberText: { color: t.accent, fontSize: 12, fontWeight: "700" },
+    stepText: { color: t.text, fontSize: 13, flex: 1 },
+    button: {
+      backgroundColor: t.accent, borderRadius: 12, paddingVertical: 14,
+      alignItems: "center", flexDirection: "row", justifyContent: "center", marginBottom: 16,
+    },
+    buttonDisabled: { opacity: 0.5 },
+    buttonText: { color: t.accentText, fontWeight: "700", fontSize: 16 },
+    completeBox: {
+      backgroundColor: t.surface, borderRadius: 12, padding: 24,
+      alignItems: "center", marginBottom: 24, borderWidth: 1, borderColor: "#4CAF5033",
+    },
+    completeTitle: { fontSize: 18, fontWeight: "700", color: "#4CAF50", marginTop: 12, marginBottom: 12 },
+    completeText: { fontSize: 13, color: t.textSecondary, textAlign: "center", lineHeight: 20 },
+    accountRow: {
+      flexDirection: "row", alignItems: "center",
+      backgroundColor: t.bg, borderRadius: 10, padding: 14,
+      borderWidth: 1, borderColor: "#4CAF5033", marginBottom: 4,
+    },
+    accountLabel: { fontSize: 11, color: t.textSecondary, marginBottom: 2 },
+    accountText: { fontSize: 16, color: t.text, fontWeight: "600" },
+    updateButton: { marginTop: 16, paddingVertical: 8, paddingHorizontal: 20 },
+    updateButtonText: { color: t.accent, fontSize: 13, fontWeight: "600" },
+    checkingRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+    checkingText: { color: t.textSecondary, fontSize: 13 },
+    infoBox: {
+      flexDirection: "row", alignItems: "flex-start", gap: 8,
+      backgroundColor: t.surface, borderRadius: 10, padding: 14,
+    },
+    infoText: { color: t.textSecondary, fontSize: 12, lineHeight: 18, flex: 1 },
+  }), [t]);
+
   return (
     <SafeAreaView style={styles.safe}>
       <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-        <Ionicons name="arrow-back" size={24} color="#fff" />
+        <Ionicons name="arrow-back" size={24} color={t.text} />
       </TouchableOpacity>
       <ScrollView contentContainerStyle={styles.container}>
         <Text style={styles.title}>Payout Account</Text>
@@ -129,7 +181,7 @@ export default function PayoutSetupScreen() {
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator color="#2196F3" />
+                <ActivityIndicator color={t.accent} />
               ) : (
                 <Text style={styles.updateButtonText}>Update Payout Details</Text>
               )}
@@ -148,7 +200,7 @@ export default function PayoutSetupScreen() {
                   <View style={styles.stepNumber}>
                     <Text style={styles.stepNumberText}>{i + 1}</Text>
                   </View>
-                  <Ionicons name={step.icon as any} size={20} color="#2196F3" style={{ marginHorizontal: 10 }} />
+                  <Ionicons name={step.icon as any} size={20} color={t.accent} style={{ marginHorizontal: 10 }} />
                   <Text style={styles.stepText}>{step.text}</Text>
                 </View>
               ))}
@@ -160,10 +212,10 @@ export default function PayoutSetupScreen() {
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color={t.accentText} />
               ) : (
                 <>
-                  <Ionicons name="open-outline" size={18} color="#fff" style={{ marginRight: 8 }} />
+                  <Ionicons name="open-outline" size={18} color={t.accentText} style={{ marginRight: 8 }} />
                   <Text style={styles.buttonText}>Set Up Payout Account</Text>
                 </>
               )}
@@ -171,7 +223,7 @@ export default function PayoutSetupScreen() {
 
             {checking && (
               <View style={styles.checkingRow}>
-                <ActivityIndicator size="small" color="#888" />
+                <ActivityIndicator size="small" color={t.textSecondary} />
                 <Text style={styles.checkingText}>Checking account status...</Text>
               </View>
             )}
@@ -179,7 +231,7 @@ export default function PayoutSetupScreen() {
         )}
 
         <View style={styles.infoBox}>
-          <Ionicons name="lock-closed" size={14} color="#888" />
+          <Ionicons name="lock-closed" size={14} color={t.textSecondary} />
           <Text style={styles.infoText}>
             Payouts are processed via Stripe. Claimio never stores your bank details.
           </Text>
@@ -188,53 +240,3 @@ export default function PayoutSetupScreen() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#0f1923" },
-  backBtn: { padding: 16, alignSelf: "flex-start" },
-  container: { padding: 24 },
-  title: { fontSize: 24, fontWeight: "700", color: "#fff", marginBottom: 8 },
-  subtitle: { fontSize: 14, color: "#888", marginBottom: 24, lineHeight: 20 },
-  stepsContainer: {
-    backgroundColor: "#1a2636",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 24,
-  },
-  stepsTitle: { fontSize: 13, color: "#888", marginBottom: 14, fontWeight: "600" },
-  step: { flexDirection: "row", alignItems: "center", marginBottom: 14 },
-  stepNumber: {
-    width: 24, height: 24, borderRadius: 12,
-    backgroundColor: "#2196F322", alignItems: "center", justifyContent: "center",
-  },
-  stepNumberText: { color: "#2196F3", fontSize: 12, fontWeight: "700" },
-  stepText: { color: "#ccc", fontSize: 13, flex: 1 },
-  button: {
-    backgroundColor: "#2196F3", borderRadius: 12, paddingVertical: 14,
-    alignItems: "center", flexDirection: "row", justifyContent: "center", marginBottom: 16,
-  },
-  buttonDisabled: { opacity: 0.5 },
-  buttonText: { color: "#fff", fontWeight: "700", fontSize: 16 },
-  completeBox: {
-    backgroundColor: "#1a2636", borderRadius: 12, padding: 24,
-    alignItems: "center", marginBottom: 24, borderWidth: 1, borderColor: "#4CAF5033",
-  },
-  completeTitle: { fontSize: 18, fontWeight: "700", color: "#4CAF50", marginTop: 12, marginBottom: 12 },
-  completeText: { fontSize: 13, color: "#888", textAlign: "center", lineHeight: 20 },
-  accountRow: {
-    flexDirection: "row", alignItems: "center",
-    backgroundColor: "#0f1923", borderRadius: 10, padding: 14,
-    borderWidth: 1, borderColor: "#4CAF5033", marginBottom: 4,
-  },
-  accountLabel: { fontSize: 11, color: "#888", marginBottom: 2 },
-  accountText: { fontSize: 16, color: "#fff", fontWeight: "600" },
-  updateButton: { marginTop: 16, paddingVertical: 8, paddingHorizontal: 20 },
-  updateButtonText: { color: "#2196F3", fontSize: 13, fontWeight: "600" },
-  checkingRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
-  checkingText: { color: "#888", fontSize: 13 },
-  infoBox: {
-    flexDirection: "row", alignItems: "flex-start", gap: 8,
-    backgroundColor: "#1a2636", borderRadius: 10, padding: 14,
-  },
-  infoText: { color: "#666", fontSize: 12, lineHeight: 18, flex: 1 },
-});

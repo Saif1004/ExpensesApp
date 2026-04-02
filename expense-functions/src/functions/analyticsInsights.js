@@ -113,6 +113,37 @@ app.http("analyticsInsights", {
 
       const { stats } = await request.json();
 
+      ////////////////////////////////////////////////////
+      // INPUT VALIDATION
+      ////////////////////////////////////////////////////
+
+      if (!stats || typeof stats !== "object" || Array.isArray(stats)) {
+        return secureResponse({ error: "stats object is required" }, 400);
+      }
+
+      const { total, approved, rejected, avgValue, categories } = stats;
+
+      if (typeof total    !== "number" || total    < 0 ||
+          typeof approved !== "number" || approved < 0 ||
+          typeof rejected !== "number" || rejected < 0 ||
+          typeof avgValue !== "number" || avgValue < 0) {
+        return secureResponse({ error: "stats fields must be non-negative numbers" }, 400);
+      }
+
+      if (!categories || typeof categories !== "object" || Array.isArray(categories)) {
+        return secureResponse({ error: "stats.categories must be an object" }, 400);
+      }
+
+      const ALLOWED_CATEGORIES = ["Meals", "Travel", "Technology", "Office"];
+      for (const key of Object.keys(categories)) {
+        if (!ALLOWED_CATEGORIES.includes(key)) {
+          return secureResponse({ error: `Unknown category: ${key}` }, 400);
+        }
+        if (typeof categories[key] !== "number" || categories[key] < 0) {
+          return secureResponse({ error: `categories.${key} must be a non-negative number` }, 400);
+        }
+      }
+
       const prompt = `
 Generate short insights from this expense data.
 

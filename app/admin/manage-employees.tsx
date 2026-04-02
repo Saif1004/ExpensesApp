@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -27,6 +27,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthProvider";
 import { db } from "../firebase/firebaseConfig";
 import { ThemedText } from "../../components/themed-text";
+import { useTheme } from "../../hooks/useTheme";
 
 type Member = {
   id: string;
@@ -41,6 +42,7 @@ type Member = {
 export default function ManageEmployees() {
   const router = useRouter();
   const { role, authLoaded, orgId, user, refreshMembership } = useAuth();
+  const { tokens: t } = useTheme();
 
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -295,6 +297,272 @@ export default function ManageEmployees() {
   const activeMembers   = filteredMembers.filter((m) => m.status === "approved");
 
   //////////////////////////////////////////////////////
+  // STYLES
+  //////////////////////////////////////////////////////
+
+  const styles = useMemo(() => StyleSheet.create({
+    safe: {
+      flex: 1,
+      backgroundColor: t.bg
+    },
+    container: {
+      flex: 1,
+      paddingHorizontal: 20,
+      paddingTop: 16
+    },
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      marginBottom: 16
+    },
+    backBtn: { paddingVertical: 4 },
+    backBtnText: {
+      color: t.accent,
+      fontSize: 15,
+      fontWeight: "600"
+    },
+    title: {
+      color: t.text,
+      fontSize: 26,
+      fontWeight: "bold"
+    },
+
+    /* Search */
+    searchWrap: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: t.surface,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: t.border,
+      paddingHorizontal: 12,
+      marginBottom: 20,
+      height: 44
+    },
+    searchInput: {
+      flex: 1,
+      color: t.text,
+      fontSize: 14
+    },
+
+    /* Section headers */
+    sectionHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 10
+    },
+    sectionDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: t.warning
+    },
+    sectionTitle: {
+      color: t.textSecondary,
+      fontSize: 12,
+      fontWeight: "700",
+      textTransform: "uppercase",
+      letterSpacing: 0.6
+    },
+
+    /* Card */
+    card: {
+      backgroundColor: t.surface,
+      borderRadius: 14,
+      padding: 14,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: t.border
+    },
+    cardPending: {
+      borderColor: t.warning + "88",
+      backgroundColor: t.warningSurface
+    },
+    cardAdmin: {
+      borderColor: t.accentSurface
+    },
+
+    /* Card top row */
+    cardTop: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12
+    },
+    avatar: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: "center",
+      justifyContent: "center"
+    },
+    avatarAdmin: { backgroundColor: t.accentSurface },
+    avatarEmployee: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border },
+    avatarLetter: {
+      color: t.accent,
+      fontSize: 16,
+      fontWeight: "700"
+    },
+    nameRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginBottom: 2
+    },
+    name: {
+      color: t.text,
+      fontSize: 15,
+      fontWeight: "600",
+      flexShrink: 1
+    },
+    email: {
+      color: t.textSecondary,
+      fontSize: 12
+    },
+    youBadge: {
+      backgroundColor: t.accentSurface,
+      borderRadius: 6,
+      paddingHorizontal: 6,
+      paddingVertical: 2
+    },
+    youBadgeText: {
+      color: t.accent,
+      fontSize: 10,
+      fontWeight: "700"
+    },
+
+    /* Role badge */
+    roleBadge: {
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      alignSelf: "flex-start"
+    },
+    roleBadgeAdmin: { backgroundColor: t.accentSurface, borderWidth: 1, borderColor: t.accent },
+    roleBadgeEmployee: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border },
+    roleBadgeText: { fontSize: 11, fontWeight: "700" },
+    roleBadgeTextAdmin: { color: t.accent },
+    roleBadgeTextEmployee: { color: t.textSecondary },
+
+    /* Pending badge */
+    pendingBadge: {
+      backgroundColor: t.warningSurface,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderWidth: 1,
+      borderColor: t.warning + "88"
+    },
+    pendingBadgeText: {
+      color: t.warning,
+      fontSize: 11,
+      fontWeight: "700"
+    },
+
+    /* Button row */
+    btnRow: {
+      flexDirection: "row",
+      gap: 8,
+      marginTop: 12
+    },
+    btnText: {
+      color: "#fff",
+      fontWeight: "600",
+      fontSize: 13
+    },
+    approveBtn: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: t.success,
+      paddingVertical: 9,
+      borderRadius: 10
+    },
+    rejectBtn: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: t.errorSurface,
+      paddingVertical: 9,
+      borderRadius: 10
+    },
+    promoteBtn: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: t.surface,
+      paddingVertical: 9,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: t.border
+    },
+    promoteBtnText: {
+      color: t.textSecondary,
+      fontWeight: "600",
+      fontSize: 13
+    },
+    demoteBtn: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: t.warningSurface,
+      paddingVertical: 9,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: t.warning + "88"
+    },
+    demoteBtnText: {
+      color: t.warning,
+      fontWeight: "600",
+      fontSize: 13
+    },
+    removeBtn: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: t.errorSurface,
+      paddingVertical: 9,
+      borderRadius: 10
+    },
+
+    /* Empty state */
+    emptyCard: {
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 10,
+      paddingVertical: 32
+    },
+    emptyText: {
+      color: t.textTertiary,
+      fontSize: 14
+    },
+
+    /* Warning card */
+    warningCard: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      backgroundColor: t.warningSurface,
+      borderRadius: 12,
+      padding: 14,
+      marginTop: 8,
+      borderWidth: 1,
+      borderColor: t.warning + "88"
+    },
+    warningText: {
+      flex: 1,
+      color: t.warning,
+      fontSize: 12,
+      lineHeight: 18
+    }
+  }), [t]);
+
+  //////////////////////////////////////////////////////
   // RENDER CARD
   //////////////////////////////////////////////////////
 
@@ -359,7 +627,7 @@ export default function ManageEmployees() {
         {!self && (
           <View style={styles.btnRow}>
             {busy ? (
-              <ActivityIndicator color="#38BDF8" style={{ marginTop: 8 }} />
+              <ActivityIndicator color={t.accent} style={{ marginTop: 8 }} />
             ) : isPending ? (
               // Pending member actions
               <>
@@ -391,7 +659,7 @@ export default function ManageEmployees() {
                       onPress={() => demoteToEmployee(item)}
                       activeOpacity={0.8}
                     >
-                      <Ionicons name="arrow-down-circle-outline" size={14} color="#FCD34D" style={{ marginRight: 4 }} />
+                      <Ionicons name="arrow-down-circle-outline" size={14} color={t.warning} style={{ marginRight: 4 }} />
                       <ThemedText style={styles.demoteBtnText}>Make Employee</ThemedText>
                     </TouchableOpacity>
                   ) : (
@@ -400,7 +668,7 @@ export default function ManageEmployees() {
                       onPress={() => promoteToAdmin(item)}
                       activeOpacity={0.8}
                     >
-                      <Ionicons name="shield-outline" size={14} color="#94A3B8" style={{ marginRight: 4 }} />
+                      <Ionicons name="shield-outline" size={14} color={t.textSecondary} style={{ marginRight: 4 }} />
                       <ThemedText style={styles.promoteBtnText}>Make Admin</ThemedText>
                     </TouchableOpacity>
                   )
@@ -428,7 +696,7 @@ export default function ManageEmployees() {
   if (loading) {
     return (
       <SafeAreaView style={styles.safe}>
-        <ActivityIndicator size="large" color="#38BDF8" style={{ marginTop: 60 }} />
+        <ActivityIndicator size="large" color={t.accent} style={{ marginTop: 60 }} />
       </SafeAreaView>
     );
   }
@@ -447,11 +715,11 @@ export default function ManageEmployees() {
 
         {/* Search */}
         <View style={styles.searchWrap}>
-          <Ionicons name="search-outline" size={16} color="#64748B" style={{ marginRight: 8 }} />
+          <Ionicons name="search-outline" size={16} color={t.textSecondary} style={{ marginRight: 8 }} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search by name or email…"
-            placeholderTextColor="#475569"
+            placeholderTextColor={t.textTertiary}
             value={search}
             onChangeText={setSearch}
             autoCapitalize="none"
@@ -479,14 +747,14 @@ export default function ManageEmployees() {
 
           {/* Active members section */}
           <View style={styles.sectionHeader}>
-            <View style={[styles.sectionDot, { backgroundColor: "#22C55E" }]} />
+            <View style={[styles.sectionDot, { backgroundColor: t.success }]} />
             <ThemedText style={styles.sectionTitle}>
               Members ({activeMembers.length})
             </ThemedText>
           </View>
           {activeMembers.length === 0 ? (
             <View style={styles.emptyCard}>
-              <Ionicons name="people-outline" size={32} color="#334155" />
+              <Ionicons name="people-outline" size={32} color={t.border} />
               <ThemedText style={styles.emptyText}>No members found</ThemedText>
             </View>
           ) : (
@@ -496,7 +764,7 @@ export default function ManageEmployees() {
           {/* Role change warning */}
           {isOwner && (
             <View style={styles.warningCard}>
-              <Ionicons name="warning-outline" size={16} color="#F59E0B" style={{ marginRight: 8, marginTop: 1 }} />
+              <Ionicons name="warning-outline" size={16} color={t.warning} style={{ marginRight: 8, marginTop: 1 }} />
               <ThemedText style={styles.warningText}>
                 Admins can approve and reject all expense claims. Only promote trusted members.
               </ThemedText>
@@ -507,265 +775,3 @@ export default function ManageEmployees() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: "#0F172A"
-  },
-  container: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 16
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 16
-  },
-  backBtn: { paddingVertical: 4 },
-  backBtnText: {
-    color: "#38BDF8",
-    fontSize: 15,
-    fontWeight: "600"
-  },
-  title: {
-    color: "#F8FAFC",
-    fontSize: 26,
-    fontWeight: "bold"
-  },
-
-  /* Search */
-  searchWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#1E293B",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#334155",
-    paddingHorizontal: 12,
-    marginBottom: 20,
-    height: 44
-  },
-  searchInput: {
-    flex: 1,
-    color: "#F8FAFC",
-    fontSize: 14
-  },
-
-  /* Section headers */
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 10
-  },
-  sectionDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#F59E0B"
-  },
-  sectionTitle: {
-    color: "#64748B",
-    fontSize: 12,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.6
-  },
-
-  /* Card */
-  card: {
-    backgroundColor: "#1E293B",
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: "#334155"
-  },
-  cardPending: {
-    borderColor: "#78350F",
-    backgroundColor: "#1C1508"
-  },
-  cardAdmin: {
-    borderColor: "#1E3A5F"
-  },
-
-  /* Card top row */
-  cardTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  avatarAdmin: { backgroundColor: "#172554" },
-  avatarEmployee: { backgroundColor: "#1E293B", borderWidth: 1, borderColor: "#334155" },
-  avatarLetter: {
-    color: "#93C5FD",
-    fontSize: 16,
-    fontWeight: "700"
-  },
-  nameRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 2
-  },
-  name: {
-    color: "#F8FAFC",
-    fontSize: 15,
-    fontWeight: "600",
-    flexShrink: 1
-  },
-  email: {
-    color: "#64748B",
-    fontSize: 12
-  },
-  youBadge: {
-    backgroundColor: "#1E3A5F",
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2
-  },
-  youBadgeText: {
-    color: "#93C5FD",
-    fontSize: 10,
-    fontWeight: "700"
-  },
-
-  /* Role badge */
-  roleBadge: {
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    alignSelf: "flex-start"
-  },
-  roleBadgeAdmin: { backgroundColor: "#172554", borderWidth: 1, borderColor: "#2563EB" },
-  roleBadgeEmployee: { backgroundColor: "#1E293B", borderWidth: 1, borderColor: "#334155" },
-  roleBadgeText: { fontSize: 11, fontWeight: "700" },
-  roleBadgeTextAdmin: { color: "#93C5FD" },
-  roleBadgeTextEmployee: { color: "#64748B" },
-
-  /* Pending badge */
-  pendingBadge: {
-    backgroundColor: "#451A03",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: "#78350F"
-  },
-  pendingBadgeText: {
-    color: "#FCD34D",
-    fontSize: 11,
-    fontWeight: "700"
-  },
-
-  /* Button row */
-  btnRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 12
-  },
-  btnText: {
-    color: "#fff",
-    fontWeight: "600",
-    fontSize: 13
-  },
-  approveBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#16A34A",
-    paddingVertical: 9,
-    borderRadius: 10
-  },
-  rejectBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#7F1D1D",
-    paddingVertical: 9,
-    borderRadius: 10
-  },
-  promoteBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#1E293B",
-    paddingVertical: 9,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#334155"
-  },
-  promoteBtnText: {
-    color: "#94A3B8",
-    fontWeight: "600",
-    fontSize: 13
-  },
-  demoteBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#292524",
-    paddingVertical: 9,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "#78350F"
-  },
-  demoteBtnText: {
-    color: "#FCD34D",
-    fontWeight: "600",
-    fontSize: 13
-  },
-  removeBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#7F1D1D",
-    paddingVertical: 9,
-    borderRadius: 10
-  },
-
-  /* Empty state */
-  emptyCard: {
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    paddingVertical: 32
-  },
-  emptyText: {
-    color: "#475569",
-    fontSize: 14
-  },
-
-  /* Warning card */
-  warningCard: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    backgroundColor: "#292524",
-    borderRadius: 12,
-    padding: 14,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: "#78350F"
-  },
-  warningText: {
-    flex: 1,
-    color: "#FCD34D",
-    fontSize: 12,
-    lineHeight: 18
-  }
-});

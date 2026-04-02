@@ -6,7 +6,7 @@ import {
   where
 } from "firebase/firestore";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   ActivityIndicator,
@@ -31,6 +31,7 @@ import { ThemedText } from "../../components/themed-text";
 import { useAuth } from "../context/AuthProvider";
 import { db } from "../firebase/firebaseConfig";
 import { addListener } from "../../utils/listenerStore";
+import { useTheme } from "../../hooks/useTheme";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -58,6 +59,7 @@ type CategoryStats = {
 export default function AnalyticsScreen() {
 
   const { user, role, isPro, orgId } = useAuth();
+  const { tokens: t } = useTheme();
 
   if(!isPro) return <PaywallScreen />;
 
@@ -231,54 +233,159 @@ export default function AnalyticsScreen() {
       ? ((stats.approved / stats.total) * 100).toFixed(1)
       : "0";
 
-  const chartConfig = {
-    backgroundGradientFrom: "#1E293B",
-    backgroundGradientTo: "#1E293B",
+  const { chartConfig, categoryData, styles } = useMemo(() => {
+    const cfg = {
+      backgroundGradientFrom: t.surface,
+      backgroundGradientTo: t.surface,
 
-    fillShadowGradient: "#38BDF8",
-    fillShadowGradientOpacity: 1,
+      fillShadowGradient: t.accent,
+      fillShadowGradientOpacity: 1,
 
-    decimalPlaces: 0,
+      decimalPlaces: 0,
 
-    color: () => "#38BDF8",
-    labelColor: () => "#E2E8F0",
+      color: () => t.accent,
+      labelColor: () => t.textSecondary,
 
-    propsForBackgroundLines: {
-      stroke: "#334155",
-      strokeDasharray: ""
-    }
-  };
+      propsForBackgroundLines: {
+        stroke: t.border,
+        strokeDasharray: ""
+      }
+    };
 
-  const categoryData = [
-    {
-      name: "Meals",
-      population: stats.categories.Meals,
-      color: "#38BDF8",
-      legendFontColor: "#FFF",
-      legendFontSize: 12
-    },
-    {
-      name: "Travel",
-      population: stats.categories.Travel,
-      color: "#22C55E",
-      legendFontColor: "#FFF",
-      legendFontSize: 12
-    },
-    {
-      name: "Technology",
-      population: stats.categories.Technology,
-      color: "#FACC15",
-      legendFontColor: "#FFF",
-      legendFontSize: 12
-    },
-    {
-      name: "Office",
-      population: stats.categories.Office,
-      color: "#F97316",
-      legendFontColor: "#FFF",
-      legendFontSize: 12
-    }
-  ];
+    const catData = [
+      {
+        name: "Meals",
+        population: stats.categories.Meals,
+        color: t.accent,
+        legendFontColor: "#FFF",
+        legendFontSize: 12
+      },
+      {
+        name: "Travel",
+        population: stats.categories.Travel,
+        color: t.success,
+        legendFontColor: "#FFF",
+        legendFontSize: 12
+      },
+      {
+        name: "Technology",
+        population: stats.categories.Technology,
+        color: t.warning,
+        legendFontColor: "#FFF",
+        legendFontSize: 12
+      },
+      {
+        name: "Office",
+        population: stats.categories.Office,
+        color: "#F97316",
+        legendFontColor: "#FFF",
+        legendFontSize: 12
+      }
+    ];
+
+    const st = StyleSheet.create({
+
+      container:{
+        flex:1,
+        padding:20,
+        backgroundColor: t.bg
+      },
+
+      title:{
+        marginTop:24,
+        fontSize:28,
+        fontWeight:"bold",
+        color: t.text
+      },
+
+      aiCard:{
+        backgroundColor: t.surface,
+        padding:16,
+        borderRadius:14,
+        marginTop:16
+      },
+
+      aiTitle:{
+        color: t.accent,
+        fontWeight:"600",
+        marginBottom:6
+      },
+
+      aiText:{
+        color: t.text,
+        lineHeight:20
+      },
+
+      grid:{
+        flexDirection:"row",
+        flexWrap:"wrap",
+        gap:14,
+        marginTop:20
+      },
+
+      card:{
+        width:"47%",
+        backgroundColor: t.surface,
+        padding:18,
+        borderRadius:14
+      },
+
+      label:{
+        color: t.textSecondary,
+        fontSize:12
+      },
+
+      value:{
+        marginTop:6,
+        fontSize:22,
+        fontWeight:"bold",
+        color: t.text
+      },
+
+      warning:{
+        marginTop:6,
+        fontSize:22,
+        fontWeight:"bold",
+        color:"#F97316"
+      },
+
+      exportBtn:{
+        marginTop:20,
+        borderWidth:1,
+        borderColor: t.accent,
+        borderRadius:10,
+        paddingVertical:12,
+        alignItems:"center"
+      },
+
+      exportBtnText:{
+        color: t.accent,
+        fontWeight:"700",
+        fontSize:14
+      },
+
+      chartTitle:{
+        marginTop:26,
+        marginBottom:10,
+        fontSize:16,
+        fontWeight:"600",
+        color: t.text
+      },
+
+      chart:{
+        borderRadius:16
+      },
+
+      center:{
+        flex:1,
+        justifyContent:"center",
+        alignItems:"center"
+      }
+
+    });
+
+    return { chartConfig: cfg, categoryData: catData, styles: st };
+  }, [t, stats.categories]);
 
   return (
     <ScrollView style={styles.container}>
@@ -296,7 +403,7 @@ export default function AnalyticsScreen() {
         </ThemedText>
 
         {aiLoading ? (
-          <ActivityIndicator color="#38BDF8"/>
+          <ActivityIndicator color={t.accent}/>
         ) : (
           <ThemedText style={styles.aiText}>
             {aiInsight || "No insights available yet."}
@@ -307,13 +414,13 @@ export default function AnalyticsScreen() {
         <TouchableOpacity
           onPress={()=>generateAIInsights(stats)}
           style={{
-            backgroundColor:"#2563EB",
+            backgroundColor: t.accent,
             padding:12,
             borderRadius:10,
             marginTop:10
           }}
         >
-          <ThemedText style={{color:"#FFF",textAlign:"center"}}>
+          <ThemedText style={{color: t.accentText, textAlign:"center"}}>
             Generate AI Insight
           </ThemedText>
         </TouchableOpacity>
@@ -322,7 +429,7 @@ export default function AnalyticsScreen() {
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#38BDF8" />
+          <ActivityIndicator size="large" color={t.accent} />
         </View>
       ) : (
         <>
@@ -424,104 +531,3 @@ export default function AnalyticsScreen() {
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-
-container:{
-flex:1,
-padding:20,
-backgroundColor:"#0F172A"
-},
-
-title:{
-marginTop:24,
-fontSize:28,
-fontWeight:"bold",
-color:"#F8FAFC"
-},
-
-aiCard:{
-backgroundColor:"#1E293B",
-padding:16,
-borderRadius:14,
-marginTop:16
-},
-
-aiTitle:{
-color:"#38BDF8",
-fontWeight:"600",
-marginBottom:6
-},
-
-aiText:{
-color:"#E2E8F0",
-lineHeight:20
-},
-
-grid:{
-flexDirection:"row",
-flexWrap:"wrap",
-gap:14,
-marginTop:20
-},
-
-card:{
-width:"47%",
-backgroundColor:"#1E293B",
-padding:18,
-borderRadius:14
-},
-
-label:{
-color:"#94A3B8",
-fontSize:12
-},
-
-value:{
-marginTop:6,
-fontSize:22,
-fontWeight:"bold",
-color:"#F8FAFC"
-},
-
-warning:{
-marginTop:6,
-fontSize:22,
-fontWeight:"bold",
-color:"#F97316"
-},
-
-exportBtn:{
-marginTop:20,
-borderWidth:1,
-borderColor:"#38BDF8",
-borderRadius:10,
-paddingVertical:12,
-alignItems:"center"
-},
-
-exportBtnText:{
-color:"#38BDF8",
-fontWeight:"700",
-fontSize:14
-},
-
-chartTitle:{
-marginTop:26,
-marginBottom:10,
-fontSize:16,
-fontWeight:"600",
-color:"#E2E8F0"
-},
-
-chart:{
-borderRadius:16
-},
-
-center:{
-flex:1,
-justifyContent:"center",
-alignItems:"center"
-}
-
-});

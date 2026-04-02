@@ -8,7 +8,7 @@ import {
   where
 } from "firebase/firestore";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   ActivityIndicator,
@@ -31,6 +31,7 @@ import { ThemedView } from "../../components/themed-view";
 import { useAuth } from "../context/AuthProvider";
 import { db } from "../firebase/firebaseConfig";
 import { addListener } from "../../utils/listenerStore";
+import { useTheme } from "../../hooks/useTheme";
 
 const LAST_SEEN_KEY = "claims_last_seen";
 
@@ -61,6 +62,7 @@ function formatDate(ts: Timestamp): string {
 export default function ClaimsScreen() {
 
   const { user } = useAuth();
+  const { tokens: t } = useTheme();
 
   const [allClaims, setAllClaims] = useState<Claim[]>([]);
   const [claims, setClaims] = useState<Claim[]>([]);
@@ -152,6 +154,16 @@ export default function ClaimsScreen() {
   };
 
   /////////////////////////////////////////////////////////
+  // STATUS CONFIG
+  /////////////////////////////////////////////////////////
+
+  const STATUS_CONFIG = {
+    pending:  { color: t.warning,  bg: t.warningSurface,  icon: "time-outline" as const },
+    approved: { color: t.success,  bg: t.successSurface,  icon: "checkmark-circle-outline" as const },
+    rejected: { color: t.error,    bg: t.errorSurface,    icon: "close-circle-outline" as const },
+  };
+
+  /////////////////////////////////////////////////////////
   // Badge colours
   /////////////////////////////////////////////////////////
 
@@ -174,6 +186,337 @@ export default function ClaimsScreen() {
   };
 
   /////////////////////////////////////////////////////////
+  // Styles
+  /////////////////////////////////////////////////////////
+
+  const styles = useMemo(() => StyleSheet.create({
+
+    container: {
+      flex: 1,
+      backgroundColor: t.bg,
+      paddingHorizontal: 20,
+      paddingTop: 20
+    },
+
+    title: {
+      fontSize: 30,
+      fontWeight: "bold",
+      color: t.text,
+      marginBottom: 14
+    },
+
+    /* Search */
+    searchWrap: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: t.surface,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: t.border,
+      paddingHorizontal: 12,
+      marginBottom: 14,
+      height: 44
+    },
+
+    searchIcon: {
+      marginRight: 8
+    },
+
+    searchInput: {
+      flex: 1,
+      color: t.text,
+      fontSize: 14
+    },
+
+    /* Filter tabs */
+    filterRow: {
+      flexDirection: "row",
+      gap: 8,
+      marginBottom: 16
+    },
+
+    filterBtn: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 8,
+      paddingHorizontal: 10,
+      borderRadius: 10,
+      backgroundColor: t.surface,
+      gap: 6,
+      borderWidth: 1,
+      borderColor: t.surface
+    },
+
+    filterActive: {
+      backgroundColor: t.accentSurface,
+      borderColor: t.accent
+    },
+
+    filterText: {
+      color: t.textSecondary,
+      fontSize: 12,
+      fontWeight: "600"
+    },
+
+    filterTextActive: {
+      color: t.accent,
+      fontSize: 12,
+      fontWeight: "700"
+    },
+
+    countPill: {
+      borderRadius: 10,
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+      minWidth: 20,
+      alignItems: "center"
+    },
+
+    countPillActive: {
+      backgroundColor: t.accent
+    },
+
+    countPillInactive: {
+      backgroundColor: t.border
+    },
+
+    countText: {
+      color: t.textSecondary,
+      fontSize: 11,
+      fontWeight: "700"
+    },
+
+    countTextActive: {
+      color: "#fff"
+    },
+
+    /* Empty state */
+    emptyCard: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 12
+    },
+
+    emptyText: {
+      color: t.textTertiary,
+      fontSize: 14
+    },
+
+    /* Claim card */
+    claimCard: {
+      backgroundColor: t.surface,
+      borderRadius: 16,
+      marginBottom: 14,
+      borderWidth: 1,
+      borderColor: t.border,
+      overflow: "hidden"
+    },
+
+    cardHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 16,
+      paddingTop: 16,
+      paddingBottom: 6
+    },
+
+    amount: {
+      fontSize: 20,
+      fontWeight: "800",
+      color: t.text,
+      letterSpacing: 0.3
+    },
+
+    dateText: {
+      fontSize: 12,
+      color: t.textSecondary,
+      fontWeight: "500"
+    },
+
+    metaRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      paddingHorizontal: 16,
+      paddingBottom: 12
+    },
+
+    merchant: {
+      color: t.textSecondary,
+      fontSize: 13
+    },
+
+    dot: {
+      width: 3,
+      height: 3,
+      borderRadius: 1.5,
+      backgroundColor: t.textTertiary
+    },
+
+    category: {
+      color: t.textSecondary,
+      fontSize: 13
+    },
+
+    statusRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      paddingHorizontal: 16,
+      paddingBottom: 10
+    },
+
+    statusBadge: {
+      alignSelf: "flex-start",
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 6
+    },
+
+    statusText: {
+      fontSize: 11,
+      fontWeight: "700",
+      letterSpacing: 0.5
+    },
+
+    badgeApproved:      { backgroundColor: t.successSurface },
+    badgePending:       { backgroundColor: t.warningSurface },
+    badgeRejected:      { backgroundColor: t.errorSurface },
+    badgeTextApproved:  { color: t.success },
+    badgeTextPending:   { color: t.warning },
+    badgeTextRejected:  { color: t.error },
+
+    /* Paid badge */
+    paidBadge: {
+      backgroundColor: t.successSurface,
+      borderRadius: 6,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderWidth: 1,
+      borderColor: t.success + "66"
+    },
+
+    paidText: {
+      color: t.success,
+      fontSize: 11,
+      fontWeight: "700"
+    },
+
+    /* Failed payment badge */
+    failedBadge: {
+      backgroundColor: t.errorSurface,
+      borderRadius: 6,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderWidth: 1,
+      borderColor: t.error
+    },
+
+    failedText: {
+      color: t.error,
+      fontSize: 11,
+      fontWeight: "700"
+    },
+
+    /* Approved/rejected by */
+    approvedBy: {
+      color: t.success,
+      fontSize: 12,
+      paddingHorizontal: 16,
+      paddingBottom: 8
+    },
+
+    rejectedBy: {
+      color: t.error,
+      fontSize: 12,
+      paddingHorizontal: 16,
+      paddingBottom: 8
+    },
+
+    /* Admin message bubble */
+    messageBubble: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 7,
+      backgroundColor: t.bg,
+      marginHorizontal: 16,
+      marginBottom: 12,
+      borderRadius: 10,
+      padding: 10,
+      borderWidth: 1,
+      borderColor: t.border
+    },
+
+    messageText: {
+      flex: 1,
+      color: t.textSecondary,
+      fontSize: 13,
+      lineHeight: 18
+    },
+
+    /* Receipt */
+    receiptPreview: {
+      width: "100%",
+      height: 130,
+      marginTop: 0
+    },
+
+    receiptOverlay: {
+      position: "absolute",
+      bottom: 8,
+      right: 10,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      backgroundColor: "rgba(0,0,0,0.55)",
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 8
+    },
+
+    receiptOverlayText: {
+      color: "#fff",
+      fontSize: 12,
+      fontWeight: "600"
+    },
+
+    center: {
+      flex: 1,
+      justifyContent: "center",
+      alignItems: "center"
+    },
+
+    /* Receipt modal */
+    imageModalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.95)",
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 20
+    },
+
+    fullImage: {
+      width: "100%",
+      height: "80%"
+    },
+
+    closeBtn: {
+      marginTop: 16,
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: t.accent,
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      borderRadius: 12
+    }
+
+  }), [t]);
+
+  /////////////////////////////////////////////////////////
   // UI
   /////////////////////////////////////////////////////////
 
@@ -187,11 +530,11 @@ export default function ClaimsScreen() {
 
       {/* Search */}
       <View style={styles.searchWrap}>
-        <Ionicons name="search-outline" size={16} color="#64748B" style={styles.searchIcon} />
+        <Ionicons name="search-outline" size={16} color={t.textSecondary} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search by merchant or category…"
-          placeholderTextColor="#475569"
+          placeholderTextColor={t.textTertiary}
           value={search}
           onChangeText={setSearch}
           autoCapitalize="none"
@@ -236,13 +579,13 @@ export default function ClaimsScreen() {
       {loading ? (
 
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#38BDF8" />
+          <ActivityIndicator size="large" color={t.accent} />
         </View>
 
       ) : claims.length === 0 ? (
 
         <View style={styles.emptyCard}>
-          <Ionicons name="receipt-outline" size={36} color="#334155" />
+          <Ionicons name="receipt-outline" size={36} color={t.border} />
           <ThemedText style={styles.emptyText}>
             {search.trim()
               ? "No claims match your search"
@@ -262,7 +605,7 @@ export default function ClaimsScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor="#38BDF8"
+              tintColor={t.accent}
             />
           }
           renderItem={({ item }) => (
@@ -285,7 +628,7 @@ export default function ClaimsScreen() {
 
               {/* Merchant + category */}
               <View style={styles.metaRow}>
-                <Ionicons name="storefront-outline" size={13} color="#64748B" />
+                <Ionicons name="storefront-outline" size={13} color={t.textSecondary} />
                 <ThemedText style={styles.merchant}>{item.merchant}</ThemedText>
                 <View style={styles.dot} />
                 <ThemedText style={styles.category}>{item.category}</ThemedText>
@@ -329,7 +672,7 @@ export default function ClaimsScreen() {
               {/* Admin message */}
               {!!item.adminFeedback && (
                 <View style={styles.messageBubble}>
-                  <Ionicons name="chatbubble-outline" size={13} color="#94A3B8" style={{ marginTop: 1 }} />
+                  <Ionicons name="chatbubble-outline" size={13} color={t.textSecondary} style={{ marginTop: 1 }} />
                   <ThemedText style={styles.messageText}>
                     {item.adminFeedback}
                   </ThemedText>
@@ -385,330 +728,3 @@ export default function ClaimsScreen() {
     </ThemedView>
   );
 }
-
-const styles = StyleSheet.create({
-
-  container: {
-    flex: 1,
-    backgroundColor: "#0F172A",
-    paddingHorizontal: 20,
-    paddingTop: 20
-  },
-
-  title: {
-    fontSize: 30,
-    fontWeight: "bold",
-    color: "#F8FAFC",
-    marginBottom: 14
-  },
-
-  /* Search */
-  searchWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#1E293B",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#334155",
-    paddingHorizontal: 12,
-    marginBottom: 14,
-    height: 44
-  },
-
-  searchIcon: {
-    marginRight: 8
-  },
-
-  searchInput: {
-    flex: 1,
-    color: "#F8FAFC",
-    fontSize: 14
-  },
-
-  /* Filter tabs */
-  filterRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 16
-  },
-
-  filterBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    backgroundColor: "#1E293B",
-    gap: 6,
-    borderWidth: 1,
-    borderColor: "#1E293B"
-  },
-
-  filterActive: {
-    backgroundColor: "#172554",
-    borderColor: "#2563EB"
-  },
-
-  filterText: {
-    color: "#64748B",
-    fontSize: 12,
-    fontWeight: "600"
-  },
-
-  filterTextActive: {
-    color: "#93C5FD",
-    fontSize: 12,
-    fontWeight: "700"
-  },
-
-  countPill: {
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    minWidth: 20,
-    alignItems: "center"
-  },
-
-  countPillActive: {
-    backgroundColor: "#2563EB"
-  },
-
-  countPillInactive: {
-    backgroundColor: "#334155"
-  },
-
-  countText: {
-    color: "#94A3B8",
-    fontSize: 11,
-    fontWeight: "700"
-  },
-
-  countTextActive: {
-    color: "#fff"
-  },
-
-  /* Empty state */
-  emptyCard: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12
-  },
-
-  emptyText: {
-    color: "#475569",
-    fontSize: 14
-  },
-
-  /* Claim card */
-  claimCard: {
-    backgroundColor: "#1E293B",
-    borderRadius: 16,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: "#334155",
-    overflow: "hidden"
-  },
-
-  cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 6
-  },
-
-  amount: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#F8FAFC",
-    letterSpacing: 0.3
-  },
-
-  dateText: {
-    fontSize: 12,
-    color: "#64748B",
-    fontWeight: "500"
-  },
-
-  metaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    paddingHorizontal: 16,
-    paddingBottom: 12
-  },
-
-  merchant: {
-    color: "#94A3B8",
-    fontSize: 13
-  },
-
-  dot: {
-    width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    backgroundColor: "#475569"
-  },
-
-  category: {
-    color: "#64748B",
-    fontSize: 13
-  },
-
-  statusRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingBottom: 10
-  },
-
-  statusBadge: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6
-  },
-
-  statusText: {
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 0.5
-  },
-
-  badgeApproved:      { backgroundColor: "#052E16" },
-  badgePending:       { backgroundColor: "#1C1917" },
-  badgeRejected:      { backgroundColor: "#450A0A" },
-  badgeTextApproved:  { color: "#4ADE80" },
-  badgeTextPending:   { color: "#FCD34D" },
-  badgeTextRejected:  { color: "#F87171" },
-
-  /* Paid badge */
-  paidBadge: {
-    backgroundColor: "#052E16",
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: "#166534"
-  },
-
-  paidText: {
-    color: "#4ADE80",
-    fontSize: 11,
-    fontWeight: "700"
-  },
-
-  /* Failed payment badge */
-  failedBadge: {
-    backgroundColor: "#7F1D1D",
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: "#991B1B"
-  },
-
-  failedText: {
-    color: "#FCA5A5",
-    fontSize: 11,
-    fontWeight: "700"
-  },
-
-  /* Approved/rejected by */
-  approvedBy: {
-    color: "#4ADE80",
-    fontSize: 12,
-    paddingHorizontal: 16,
-    paddingBottom: 8
-  },
-
-  rejectedBy: {
-    color: "#F87171",
-    fontSize: 12,
-    paddingHorizontal: 16,
-    paddingBottom: 8
-  },
-
-  /* Admin message bubble */
-  messageBubble: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 7,
-    backgroundColor: "#0F172A",
-    marginHorizontal: 16,
-    marginBottom: 12,
-    borderRadius: 10,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: "#334155"
-  },
-
-  messageText: {
-    flex: 1,
-    color: "#94A3B8",
-    fontSize: 13,
-    lineHeight: 18
-  },
-
-  /* Receipt */
-  receiptPreview: {
-    width: "100%",
-    height: 130,
-    marginTop: 0
-  },
-
-  receiptOverlay: {
-    position: "absolute",
-    bottom: 8,
-    right: 10,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "rgba(0,0,0,0.55)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8
-  },
-
-  receiptOverlayText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "600"
-  },
-
-  center: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center"
-  },
-
-  /* Receipt modal */
-  imageModalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.95)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20
-  },
-
-  fullImage: {
-    width: "100%",
-    height: "80%"
-  },
-
-  closeBtn: {
-    marginTop: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#2563EB",
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12
-  }
-
-});

@@ -41,6 +41,21 @@ app.http("uploadReceipt", {
         return secureResponse({ error: "No image provided" }, 400);
       }
 
+      if (typeof image !== "string") {
+        return secureResponse({ error: "image must be a base64 string" }, 400);
+      }
+
+      // Validate base64 format
+      if (!/^[A-Za-z0-9+/]+=*$/.test(image)) {
+        return secureResponse({ error: "image must be valid base64" }, 400);
+      }
+
+      // Enforce 10 MB limit (base64 is ~4/3x raw size, so 10 MB raw ≈ 13.3 MB base64)
+      const MAX_BASE64_LENGTH = 13_500_000;
+      if (image.length > MAX_BASE64_LENGTH) {
+        return secureResponse({ error: "image exceeds the 10 MB size limit" }, 400);
+      }
+
       const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING;
 
       if (!connectionString) {

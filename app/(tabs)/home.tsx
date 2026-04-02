@@ -1,3 +1,5 @@
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -10,7 +12,6 @@ import {
   View
 } from "react-native";
 import { ThemedText } from "../../components/themed-text";
-import { Ionicons } from "@expo/vector-icons";
 
 import { router } from "expo-router";
 import {
@@ -26,11 +27,12 @@ import {
   where,
 } from "firebase/firestore";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTheme } from "../../hooks/useTheme";
+import { addListener } from "../../utils/listenerStore";
 import { useAuth } from "../context/AuthProvider";
 import { db } from "../firebase/firebaseConfig";
-import { addListener } from "../../utils/listenerStore";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type Claim = {
   id: string;
@@ -41,12 +43,6 @@ type Claim = {
   paymentStatus?: string;
 };
 
-const STATUS_CONFIG: Record<string, { color: string; bg: string; icon: React.ComponentProps<typeof Ionicons>["name"] }> = {
-  pending:  { color: "#F59E0B", bg: "#1C1208", icon: "time-outline" },
-  approved: { color: "#22C55E", bg: "#052E16", icon: "checkmark-circle-outline" },
-  rejected: { color: "#EF4444", bg: "#2D0A0A", icon: "close-circle-outline" }
-};
-
 const BUDGET_PRESETS = [500, 1000, 2000, 3000, 5000, 10000];
 const DEFAULT_BUDGET  = 2000;
 
@@ -54,7 +50,9 @@ export default function HomeScreen() {
 
   const { user, refreshMembership, orgPlan, trialDaysLeft, role } = useAuth();
   const insets = useSafeAreaInsets();
+  const { tokens: t, mode } = useTheme();
 
+  const [username,     setUsername]     = useState("");
   const [monthlySpend, setMonthlySpend] = useState(0);
   const [pending,      setPending]      = useState(0);
   const [approved,     setApproved]     = useState(0);
@@ -74,7 +72,7 @@ export default function HomeScreen() {
     if (user) refreshMembership();
   }, [user]);
 
-  // Load saved budget + admin override
+  // Load saved budget + admin override + username
   useEffect(() => {
     if (!user) return;
 
@@ -83,6 +81,7 @@ export default function HomeScreen() {
       if (data?.monthlyBudget && typeof data.monthlyBudget === "number") {
         setMonthlyBudget(data.monthlyBudget);
       }
+      if (data?.username) setUsername(data.username);
     }).catch(() => {});
 
     getDocs(query(collection(db, "memberships"), where("userId", "==", user.uid)))
@@ -132,9 +131,9 @@ export default function HomeScreen() {
   const effectiveBudget = adminBudgetLimit ?? monthlyBudget;
   const progress        = Math.min((monthlySpend / effectiveBudget) * 100, 100);
   const progressColor   =
-    progress >= 100 ? "#EF4444" :
-    progress >= 80  ? "#F59E0B" :
-                      "#2563EB";
+    progress >= 100 ? t.error :
+    progress >= 80  ? t.warning :
+                      t.accent;
 
   // ── Budget modal helpers ─────────────────────────────────────────
 
@@ -179,135 +178,346 @@ export default function HomeScreen() {
     }
   }
 
+  const STATUS_CONFIG: Record<string, { color: string; bg: string; icon: React.ComponentProps<typeof Ionicons>["name"] }> = {
+    pending:  { color: t.warning, bg: t.warningSurface, icon: "time-outline" },
+    approved: { color: t.success, bg: t.successSurface, icon: "checkmark-circle-outline" },
+    rejected: { color: t.error, bg: t.errorSurface, icon: "close-circle-outline" }
+  };
+
+  const isDark = mode === "dark";
+
+  const styles = useMemo(() => StyleSheet.create({
+
+    root: { flex: 1, backgroundColor: t.bg },
+    container: { paddingTop: 8 },
+
+    /* ── Header ── */
+    headerRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 24,
+      marginBottom: 28,
+    },
+    greetingLabel: { color: t.textSecondary, fontSize: 13, fontWeight: "500", marginBottom: 4 },
+    greeting:      { color: t.text, fontSize: 30, fontWeight: "800", letterSpacing: -0.5 },
+    avatarBtn: {
+      width: 44, height: 44, borderRadius: 22,
+      backgroundColor: t.surface,
+      justifyContent: "center", alignItems: "center",
+    },
+
+    /* ── Trial banner ── */
+    trialBanner: {
+      flexDirection: "row", alignItems: "center",
+      backgroundColor: t.warningSurface,
+      borderRadius: t.radius.md, paddingHorizontal: 16, paddingVertical: 12,
+      marginHorizontal: 24, marginBottom: 24,
+      gap: 8,
+    },
+    trialText: { flex: 1, color: t.warning, fontSize: 13, fontWeight: "600" },
+
+    /* ── Hero spending card ── */
+    heroCard: {
+      marginHorizontal: 24,
+      marginBottom: 16,
+      // No overflow:hidden here — it clips large text on Android
+    },
+    heroGradient: {
+      padding: 22,
+      borderRadius: t.radius.xl,   // radius lives on the gradient, not the wrapper
+    },
+    /* Row 1: label + right controls */
+    heroTopRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 10,
+    },
+    heroLabel: {
+      color: isDark ? "rgba(255,255,255,0.5)" : t.textSecondary,
+      fontSize: 11, fontWeight: "700",
+      letterSpacing: 1.2, textTransform: "uppercase",
+    },
+    heroBadge: {
+      flexDirection: "row", alignItems: "center",
+      backgroundColor: isDark ? "rgba(255,255,255,0.1)" : t.accentSurface,
+      borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, gap: 4,
+    },
+    heroBadgeText: {
+      color: isDark ? "rgba(255,255,255,0.7)" : t.accent,
+      fontSize: 11, fontWeight: "600",
+    },
+    editBudgetBtn: {
+      width: 30, height: 30, borderRadius: t.radius.sm,
+      backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)",
+      justifyContent: "center", alignItems: "center",
+      marginLeft: 6,
+    },
+    /* Row 2: the big number — its own independent row */
+    heroAmount: {
+      fontSize: 42, fontWeight: "800", letterSpacing: -1.5,
+      color: isDark ? "#FFFFFF" : t.text,
+      fontVariant: ["tabular-nums"],
+      lineHeight: 54,                // explicit line-height stops Android clipping
+      includeFontPadding: false,     // Android: remove internal font padding
+      marginBottom: 16,
+    },
+    /* Row 3: progress */
+    progressTrack: {
+      height: 4, backgroundColor: isDark ? "rgba(255,255,255,0.15)" : t.border,
+      borderRadius: 2, overflow: "hidden", marginBottom: 8,
+    },
+    progressFill:   { height: "100%", borderRadius: 2 },
+    progressLabels: { flexDirection: "row", justifyContent: "space-between" },
+    progressNote: {
+      color: isDark ? "rgba(255,255,255,0.45)" : t.textSecondary, fontSize: 12,
+    },
+
+    /* ── Stats ── */
+    statsRow: { flexDirection: "row", gap: 12, marginHorizontal: 24, marginBottom: 28 },
+    statCard: {
+      flex: 1, backgroundColor: t.surface, borderRadius: t.radius.lg,
+      padding: 16, alignItems: "flex-start",
+    },
+    statIconWrap: {
+      width: 38, height: 38, borderRadius: 12,
+      justifyContent: "center", alignItems: "center", marginBottom: 12,
+      alignSelf: "flex-start",
+    },
+    statValue: { fontSize: 28, fontWeight: "800", marginBottom: 2 },
+    statLabel: { color: t.textSecondary, fontSize: 12 },
+
+    /* ── Quick actions (horizontal scroll) ── */
+    actionsSection: { marginBottom: 32 },
+    sectionHeader: {
+      flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+      paddingHorizontal: 24, marginBottom: 16,
+    },
+    sectionTitle: { color: t.text, fontSize: 16, fontWeight: "700" },
+    actionsScroll: { paddingLeft: 24, paddingRight: 8 },
+    actionItem: { alignItems: "center", marginRight: 20 },
+    actionCircle: {
+      width: 60, height: 60, borderRadius: 30,
+      backgroundColor: t.surface,
+      justifyContent: "center", alignItems: "center",
+      marginBottom: 8,
+    },
+    actionLabel: { color: t.textSecondary, fontSize: 11, fontWeight: "600", textAlign: "center" },
+
+    /* ── Recent activity ── */
+    recentSection: { paddingHorizontal: 24 },
+    recentHeader:  { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
+    viewAllLink:   { color: t.accent, fontSize: 14, fontWeight: "600" },
+
+    recentCard: {
+      flexDirection: "row", alignItems: "center",
+      backgroundColor: t.surface, borderRadius: t.radius.lg,
+      padding: 16, marginBottom: 10, gap: 14,
+    },
+    recentIconWrap: {
+      width: 44, height: 44, borderRadius: 14,
+      justifyContent: "center", alignItems: "center",
+    },
+    recentMerchant: { color: t.text, fontWeight: "700", fontSize: 15, marginBottom: 3 },
+    recentMeta:     { color: t.textSecondary, fontSize: 13 },
+    recentAmount:   { color: t.text, fontWeight: "700", fontSize: 15, marginBottom: 4, textAlign: "right" },
+    statusPill:     { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, alignSelf: "flex-end" },
+    statusPillText: { fontSize: 10, fontWeight: "800" },
+
+    /* ── Empty state ── */
+    emptyState:    { alignItems: "center", paddingVertical: 48 },
+    emptyIconWrap: {
+      width: 80, height: 80, borderRadius: 24, backgroundColor: t.surface,
+      justifyContent: "center", alignItems: "center", marginBottom: 20,
+    },
+    emptyTitle:    { color: t.textSecondary, fontSize: 17, fontWeight: "700", marginBottom: 6 },
+    emptySubtitle: { color: t.textTertiary, fontSize: 14, textAlign: "center", marginBottom: 24, maxWidth: 220, lineHeight: 20 },
+    emptyBtn:      { backgroundColor: t.accent, borderRadius: t.radius.md, paddingVertical: 14, paddingHorizontal: 28 },
+    emptyBtnText:  { color: t.accentText, fontWeight: "700", fontSize: 15 },
+
+    /* ── Budget modal ── */
+    modalOverlay:  { flex: 1, justifyContent: "flex-end" },
+    modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.7)" },
+    modalSheet: {
+      backgroundColor: t.surface, borderTopLeftRadius: t.radius.xxl, borderTopRightRadius: t.radius.xxl,
+      paddingHorizontal: 24, paddingBottom: 40, paddingTop: 12,
+    },
+    sheetHandle: {
+      width: 36, height: 4, backgroundColor: t.border,
+      borderRadius: 2, alignSelf: "center", marginBottom: 24,
+    },
+    modalHeader:   { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
+    modalTitle:    { color: t.text, fontSize: 20, fontWeight: "800" },
+    modalSubtitle: { color: t.textSecondary, fontSize: 14, marginBottom: 24 },
+    presetGrid:    { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 24 },
+    presetChip: {
+      paddingHorizontal: 18, paddingVertical: 12,
+      backgroundColor: t.surfaceAlt, borderRadius: t.radius.md,
+    },
+    presetChipActive:     { backgroundColor: t.accent },
+    presetChipText:       { color: t.textSecondary, fontSize: 14, fontWeight: "600" },
+    presetChipTextActive: { color: t.accentText },
+    customLabel: {
+      color: t.textSecondary, fontSize: 12, fontWeight: "700",
+      marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.6,
+    },
+    customInputRow: {
+      flexDirection: "row", alignItems: "center",
+      backgroundColor: t.surfaceAlt, borderRadius: t.radius.md, borderWidth: 1, borderColor: t.border,
+      paddingHorizontal: 16, paddingVertical: 14, marginBottom: 24,
+    },
+    customInputRowActive: { borderColor: t.accent },
+    currencySymbol: { color: t.accent, fontSize: 20, fontWeight: "700", marginRight: 8 },
+    customInput:    { flex: 1, color: t.text, fontSize: 20, fontWeight: "700" },
+    saveBtn:        { backgroundColor: t.accent, borderRadius: t.radius.md, paddingVertical: 16, alignItems: "center" },
+    saveBtnText:    { color: t.accentText, fontSize: 16, fontWeight: "700" },
+
+  }), [t, isDark]);
+
+  // Hero card gradient colours
+  const gradientColors: [string, string, string] = isDark
+    ? ["#1A1040", "#0E0B22", "#080808"]
+    : ["#EEF2FF", "#F0F4FF", "#FFFFFF"];
+
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 24 }]}
+        contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 48 }]}
         showsVerticalScrollIndicator={false}
       >
 
         {/* ── HEADER ── */}
         <View style={styles.headerRow}>
           <View>
-            <ThemedText style={styles.greeting}>Good {greeting} 👋</ThemedText>
-            <ThemedText style={styles.subheading}>Here's your expense overview</ThemedText>
+            <ThemedText style={styles.greetingLabel}>Good {greeting} 👋</ThemedText>
+            <ThemedText style={styles.greeting}>
+              {username ? username.split(" ")[0] : "Dashboard"}
+            </ThemedText>
           </View>
           <TouchableOpacity
             style={styles.avatarBtn}
             onPress={() => router.push("/profile")}
             activeOpacity={0.8}
           >
-            <Ionicons name="person" size={18} color="#38BDF8" />
+            <Ionicons name="person" size={20} color={t.accent} />
           </TouchableOpacity>
         </View>
 
         {/* ── TRIAL BANNER ── */}
         {orgPlan === "trial" && (
-          <TouchableOpacity
-            style={styles.trialBanner}
-            onPress={() => router.push("/plans")}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="time-outline" size={16} color="#F59E0B" style={{ marginRight: 8 }} />
+          <TouchableOpacity style={styles.trialBanner} onPress={() => router.push("/plans")} activeOpacity={0.8}>
+            <Ionicons name="time-outline" size={16} color={t.warning} />
             <ThemedText style={styles.trialText}>
               {trialDaysLeft > 0
                 ? `Trial ends in ${trialDaysLeft} day${trialDaysLeft !== 1 ? "s" : ""} — tap to upgrade`
                 : "Trial expired — tap to upgrade"}
             </ThemedText>
-            <Ionicons name="chevron-forward" size={14} color="#F59E0B" />
+            <Ionicons name="chevron-forward" size={14} color={t.warning} />
           </TouchableOpacity>
         )}
 
-        {/* ── SPENDING CARD ── */}
-        <View style={styles.spendingCard}>
-          <View style={styles.spendingTop}>
-            <View style={{ flex: 1 }}>
-              <ThemedText style={styles.spendingLabel}>Total Spending</ThemedText>
-              <ThemedText style={styles.spendingAmount}>
-                £{monthlySpend.toFixed(2)}
+        {/* ── HERO SPENDING CARD ── */}
+        <View style={styles.heroCard}>
+          <LinearGradient colors={gradientColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroGradient}>
+
+            {/* Row 1 — label + controls */}
+            <View style={styles.heroTopRow}>
+              <ThemedText style={styles.heroLabel}>Total Spending</ThemedText>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <View style={styles.heroBadge}>
+                  <Ionicons name="trending-up-outline" size={13} color={isDark ? "rgba(255,255,255,0.7)" : t.accent} />
+                  <ThemedText style={styles.heroBadgeText}>All time</ThemedText>
+                </View>
+                <TouchableOpacity style={styles.editBudgetBtn} onPress={openBudgetModal} activeOpacity={0.75}>
+                  <Ionicons
+                    name={adminBudgetLimit ? "lock-closed-outline" : "pencil-outline"}
+                    size={13}
+                    color={adminBudgetLimit ? t.warning : (isDark ? "rgba(255,255,255,0.6)" : t.textSecondary)}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Row 2 — big number, fully independent */}
+            <ThemedText style={styles.heroAmount}>
+              £{monthlySpend.toFixed(2)}
+            </ThemedText>
+
+            {/* Row 3 — progress */}
+            <View style={styles.progressTrack}>
+              <View style={[styles.progressFill, { width: `${progress}%` as any, backgroundColor: progressColor }]} />
+            </View>
+            <View style={styles.progressLabels}>
+              <ThemedText style={styles.progressNote}>
+                £{monthlySpend.toFixed(2)} of £{effectiveBudget.toLocaleString()} budget
+                {adminBudgetLimit ? " 🔒" : ""}
+              </ThemedText>
+              <ThemedText style={[styles.progressNote, progress >= 80 && { color: progressColor }]}>
+                {Math.round(progress)}%
               </ThemedText>
             </View>
-            <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
-              <View style={styles.spendingBadge}>
-                <Ionicons name="trending-up-outline" size={16} color="#60A5FA" />
-                <ThemedText style={styles.spendingBadgeText}>All time</ThemedText>
-              </View>
-              <TouchableOpacity
-                style={styles.editBudgetBtn}
-                onPress={openBudgetModal}
-                activeOpacity={0.75}
-              >
-                <Ionicons
-                  name={adminBudgetLimit ? "lock-closed-outline" : "pencil-outline"}
-                  size={14}
-                  color={adminBudgetLimit ? "#F59E0B" : "#94A3B8"}
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
 
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${progress}%` as any, backgroundColor: progressColor }]} />
-          </View>
-          <View style={styles.progressLabels}>
-            <ThemedText style={styles.progressNote}>
-              £{monthlySpend.toFixed(2)} of £{effectiveBudget.toLocaleString()} budget
-              {adminBudgetLimit ? " 🔒" : ""}
-            </ThemedText>
-            <ThemedText style={[styles.progressNote, progress >= 80 && { color: progressColor }]}>
-              {Math.round(progress)}%
-            </ThemedText>
-          </View>
+          </LinearGradient>
         </View>
 
         {/* ── STAT CARDS ── */}
         <View style={styles.statsRow}>
-          <StatCard label="Pending"  value={pending}  icon="time-outline"             color="#F59E0B" bg="#1C1208" />
-          <StatCard label="Approved" value={approved} icon="checkmark-circle-outline" color="#22C55E" bg="#052E16" />
+          <StatCard label="Pending"  value={pending}  icon="time-outline"             color={t.warning} bg={t.warningSurface} />
+          <StatCard label="Approved" value={approved} icon="checkmark-circle-outline" color={t.success} bg={t.successSurface} />
         </View>
 
-        {/* ── QUICK ACTIONS ── */}
-        <ThemedText style={styles.sectionTitle}>Quick Actions</ThemedText>
-        <View style={styles.actionsGrid}>
-          <ActionBtn icon="add-circle-outline"   label="New Claim"   color="#2563EB" bg="#0D1F3C" onPress={() => router.push("/add-expense")} />
-          <ActionBtn icon="document-text-outline" label="My Claims"  color="#7C3AED" bg="#1A0D3C" onPress={() => router.push("/claims")} />
-          <ActionBtn icon="bar-chart-outline"    label="Analytics"   color="#0891B2" bg="#0A1F2E" onPress={() => router.push("/Analytics")} />
-          {role === "admin" && (
-            <ActionBtn icon="people-outline" label="Admin Panel" color="#F59E0B" bg="#1C1208" onPress={() => router.push("/admin")} />
-          )}
+        {/* ── QUICK ACTIONS (horizontal scroll, circular — bunq-style) ── */}
+        <View style={styles.actionsSection}>
+          <View style={styles.sectionHeader}>
+            <ThemedText style={styles.sectionTitle}>Quick Actions</ThemedText>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.actionsScroll}>
+            <ActionCircle icon="add-circle-outline"       label="New Claim"  color={t.accent}   bg={t.accentSurface}   onPress={() => router.push("/add-expense")} />
+            <ActionCircle icon="document-text-outline"    label="My Claims"  color="#7C3AED"    bg={t.accentSurface}   onPress={() => router.push("/claims")} />
+            <ActionCircle icon="bar-chart-outline"        label="Analytics"  color="#0891B2"    bg={t.accentSurface}   onPress={() => router.push("/Analytics")} />
+            <ActionCircle icon="chatbubble-ellipses-outline" label="AI Chat" color="#10B981"    bg={t.successSurface}  onPress={() => router.push("/chatbot")} />
+            {role === "admin" && (
+              <ActionCircle icon="people-outline" label="Admin" color={t.warning} bg={t.warningSurface} onPress={() => router.push("/admin")} />
+            )}
+          </ScrollView>
         </View>
 
         {/* ── RECENT ACTIVITY ── */}
-        <View style={styles.recentHeader}>
-          <ThemedText style={styles.sectionTitle}>Recent Activity</ThemedText>
-          <TouchableOpacity onPress={() => router.push("/claims")} activeOpacity={0.7}>
-            <ThemedText style={styles.viewAllLink}>View all</ThemedText>
-          </TouchableOpacity>
-        </View>
-
-        {recent.length === 0 ? (
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIconWrap}>
-              <Ionicons name="receipt-outline" size={32} color="#334155" />
-            </View>
-            <ThemedText style={styles.emptyTitle}>No claims yet</ThemedText>
-            <ThemedText style={styles.emptySubtitle}>
-              Submit your first expense claim to get started
-            </ThemedText>
-            <TouchableOpacity style={styles.emptyBtn} onPress={() => router.push("/add-expense")} activeOpacity={0.85}>
-              <ThemedText style={styles.emptyBtnText}>Add Expense</ThemedText>
+        <View style={styles.recentSection}>
+          <View style={styles.recentHeader}>
+            <ThemedText style={styles.sectionTitle}>Recent Activity</ThemedText>
+            <TouchableOpacity onPress={() => router.push("/claims")} activeOpacity={0.7}>
+              <ThemedText style={styles.viewAllLink}>View all</ThemedText>
             </TouchableOpacity>
           </View>
-        ) : (
-          recent.map((claim) => (
-            <RecentClaimCard
-              key={claim.id}
-              claim={claim}
-              onPress={() => router.push(`/claims/${claim.id}`)}
-            />
-          ))
-        )}
+
+          {recent.length === 0 ? (
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIconWrap}>
+                <Ionicons name="receipt-outline" size={34} color={t.textTertiary} />
+              </View>
+              <ThemedText style={styles.emptyTitle}>No claims yet</ThemedText>
+              <ThemedText style={styles.emptySubtitle}>
+                Submit your first expense claim to get started
+              </ThemedText>
+              <TouchableOpacity style={styles.emptyBtn} onPress={() => router.push("/add-expense")} activeOpacity={0.85}>
+                <ThemedText style={styles.emptyBtnText}>Add Expense</ThemedText>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            recent.map((claim) => (
+              <RecentClaimCard
+                key={claim.id}
+                claim={claim}
+                onPress={() => router.push(`/claims/${claim.id}`)}
+                statusConfig={STATUS_CONFIG}
+                styles={styles}
+              />
+            ))
+          )}
+        </View>
 
       </ScrollView>
 
@@ -322,7 +532,7 @@ export default function HomeScreen() {
             <View style={styles.modalHeader}>
               <ThemedText style={styles.modalTitle}>Set Budget</ThemedText>
               <TouchableOpacity onPress={closeBudgetModal} hitSlop={12}>
-                <Ionicons name="close" size={22} color="#64748B" />
+                <Ionicons name="close" size={22} color={t.textSecondary} />
               </TouchableOpacity>
             </View>
             <ThemedText style={styles.modalSubtitle}>Choose a preset or enter a custom budget</ThemedText>
@@ -352,10 +562,10 @@ export default function HomeScreen() {
                 ref={customInputRef}
                 style={styles.customInput}
                 placeholder="e.g. 4500"
-                placeholderTextColor="#475569"
+                placeholderTextColor={t.textTertiary}
                 keyboardType="number-pad"
                 value={customInput}
-                onChangeText={(t) => { setCustomInput(t.replace(/[^0-9]/g, "")); if (t.length > 0) setSelectedPreset(null); }}
+                onChangeText={(val) => { setCustomInput(val.replace(/[^0-9]/g, "")); if (val.length > 0) setSelectedPreset(null); }}
                 returnKeyType="done"
                 onSubmitEditing={saveBudget}
               />
@@ -376,42 +586,93 @@ export default function HomeScreen() {
 // SUB-COMPONENTS
 //////////////////////////////////////////////////////
 
-function StatCard({ label, value, icon, color, bg }: {
-  label: string; value: number;
-  icon: React.ComponentProps<typeof Ionicons>["name"];
-  color: string; bg: string;
-}) {
+function StatCard({ label, value, icon, color, bg }) {
+  const { tokens: t } = useTheme();
+
   return (
-    <View style={[styles.statCard, { borderColor: color + "33" }]}>
-      <View style={[styles.statIconWrap, { backgroundColor: bg }]}>
+    <View style={{
+      flex: 1,
+      backgroundColor: t.surface,
+      borderRadius: t.radius.lg,
+      padding: 16,
+      alignItems: "flex-start", // 👈 keep original layout
+    }}>
+
+      {/* ICON */}
+      <View style={{
+        width: 38,
+        height: 38,
+        borderRadius: 12,
+        justifyContent: "center",
+        alignItems: "center",
+        backgroundColor: bg,
+
+        marginLeft: -11, // 
+      }}>
         <Ionicons name={icon} size={18} color={color} />
       </View>
-      <ThemedText style={[styles.statValue, { color }]}>{value}</ThemedText>
-      <ThemedText style={styles.statLabel}>{label}</ThemedText>
+
+      {/* VALUE */}
+      <ThemedText style={{
+        fontSize: 28,
+        fontWeight: "800",
+        marginTop: 8,
+        color
+      }}>
+        {value}
+      </ThemedText>
+
+      {/* LABEL */}
+      <ThemedText style={{
+        color: t.textSecondary,
+        fontSize: 12
+      }}>
+        {label}
+      </ThemedText>
+
     </View>
   );
 }
 
-function ActionBtn({ icon, label, color, bg, onPress }: {
+function ActionCircle({ icon, label, color, bg, onPress }: {
   icon: React.ComponentProps<typeof Ionicons>["name"];
   label: string; color: string; bg: string; onPress: () => void;
 }) {
+  const { tokens: t } = useTheme();
   return (
-    <TouchableOpacity style={[styles.actionBtn, { borderColor: color + "33" }]} onPress={onPress} activeOpacity={0.75}>
-      <View style={[styles.actionIconWrap, { backgroundColor: bg }]}>
-        <Ionicons name={icon} size={22} color={color} />
+    <TouchableOpacity
+      style={{ alignItems: "center", marginRight: 20, width: 68 }}
+      onPress={onPress}
+      activeOpacity={0.75}
+    >
+      <View style={{
+        width: 62, height: 62, borderRadius: 31,
+        backgroundColor: t.surface,
+        justifyContent: "center", alignItems: "center", marginBottom: 8,
+      }}>
+        <Ionicons name={icon} size={26} color={color} />
       </View>
-      <ThemedText style={styles.actionLabel}>{label}</ThemedText>
+      <ThemedText style={{
+        color: t.textSecondary, fontSize: 11, fontWeight: "600",
+        textAlign: "center", width: 68, lineHeight: 14,
+      }} numberOfLines={1}>
+        {label}
+      </ThemedText>
     </TouchableOpacity>
   );
 }
 
-function RecentClaimCard({ claim, onPress }: { claim: Claim; onPress: () => void }) {
-  const cfg = STATUS_CONFIG[claim.status] ?? STATUS_CONFIG.pending;
+function RecentClaimCard({ claim, onPress, statusConfig, styles }: {
+  claim: Claim;
+  onPress: () => void;
+  statusConfig: Record<string, { color: string; bg: string; icon: React.ComponentProps<typeof Ionicons>["name"] }>;
+  styles: any;
+}) {
+  const cfg = statusConfig[claim.status] ?? statusConfig.pending;
   return (
     <TouchableOpacity style={styles.recentCard} onPress={onPress} activeOpacity={0.75}>
-      <View style={[styles.recentStatusDot, { backgroundColor: cfg.bg }]}>
-        <Ionicons name={cfg.icon} size={18} color={cfg.color} />
+      <View style={[styles.recentIconWrap, { backgroundColor: cfg.bg }]}>
+        <Ionicons name={cfg.icon} size={20} color={cfg.color} />
       </View>
       <View style={{ flex: 1 }}>
         <ThemedText style={styles.recentMerchant}>{claim.merchant}</ThemedText>
@@ -430,162 +691,3 @@ function RecentClaimCard({ claim, onPress }: { claim: Claim; onPress: () => void
     </TouchableOpacity>
   );
 }
-
-//////////////////////////////////////////////////////
-// STYLES
-//////////////////////////////////////////////////////
-
-const styles = StyleSheet.create({
-
-  root: { flex: 1, backgroundColor: "#0F172A" },
-
-  container: { paddingHorizontal: 20, paddingTop: 16 },
-
-  /* Header */
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 16
-  },
-  greeting:   { color: "#F8FAFC", fontSize: 24, fontWeight: "700", marginBottom: 2 },
-  subheading: { color: "#475569", fontSize: 13 },
-  avatarBtn: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: "#1E293B", borderWidth: 1, borderColor: "#334155",
-    justifyContent: "center", alignItems: "center"
-  },
-
-  /* Trial banner */
-  trialBanner: {
-    flexDirection: "row", alignItems: "center",
-    backgroundColor: "#1C1208", borderWidth: 1, borderColor: "#F59E0B55",
-    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 16
-  },
-  trialText: { flex: 1, color: "#FCD34D", fontSize: 13, fontWeight: "600" },
-
-  /* Spending card */
-  spendingCard: {
-    backgroundColor: "#1E293B", borderRadius: 20, padding: 20,
-    marginBottom: 16, borderWidth: 1, borderColor: "#334155"
-  },
-  spendingTop: {
-    flexDirection: "row", justifyContent: "space-between",
-    alignItems: "flex-start", marginBottom: 16
-  },
-  spendingLabel:  { color: "#64748B", fontSize: 12, marginBottom: 4 },
-  spendingAmount: { fontSize: 34, fontWeight: "800", color: "#60A5FA", fontVariant: ["tabular-nums"] },
-  spendingBadge: {
-    flexDirection: "row", alignItems: "center",
-    backgroundColor: "#0D1F3C", borderRadius: 10,
-    paddingHorizontal: 10, paddingVertical: 6, gap: 4
-  },
-  spendingBadgeText: { color: "#60A5FA", fontSize: 11, fontWeight: "600" },
-  editBudgetBtn: {
-    width: 32, height: 32, borderRadius: 8,
-    backgroundColor: "#0F172A", borderWidth: 1, borderColor: "#334155",
-    justifyContent: "center", alignItems: "center"
-  },
-  progressTrack: {
-    height: 6, backgroundColor: "#334155", borderRadius: 4,
-    overflow: "hidden", marginBottom: 6
-  },
-  progressFill:   { height: "100%", borderRadius: 4 },
-  progressLabels: { flexDirection: "row", justifyContent: "space-between" },
-  progressNote:   { color: "#475569", fontSize: 11 },
-
-  /* Stats */
-  statsRow: { flexDirection: "row", gap: 12, marginBottom: 24 },
-  statCard: {
-    flex: 1, backgroundColor: "#1E293B", borderRadius: 16,
-    padding: 16, borderWidth: 1, alignItems: "flex-start"
-  },
-  statIconWrap: {
-    width: 36, height: 36, borderRadius: 10,
-    justifyContent: "center", alignItems: "center", marginBottom: 10
-  },
-  statValue: { fontSize: 26, fontWeight: "800", marginBottom: 2 },
-  statLabel: { color: "#64748B", fontSize: 12 },
-
-  /* Quick actions */
-  sectionTitle: {
-    color: "#94A3B8", fontSize: 12, fontWeight: "700",
-    letterSpacing: 0.8, textTransform: "uppercase", marginBottom: 12
-  },
-  actionsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 24 },
-  actionBtn: {
-    width: "47%", backgroundColor: "#1E293B", borderRadius: 16,
-    padding: 14, borderWidth: 1, flexDirection: "row", alignItems: "center", gap: 10
-  },
-  actionIconWrap: { width: 40, height: 40, borderRadius: 12, justifyContent: "center", alignItems: "center" },
-  actionLabel:   { color: "#E2E8F0", fontSize: 13, fontWeight: "600", flex: 1 },
-
-  /* Recent */
-  recentHeader: {
-    flexDirection: "row", justifyContent: "space-between",
-    alignItems: "center", marginBottom: 12
-  },
-  viewAllLink: { color: "#38BDF8", fontSize: 13, fontWeight: "600" },
-  recentCard: {
-    flexDirection: "row", alignItems: "center",
-    backgroundColor: "#1E293B", borderRadius: 16, padding: 14,
-    marginBottom: 10, borderWidth: 1, borderColor: "#334155", gap: 12
-  },
-  recentStatusDot: { width: 40, height: 40, borderRadius: 12, justifyContent: "center", alignItems: "center" },
-  recentMerchant: { color: "#F8FAFC", fontWeight: "600", fontSize: 14, marginBottom: 2 },
-  recentMeta:     { color: "#64748B", fontSize: 12 },
-  recentAmount:   { color: "#60A5FA", fontWeight: "700", fontSize: 15, marginBottom: 4 },
-  statusPill:     { borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
-  statusPillText: { fontSize: 10, fontWeight: "700" },
-
-  /* Empty state */
-  emptyState:    { alignItems: "center", paddingVertical: 40 },
-  emptyIconWrap: {
-    width: 72, height: 72, borderRadius: 20, backgroundColor: "#1E293B",
-    justifyContent: "center", alignItems: "center", marginBottom: 16,
-    borderWidth: 1, borderColor: "#334155"
-  },
-  emptyTitle:    { color: "#94A3B8", fontSize: 16, fontWeight: "600", marginBottom: 6 },
-  emptySubtitle: { color: "#475569", fontSize: 13, textAlign: "center", marginBottom: 20, maxWidth: 220 },
-  emptyBtn:      { backgroundColor: "#2563EB", borderRadius: 12, paddingVertical: 12, paddingHorizontal: 24 },
-  emptyBtnText:  { color: "#fff", fontWeight: "700", fontSize: 14 },
-
-  /* Budget modal */
-  modalOverlay:  { flex: 1, justifyContent: "flex-end" },
-  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.6)" },
-  modalSheet: {
-    backgroundColor: "#1E293B", borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    paddingHorizontal: 24, paddingBottom: 40, paddingTop: 12,
-    borderTopWidth: 1, borderColor: "#334155"
-  },
-  sheetHandle: {
-    width: 40, height: 4, backgroundColor: "#334155",
-    borderRadius: 2, alignSelf: "center", marginBottom: 20
-  },
-  modalHeader:   { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
-  modalTitle:    { color: "#F8FAFC", fontSize: 18, fontWeight: "700" },
-  modalSubtitle: { color: "#64748B", fontSize: 13, marginBottom: 20 },
-  presetGrid:    { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 20 },
-  presetChip: {
-    paddingHorizontal: 18, paddingVertical: 10,
-    backgroundColor: "#0F172A", borderRadius: 12, borderWidth: 1, borderColor: "#334155"
-  },
-  presetChipActive:     { backgroundColor: "#1D4ED8", borderColor: "#3B82F6" },
-  presetChipText:       { color: "#94A3B8", fontSize: 14, fontWeight: "600" },
-  presetChipTextActive: { color: "#fff" },
-  customLabel: {
-    color: "#64748B", fontSize: 12, fontWeight: "600",
-    marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.6
-  },
-  customInputRow: {
-    flexDirection: "row", alignItems: "center",
-    backgroundColor: "#0F172A", borderRadius: 12, borderWidth: 1, borderColor: "#334155",
-    paddingHorizontal: 14, paddingVertical: 12, marginBottom: 24
-  },
-  customInputRowActive: { borderColor: "#3B82F6" },
-  currencySymbol: { color: "#60A5FA", fontSize: 18, fontWeight: "700", marginRight: 6 },
-  customInput:    { flex: 1, color: "#F8FAFC", fontSize: 18, fontWeight: "600" },
-  saveBtn:        { backgroundColor: "#2563EB", borderRadius: 14, paddingVertical: 15, alignItems: "center" },
-  saveBtnText:    { color: "#fff", fontSize: 16, fontWeight: "700" }
-
-});

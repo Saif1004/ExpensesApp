@@ -7,7 +7,7 @@ import {
   where
 } from "firebase/firestore";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -29,6 +29,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { db } from "../firebase/firebaseConfig";
 import { useAuth } from "../context/AuthProvider";
 import { ThemedText } from "../../components/themed-text";
+import { useTheme } from "../../hooks/useTheme";
 
 const BUDGET_PRESETS = [500, 1000, 2000, 3000, 5000, 10000];
 
@@ -55,6 +56,7 @@ function getInitials(displayName?: string, email?: string): string {
 export default function AdminUsers() {
 
   const { employeeLimit, orgPlan, orgId, user, refreshMembership } = useAuth();
+  const { tokens: t } = useTheme();
 
   const [users, setUsers]                   = useState<UserItem[]>([]);
   const [approvedCount, setApprovedCount]   = useState(0);
@@ -276,6 +278,290 @@ export default function AdminUsers() {
   });
 
   //////////////////////////////////////////////////////
+  // STYLES
+  //////////////////////////////////////////////////////
+
+  const styles = useMemo(() => StyleSheet.create({
+
+    container: {
+      flex: 1,
+      backgroundColor: t.bg,
+      paddingHorizontal: 20,
+      paddingTop: 12
+    },
+
+    title: {
+      color: t.text,
+      fontSize: 26,
+      fontWeight: "bold",
+      marginBottom: 6
+    },
+
+    limitRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      marginBottom: 14
+    },
+    limitText:    { color: t.textSecondary, fontSize: 12 },
+    limitWarning: { color: t.warning, fontSize: 11, fontWeight: "700" },
+
+    /* Search */
+    searchWrapper: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: t.surface,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: t.border,
+      paddingHorizontal: 12,
+      marginBottom: 16,
+      height: 44
+    },
+    searchInput: { flex: 1, color: t.text, fontSize: 14 },
+
+    /* Tabs */
+    tabs: { flexDirection: "row", marginBottom: 20, gap: 8 },
+    tab: {
+      flex: 1,
+      paddingVertical: 10,
+      borderRadius: 12,
+      backgroundColor: t.surface,
+      alignItems: "center",
+      flexDirection: "row",
+      justifyContent: "center",
+      gap: 6,
+      borderWidth: 1,
+      borderColor: t.border
+    },
+    tabActive:     { backgroundColor: t.accent, borderColor: t.accent },
+    tabText:       { color: t.textSecondary, fontWeight: "600", fontSize: 13 },
+    tabTextActive: { color: "#fff" },
+    badge: {
+      backgroundColor: t.error,
+      borderRadius: 10,
+      paddingHorizontal: 6,
+      paddingVertical: 2
+    },
+    badgeText: { color: "#fff", fontSize: 10, fontWeight: "700" },
+
+    /* Cards */
+    card: {
+      backgroundColor: t.surface,
+      borderRadius: 14,
+      marginBottom: 12,
+      overflow: "hidden",
+      borderWidth: 1,
+      borderColor: t.border
+    },
+    cardTop: {
+      flexDirection: "row",
+      alignItems: "center",
+      padding: 14,
+      gap: 12
+    },
+
+    /* Avatar */
+    avatar: {
+      width: 44, height: 44,
+      borderRadius: 22,
+      backgroundColor: t.accent,
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0
+    },
+    avatarText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+
+    userInfo: { flex: 1 },
+    name:  { color: t.text, fontSize: 15, fontWeight: "600" },
+    email: { color: t.textSecondary, marginTop: 2, fontSize: 12 },
+
+    /* Role badge */
+    roleBadge: {
+      backgroundColor: t.bg,
+      borderRadius: 8,
+      paddingHorizontal: 9,
+      paddingVertical: 4,
+      borderWidth: 1,
+      borderColor: t.accent
+    },
+    roleBadgeAdmin: { borderColor: t.warning },
+    roleBadgeText: {
+      color: t.accent,
+      fontSize: 11,
+      fontWeight: "600",
+      textTransform: "capitalize"
+    },
+    roleBadgeTextAdmin: { color: t.warning },
+
+    /* Budget row */
+    budgetRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      paddingHorizontal: 14,
+      paddingBottom: 12
+    },
+    budgetBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: t.warningSurface,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderWidth: 1,
+      borderColor: t.warning + "88"
+    },
+    budgetBadgeText: { color: t.warning, fontSize: 11, fontWeight: "600" },
+    budgetEditBtn: {
+      width: 28, height: 28,
+      borderRadius: 7,
+      backgroundColor: t.surface,
+      borderWidth: 1,
+      borderColor: t.border,
+      justifyContent: "center",
+      alignItems: "center"
+    },
+    budgetRemoveBtn: {
+      width: 28, height: 28,
+      borderRadius: 7,
+      backgroundColor: t.errorSurface,
+      borderWidth: 1,
+      borderColor: t.errorSurface,
+      justifyContent: "center",
+      alignItems: "center"
+    },
+    setBudgetBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: t.accentSurface,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderWidth: 1,
+      borderColor: t.accent + "55"
+    },
+    setBudgetText: { color: t.accent, fontSize: 12, fontWeight: "600" },
+
+    /* Action buttons */
+    buttons: {
+      flexDirection: "row",
+      paddingHorizontal: 14,
+      paddingBottom: 14,
+      gap: 10
+    },
+    approveBtn: {
+      flex: 1,
+      backgroundColor: t.accent,
+      paddingVertical: 11,
+      borderRadius: 10,
+      alignItems: "center"
+    },
+    rejectBtn: {
+      flex: 1,
+      backgroundColor: "transparent",
+      paddingVertical: 11,
+      borderRadius: 10,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: t.error
+    },
+    approveBtnText: { color: "#fff",     fontWeight: "700", fontSize: 14 },
+    rejectBtnText:  { color: t.error,    fontWeight: "700", fontSize: 14 },
+
+    /* Empty state */
+    emptyState: { alignItems: "center", marginTop: 60, gap: 10 },
+    emptyIcon:  { fontSize: 36 },
+    empty:      { color: t.textSecondary, textAlign: "center", fontSize: 14 },
+
+    /* Budget modal */
+    modalOverlay:  { flex: 1, justifyContent: "flex-end" },
+    modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.6)" },
+    modalSheet: {
+      backgroundColor: t.surface,
+      borderTopLeftRadius: 24,
+      borderTopRightRadius: 24,
+      paddingHorizontal: 24,
+      paddingBottom: 40,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderColor: t.border
+    },
+    sheetHandle: {
+      width: 40, height: 4,
+      backgroundColor: t.border,
+      borderRadius: 2,
+      alignSelf: "center",
+      marginBottom: 20
+    },
+    modalHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 6
+    },
+    modalTitle:    { color: t.text, fontSize: 18, fontWeight: "700" },
+    modalSubtitle: { color: t.textSecondary, fontSize: 13, marginBottom: 20 },
+    presetGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 10,
+      marginBottom: 20
+    },
+    presetChip: {
+      paddingHorizontal: 18,
+      paddingVertical: 10,
+      backgroundColor: t.bg,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: t.border
+    },
+    presetChipActive:     { backgroundColor: t.accentSurface, borderColor: t.accent },
+    presetChipText:       { color: t.textSecondary, fontSize: 14, fontWeight: "600" },
+    presetChipTextActive: { color: "#fff" },
+    customLabel: {
+      color: t.textSecondary,
+      fontSize: 12,
+      fontWeight: "600",
+      marginBottom: 8,
+      textTransform: "uppercase",
+      letterSpacing: 0.6
+    },
+    customInputRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: t.surfaceAlt,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: t.border,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      marginBottom: 16
+    },
+    customInputRowActive: { borderColor: t.accent },
+    currencySymbol: { color: t.accent, fontSize: 18, fontWeight: "700", marginRight: 6 },
+    customInput:    { flex: 1, color: t.text, fontSize: 18, fontWeight: "600" },
+    removeOverrideBtn: {
+      flex: 1,
+      backgroundColor: t.surface,
+      borderRadius: 14,
+      paddingVertical: 15,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: t.border
+    },
+    removeOverrideBtnText: { color: t.textSecondary, fontSize: 15, fontWeight: "600" },
+    saveBtn: {
+      backgroundColor: t.accent,
+      borderRadius: 14,
+      paddingVertical: 15,
+      alignItems: "center"
+    },
+    saveBtnText: { color: t.accentText, fontSize: 16, fontWeight: "700" }
+
+  }), [t]);
+
+  //////////////////////////////////////////////////////
   // TAB BUTTON
   //////////////////////////////////////////////////////
 
@@ -307,11 +593,11 @@ export default function AdminUsers() {
 
       {/* Search bar */}
       <View style={styles.searchWrapper}>
-        <Ionicons name="search-outline" size={15} color="#64748B" style={{ marginRight: 8 }} />
+        <Ionicons name="search-outline" size={15} color={t.textSecondary} style={{ marginRight: 8 }} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search by name or email..."
-          placeholderTextColor="#475569"
+          placeholderTextColor={t.textTertiary}
           value={searchQuery}
           onChangeText={setSearchQuery}
           autoCapitalize="none"
@@ -327,7 +613,7 @@ export default function AdminUsers() {
       </View>
 
       {loading ? (
-        <ActivityIndicator color="#38BDF8" size="large" style={{ marginTop: 40 }} />
+        <ActivityIndicator color={t.accent} size="large" style={{ marginTop: 40 }} />
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -335,8 +621,8 @@ export default function AdminUsers() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor="#38BDF8"
-              colors={["#38BDF8"]}
+              tintColor={t.accent}
+              colors={[t.accent]}
             />
           }
         >
@@ -372,19 +658,19 @@ export default function AdminUsers() {
                     {u.budgetLimit ? (
                       <>
                         <View style={styles.budgetBadge}>
-                          <Ionicons name="lock-closed-outline" size={11} color="#F59E0B" style={{ marginRight: 4 }} />
+                          <Ionicons name="lock-closed-outline" size={11} color={t.warning} style={{ marginRight: 4 }} />
                           <Text style={styles.budgetBadgeText}>Budget: £{u.budgetLimit.toLocaleString()}</Text>
                         </View>
                         <TouchableOpacity style={styles.budgetEditBtn} onPress={() => openBudgetModal(u)}>
-                          <Ionicons name="pencil-outline" size={13} color="#94A3B8" />
+                          <Ionicons name="pencil-outline" size={13} color={t.textSecondary} />
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.budgetRemoveBtn} onPress={() => removeBudgetOverride(u)}>
-                          <Ionicons name="close-circle-outline" size={13} color="#EF4444" />
+                          <Ionicons name="close-circle-outline" size={13} color={t.error} />
                         </TouchableOpacity>
                       </>
                     ) : (
                       <TouchableOpacity style={styles.setBudgetBtn} onPress={() => openBudgetModal(u)} activeOpacity={0.8}>
-                        <Ionicons name="wallet-outline" size={13} color="#60A5FA" style={{ marginRight: 4 }} />
+                        <Ionicons name="wallet-outline" size={13} color={t.accent} style={{ marginRight: 4 }} />
                         <Text style={styles.setBudgetText}>Set Budget Limit</Text>
                       </TouchableOpacity>
                     )}
@@ -421,7 +707,7 @@ export default function AdminUsers() {
             <View style={styles.modalHeader}>
               <ThemedText style={styles.modalTitle}>Set Budget Limit</ThemedText>
               <TouchableOpacity onPress={closeBudgetModal} hitSlop={12}>
-                <Ionicons name="close" size={22} color="#64748B" />
+                <Ionicons name="close" size={22} color={t.textSecondary} />
               </TouchableOpacity>
             </View>
 
@@ -460,10 +746,10 @@ export default function AdminUsers() {
                 ref={customRef}
                 style={styles.customInput}
                 placeholder="e.g. 1500"
-                placeholderTextColor="#475569"
+                placeholderTextColor={t.textTertiary}
                 keyboardType="number-pad"
                 value={budgetCustom}
-                onChangeText={(t) => { setBudgetCustom(t.replace(/[^0-9]/g, "")); if (t.length > 0) setBudgetPreset(null); }}
+                onChangeText={(txt) => { setBudgetCustom(txt.replace(/[^0-9]/g, "")); if (txt.length > 0) setBudgetPreset(null); }}
                 returnKeyType="done"
                 onSubmitEditing={saveBudgetOverride}
               />
@@ -494,283 +780,3 @@ export default function AdminUsers() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-
-  container: {
-    flex: 1,
-    backgroundColor: "#0F172A",
-    paddingHorizontal: 20,
-    paddingTop: 12
-  },
-
-  title: {
-    color: "#F8FAFC",
-    fontSize: 26,
-    fontWeight: "bold",
-    marginBottom: 6
-  },
-
-  limitRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 14
-  },
-  limitText:    { color: "#64748B", fontSize: 12 },
-  limitWarning: { color: "#F97316", fontSize: 11, fontWeight: "700" },
-
-  /* Search */
-  searchWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#1E293B",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#334155",
-    paddingHorizontal: 12,
-    marginBottom: 16,
-    height: 44
-  },
-  searchInput: { flex: 1, color: "#F8FAFC", fontSize: 14 },
-
-  /* Tabs */
-  tabs: { flexDirection: "row", marginBottom: 20, gap: 8 },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: "#1E293B",
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "center",
-    gap: 6,
-    borderWidth: 1,
-    borderColor: "#334155"
-  },
-  tabActive:     { backgroundColor: "#2563EB", borderColor: "#2563EB" },
-  tabText:       { color: "#94A3B8", fontWeight: "600", fontSize: 13 },
-  tabTextActive: { color: "#fff" },
-  badge: {
-    backgroundColor: "#DC2626",
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 2
-  },
-  badgeText: { color: "#fff", fontSize: 10, fontWeight: "700" },
-
-  /* Cards */
-  card: {
-    backgroundColor: "#1E293B",
-    borderRadius: 14,
-    marginBottom: 12,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "#334155"
-  },
-  cardTop: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 14,
-    gap: 12
-  },
-
-  /* Avatar */
-  avatar: {
-    width: 44, height: 44,
-    borderRadius: 22,
-    backgroundColor: "#2563EB",
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0
-  },
-  avatarText: { color: "#fff", fontWeight: "700", fontSize: 16 },
-
-  userInfo: { flex: 1 },
-  name:  { color: "#F8FAFC", fontSize: 15, fontWeight: "600" },
-  email: { color: "#94A3B8", marginTop: 2, fontSize: 12 },
-
-  /* Role badge */
-  roleBadge: {
-    backgroundColor: "#0F172A",
-    borderRadius: 8,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: "#38BDF8"
-  },
-  roleBadgeAdmin: { borderColor: "#F59E0B" },
-  roleBadgeText: {
-    color: "#38BDF8",
-    fontSize: 11,
-    fontWeight: "600",
-    textTransform: "capitalize"
-  },
-  roleBadgeTextAdmin: { color: "#F59E0B" },
-
-  /* Budget row */
-  budgetRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingBottom: 12
-  },
-  budgetBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#292524",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderWidth: 1,
-    borderColor: "#78350F"
-  },
-  budgetBadgeText: { color: "#FCD34D", fontSize: 11, fontWeight: "600" },
-  budgetEditBtn: {
-    width: 28, height: 28,
-    borderRadius: 7,
-    backgroundColor: "#1E293B",
-    borderWidth: 1,
-    borderColor: "#334155",
-    justifyContent: "center",
-    alignItems: "center"
-  },
-  budgetRemoveBtn: {
-    width: 28, height: 28,
-    borderRadius: 7,
-    backgroundColor: "#2D0A0A",
-    borderWidth: 1,
-    borderColor: "#7F1D1D",
-    justifyContent: "center",
-    alignItems: "center"
-  },
-  setBudgetBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#0D1F3C",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: "#2563EB55"
-  },
-  setBudgetText: { color: "#60A5FA", fontSize: 12, fontWeight: "600" },
-
-  /* Action buttons */
-  buttons: {
-    flexDirection: "row",
-    paddingHorizontal: 14,
-    paddingBottom: 14,
-    gap: 10
-  },
-  approveBtn: {
-    flex: 1,
-    backgroundColor: "#2563EB",
-    paddingVertical: 11,
-    borderRadius: 10,
-    alignItems: "center"
-  },
-  rejectBtn: {
-    flex: 1,
-    backgroundColor: "transparent",
-    paddingVertical: 11,
-    borderRadius: 10,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#DC2626"
-  },
-  approveBtnText: { color: "#fff",     fontWeight: "700", fontSize: 14 },
-  rejectBtnText:  { color: "#DC2626",  fontWeight: "700", fontSize: 14 },
-
-  /* Empty state */
-  emptyState: { alignItems: "center", marginTop: 60, gap: 10 },
-  emptyIcon:  { fontSize: 36 },
-  empty:      { color: "#94A3B8", textAlign: "center", fontSize: 14 },
-
-  /* Budget modal */
-  modalOverlay:  { flex: 1, justifyContent: "flex-end" },
-  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.6)" },
-  modalSheet: {
-    backgroundColor: "#1E293B",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderColor: "#334155"
-  },
-  sheetHandle: {
-    width: 40, height: 4,
-    backgroundColor: "#334155",
-    borderRadius: 2,
-    alignSelf: "center",
-    marginBottom: 20
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 6
-  },
-  modalTitle:    { color: "#F8FAFC", fontSize: 18, fontWeight: "700" },
-  modalSubtitle: { color: "#64748B", fontSize: 13, marginBottom: 20 },
-  presetGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    marginBottom: 20
-  },
-  presetChip: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    backgroundColor: "#0F172A",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#334155"
-  },
-  presetChipActive:     { backgroundColor: "#1D4ED8", borderColor: "#3B82F6" },
-  presetChipText:       { color: "#94A3B8", fontSize: 14, fontWeight: "600" },
-  presetChipTextActive: { color: "#fff" },
-  customLabel: {
-    color: "#64748B",
-    fontSize: 12,
-    fontWeight: "600",
-    marginBottom: 8,
-    textTransform: "uppercase",
-    letterSpacing: 0.6
-  },
-  customInputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#0F172A",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#334155",
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 16
-  },
-  customInputRowActive: { borderColor: "#3B82F6" },
-  currencySymbol: { color: "#60A5FA", fontSize: 18, fontWeight: "700", marginRight: 6 },
-  customInput:    { flex: 1, color: "#F8FAFC", fontSize: 18, fontWeight: "600" },
-  removeOverrideBtn: {
-    flex: 1,
-    backgroundColor: "#1E293B",
-    borderRadius: 14,
-    paddingVertical: 15,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#334155"
-  },
-  removeOverrideBtnText: { color: "#94A3B8", fontSize: 15, fontWeight: "600" },
-  saveBtn: {
-    backgroundColor: "#2563EB",
-    borderRadius: 14,
-    paddingVertical: 15,
-    alignItems: "center"
-  },
-  saveBtnText: { color: "#fff", fontSize: 16, fontWeight: "700" }
-
-});

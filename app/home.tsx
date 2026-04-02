@@ -1,8 +1,10 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { StyleSheet, TouchableOpacity, View, Text } from "react-native";
+import { useMemo } from "react";
+import { ScrollView, StyleSheet, TouchableOpacity, View, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useTheme } from "../hooks/useTheme";
 
 const FEATURES = [
   {
@@ -35,15 +37,185 @@ const TRUST = [
 
 export default function Landing() {
   const router = useRouter();
+  const { tokens: t } = useTheme();
+
+  const styles = useMemo(() => StyleSheet.create({
+
+    safe: {
+      flex: 1,
+      paddingHorizontal: 20,
+      paddingTop: 16,
+    },
+
+    /* Hero */
+    hero: {
+      alignItems: "center",
+    },
+    logoOuter: {
+      width: 68,
+      height: 68,
+      borderRadius: 20,
+      backgroundColor: t.accentSurface,
+      borderWidth: 1.5,
+      borderColor: t.accentSurface,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 14,
+      shadowColor: t.accent,
+      shadowOpacity: 0.3,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 4 }
+    },
+    brandName: {
+      color: t.text,
+      fontSize: 34,
+      fontWeight: "800",
+      letterSpacing: -0.5,
+      marginBottom: 8,
+      textAlign: "center"
+    },
+    tagline: {
+      color: t.accent,
+      fontSize: 16,
+      fontWeight: "700",
+      textAlign: "center",
+      lineHeight: 23,
+      marginBottom: 10
+    },
+    description: {
+      color: t.textSecondary,
+      fontSize: 13,
+      textAlign: "center",
+      lineHeight: 20,
+      maxWidth: 300
+    },
+
+    /* Features */
+    featuresSection: {},
+    featuresHeading: {
+      color: t.textSecondary,
+      fontSize: 11,
+      fontWeight: "700",
+      letterSpacing: 1.4,
+      textTransform: "uppercase",
+      textAlign: "center",
+      marginBottom: 12
+    },
+    featuresGrid: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 10
+    },
+    featureCard: {
+      width: "48%",
+      backgroundColor: t.surface,
+      borderRadius: 14,
+      padding: 13,
+      borderWidth: 1,
+      borderColor: t.border
+    },
+    featureIconWrap: {
+      width: 36,
+      height: 36,
+      borderRadius: 10,
+      backgroundColor: t.accentSurface,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 9
+    },
+    featureTitle: {
+      color: t.text,
+      fontSize: 12,
+      fontWeight: "700",
+      marginBottom: 4,
+      lineHeight: 17
+    },
+    featureDesc: {
+      color: t.textSecondary,
+      fontSize: 11,
+      lineHeight: 16
+    },
+
+    /* Trust badges */
+    trustRow: {
+      flexDirection: "row",
+      justifyContent: "center",
+      flexWrap: "wrap",
+      gap: 8
+    },
+    trustBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: t.bg,
+      borderWidth: 1,
+      borderColor: t.accentSurface,
+      borderRadius: 20,
+      paddingHorizontal: 10,
+      paddingVertical: 5
+    },
+    trustLabel: {
+      color: t.textSecondary,
+      fontSize: 11,
+      fontWeight: "500"
+    },
+
+    /* CTA */
+    ctaSection: {
+      alignItems: "center"
+    },
+    primaryBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: t.accent,
+      borderRadius: 15,
+      paddingVertical: 15,
+      width: "100%",
+      marginBottom: 10,
+      shadowColor: t.accent,
+      shadowOpacity: 0.4,
+      shadowRadius: 10,
+      shadowOffset: { width: 0, height: 4 }
+    },
+    primaryBtnText: {
+      color: "#fff",
+      fontSize: 16,
+      fontWeight: "700"
+    },
+    secondaryBtn: {
+      borderRadius: 15,
+      paddingVertical: 13,
+      width: "100%",
+      borderWidth: 1.5,
+      borderColor: t.border,
+      alignItems: "center",
+      marginBottom: 12
+    },
+    secondaryBtnText: {
+      color: t.textSecondary,
+      fontSize: 15,
+      fontWeight: "600"
+    },
+    legalNote: {
+      color: t.border,
+      fontSize: 11,
+      textAlign: "center"
+    }
+
+  }), [t]);
 
   return (
-    <LinearGradient colors={["#020617", "#0F172A", "#1E293B"]} style={{ flex: 1 }}>
-      <SafeAreaView style={styles.safe}>
+    <LinearGradient colors={[t.bg, t.surface]} style={{ flex: 1 }}>
+      <SafeAreaView style={[styles.safe, { paddingBottom: 0 }]}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={{ flexGrow: 1, justifyContent: "space-between", paddingBottom: 24 }}
+        >
 
-        {/* ── HERO ── */}
+        {/* HERO */}
         <View style={styles.hero}>
           <View style={styles.logoOuter}>
-            <Ionicons name="receipt-outline" size={28} color="#38BDF8" />
+            <Ionicons name="receipt-outline" size={28} color={t.accent} />
           </View>
           <Text style={styles.brandName}>Claimio</Text>
           <Text style={styles.tagline}>
@@ -54,14 +226,14 @@ export default function Landing() {
           </Text>
         </View>
 
-        {/* ── FEATURES ── */}
+        {/* FEATURES */}
         <View style={styles.featuresSection}>
           <Text style={styles.featuresHeading}>Everything you need</Text>
           <View style={styles.featuresGrid}>
             {FEATURES.map((f) => (
               <View key={f.title} style={styles.featureCard}>
                 <View style={styles.featureIconWrap}>
-                  <Ionicons name={f.icon} size={18} color="#38BDF8" />
+                  <Ionicons name={f.icon} size={18} color={t.accent} />
                 </View>
                 <Text style={styles.featureTitle}>{f.title}</Text>
                 <Text style={styles.featureDesc}>{f.desc}</Text>
@@ -70,17 +242,17 @@ export default function Landing() {
           </View>
         </View>
 
-        {/* ── TRUST BADGES ── */}
+        {/* TRUST BADGES */}
         <View style={styles.trustRow}>
-          {TRUST.map((t) => (
-            <View key={t.label} style={styles.trustBadge}>
-              <Ionicons name={t.icon} size={12} color="#38BDF8" style={{ marginRight: 4 }} />
-              <Text style={styles.trustLabel}>{t.label}</Text>
+          {TRUST.map((trust) => (
+            <View key={trust.label} style={styles.trustBadge}>
+              <Ionicons name={trust.icon} size={12} color={t.accent} style={{ marginRight: 4 }} />
+              <Text style={styles.trustLabel}>{trust.label}</Text>
             </View>
           ))}
         </View>
 
-        {/* ── CTA ── */}
+        {/* CTA */}
         <View style={styles.ctaSection}>
           <TouchableOpacity
             style={styles.primaryBtn}
@@ -102,174 +274,8 @@ export default function Landing() {
           <Text style={styles.legalNote}>Free plan available · No credit card required</Text>
         </View>
 
+        </ScrollView>
       </SafeAreaView>
     </LinearGradient>
   );
 }
-
-const styles = StyleSheet.create({
-
-  safe: {
-    flex: 1,
-    paddingHorizontal: 20,
-    justifyContent: "space-between",
-    paddingTop: 16,
-    paddingBottom: 8
-  },
-
-  /* ── Hero ── */
-  hero: {
-    alignItems: "center",
-  },
-  logoOuter: {
-    width: 68,
-    height: 68,
-    borderRadius: 20,
-    backgroundColor: "#0F2A3D",
-    borderWidth: 1.5,
-    borderColor: "#1E4F6B",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 14,
-    shadowColor: "#38BDF8",
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 }
-  },
-  brandName: {
-    color: "#F8FAFC",
-    fontSize: 34,
-    fontWeight: "800",
-    letterSpacing: -0.5,
-    marginBottom: 8,
-    textAlign: "center"
-  },
-  tagline: {
-    color: "#38BDF8",
-    fontSize: 16,
-    fontWeight: "700",
-    textAlign: "center",
-    lineHeight: 23,
-    marginBottom: 10
-  },
-  description: {
-    color: "#64748B",
-    fontSize: 13,
-    textAlign: "center",
-    lineHeight: 20,
-    maxWidth: 300
-  },
-
-  /* ── Features ── */
-  featuresSection: {},
-  featuresHeading: {
-    color: "#94A3B8",
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 1.4,
-    textTransform: "uppercase",
-    textAlign: "center",
-    marginBottom: 12
-  },
-  featuresGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10
-  },
-  featureCard: {
-    width: "48%",
-    backgroundColor: "#1E293B",
-    borderRadius: 14,
-    padding: 13,
-    borderWidth: 1,
-    borderColor: "#334155"
-  },
-  featureIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: "#0F2A3D",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 9
-  },
-  featureTitle: {
-    color: "#F1F5F9",
-    fontSize: 12,
-    fontWeight: "700",
-    marginBottom: 4,
-    lineHeight: 17
-  },
-  featureDesc: {
-    color: "#64748B",
-    fontSize: 11,
-    lineHeight: 16
-  },
-
-  /* ── Trust badges ── */
-  trustRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    flexWrap: "wrap",
-    gap: 8
-  },
-  trustBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#0F172A",
-    borderWidth: 1,
-    borderColor: "#1E3A5F",
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 5
-  },
-  trustLabel: {
-    color: "#94A3B8",
-    fontSize: 11,
-    fontWeight: "500"
-  },
-
-  /* ── CTA ── */
-  ctaSection: {
-    alignItems: "center"
-  },
-  primaryBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#2563EB",
-    borderRadius: 15,
-    paddingVertical: 15,
-    width: "100%",
-    marginBottom: 10,
-    shadowColor: "#2563EB",
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 }
-  },
-  primaryBtnText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700"
-  },
-  secondaryBtn: {
-    borderRadius: 15,
-    paddingVertical: 13,
-    width: "100%",
-    borderWidth: 1.5,
-    borderColor: "#334155",
-    alignItems: "center",
-    marginBottom: 12
-  },
-  secondaryBtnText: {
-    color: "#94A3B8",
-    fontSize: 15,
-    fontWeight: "600"
-  },
-  legalNote: {
-    color: "#334155",
-    fontSize: 11,
-    textAlign: "center"
-  }
-
-});

@@ -1,5 +1,5 @@
 import * as ImagePicker from "expo-image-picker";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -25,6 +25,7 @@ import { ThemedView } from "../../components/themed-view";
 import { IconSymbol } from "../../components/ui/icon-symbol";
 import { useAuth } from "../context/AuthProvider";
 import { db } from "../firebase/firebaseConfig";
+import { useTheme } from "../../hooks/useTheme";
 
 const AZURE_VALIDATE_URL = process.env.EXPO_PUBLIC_AZURE_VALIDATE_URL!;
 const AZURE_OCR_URL = process.env.EXPO_PUBLIC_AZURE_OCR_URL!;
@@ -35,6 +36,7 @@ const DEFAULT_CATEGORIES = ["Meals", "Travel", "Technology", "Office"];
 export default function AddExpenseScreen() {
   const { user, orgId } = useAuth();
   const insets = useSafeAreaInsets();
+  const { tokens: t } = useTheme();
 
   const [dynamicCategories, setDynamicCategories] = useState<string[]>(DEFAULT_CATEGORIES);
 
@@ -300,6 +302,257 @@ export default function AddExpenseScreen() {
     }
   };
 
+  const styles = useMemo(() => StyleSheet.create({
+    container: {
+      paddingHorizontal: 20,
+      backgroundColor: t.bg,
+      flex: 1
+    },
+
+    /* Header */
+    header: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      marginBottom: 24
+    },
+    headerIconWrap: {
+      width: 46,
+      height: 46,
+      borderRadius: 14,
+      backgroundColor: t.accentSurface,
+      borderWidth: 1,
+      borderColor: t.accentSurface,
+      justifyContent: "center",
+      alignItems: "center"
+    },
+    title: {
+      fontSize: 24,
+      color: t.text,
+      fontWeight: "800",
+      lineHeight: 28
+    },
+    subtitle: {
+      color: t.textTertiary,
+      fontSize: 12,
+      marginTop: 2
+    },
+
+    /* Section labels */
+    sectionLabel: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 10
+    },
+    sectionLabelText: {
+      color: t.textTertiary,
+      fontSize: 11,
+      fontWeight: "700",
+      letterSpacing: 1.2
+    },
+
+    /* Cards */
+    card: {
+      backgroundColor: t.surface,
+      padding: 16,
+      borderRadius: 16,
+      marginBottom: 20,
+      borderWidth: 1,
+      borderColor: t.border
+    },
+
+    /* Switch row */
+    switchRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 14
+    },
+    switchLabelRow: {
+      flexDirection: "row",
+      alignItems: "center"
+    },
+    switchLabel: {
+      color: t.text,
+      fontSize: 15,
+      fontWeight: "500"
+    },
+
+    /* Upload box */
+    uploadBox: {
+      borderWidth: 1.5,
+      borderColor: t.border,
+      borderStyle: "dashed",
+      borderRadius: 16,
+      paddingVertical: 32,
+      paddingHorizontal: 20,
+      alignItems: "center",
+      backgroundColor: t.bg
+    },
+    uploadIconWrap: {
+      width: 64,
+      height: 64,
+      borderRadius: 18,
+      backgroundColor: t.accentSurface,
+      justifyContent: "center",
+      alignItems: "center",
+      marginBottom: 14,
+      borderWidth: 1,
+      borderColor: t.accentSurface
+    },
+    uploadTitle: {
+      color: t.accent,
+      fontSize: 16,
+      fontWeight: "700",
+      marginBottom: 4
+    },
+    uploadSubtitle: {
+      color: t.textTertiary,
+      fontSize: 12,
+      textAlign: "center"
+    },
+    ocrLoading: {
+      alignItems: "center",
+      paddingVertical: 20,
+      gap: 12
+    },
+    ocrText: {
+      color: t.accent,
+      fontSize: 14,
+      fontWeight: "600"
+    },
+
+    /* Receipt preview */
+    previewWrapper: {
+      borderRadius: 12,
+      overflow: "hidden"
+    },
+    receiptPreview: {
+      width: "100%",
+      height: 180,
+      borderRadius: 12
+    },
+    previewBanner: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "rgba(0,0,0,0.6)",
+      paddingVertical: 8
+    },
+    previewHint: {
+      color: t.text,
+      fontSize: 12,
+      fontWeight: "500"
+    },
+
+    /* Form inputs */
+    inputWrapper: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: t.surfaceAlt,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: t.border,
+      paddingHorizontal: 12,
+      marginBottom: 10
+    },
+    inputIcon: {
+      marginRight: 10
+    },
+    input: {
+      flex: 1,
+      color: t.text,
+      fontSize: 15,
+      paddingVertical: 13
+    },
+
+    /* Dropdown */
+    dropdownTrigger: {
+      paddingVertical: 13
+    },
+    dropdownValue: {
+      flex: 1,
+      color: t.text,
+      fontSize: 15
+    },
+    dropdown: {
+      backgroundColor: t.surfaceAlt,
+      borderRadius: 12,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: t.border,
+      overflow: "hidden"
+    },
+    dropdownItem: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingHorizontal: 14,
+      paddingVertical: 13,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: t.border
+    },
+    dropdownItemActive: {
+      backgroundColor: t.accentSurface
+    },
+    dropdownItemText: {
+      color: t.text,
+      fontSize: 15
+    },
+    dropdownItemTextActive: {
+      color: t.accent,
+      fontWeight: "600"
+    },
+
+    /* Submit */
+    submitButton: {
+      backgroundColor: t.accent,
+      paddingVertical: 15,
+      borderRadius: 14,
+      alignItems: "center",
+      marginTop: 4
+    },
+    submitDisabled: {
+      opacity: 0.6
+    },
+    submitInner: {
+      flexDirection: "row",
+      alignItems: "center"
+    },
+    submitText: {
+      color: t.accentText,
+      fontWeight: "700",
+      fontSize: 16
+    },
+
+    /* Modals */
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.8)",
+      justifyContent: "center",
+      padding: 20
+    },
+    modalContent: {
+      backgroundColor: t.surface,
+      borderRadius: 16,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: t.border
+    },
+    modalImage: {
+      width: "100%",
+      height: 350,
+      borderRadius: 12
+    },
+    closeBtn: {
+      marginTop: 16,
+      backgroundColor: t.accent,
+      paddingVertical: 13,
+      borderRadius: 12,
+      alignItems: "center"
+    }
+  }), [t]);
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
@@ -315,7 +568,7 @@ export default function AddExpenseScreen() {
             {/* HEADER */}
             <View style={styles.header}>
               <View style={styles.headerIconWrap}>
-                <Ionicons name="receipt-outline" size={22} color="#38BDF8" />
+                <Ionicons name="receipt-outline" size={22} color={t.accent} />
               </View>
               <View style={{ flex: 1 }}>
                 <ThemedText type="title" style={styles.title}>
@@ -329,21 +582,21 @@ export default function AddExpenseScreen() {
 
             {/* RECEIPT CARD */}
             <View style={styles.sectionLabel}>
-              <Ionicons name="camera-outline" size={14} color="#475569" style={{ marginRight: 6 }} />
+              <Ionicons name="camera-outline" size={14} color={t.textTertiary} style={{ marginRight: 6 }} />
               <ThemedText style={styles.sectionLabelText}>RECEIPT</ThemedText>
             </View>
 
             <ThemedView style={styles.card}>
               <View style={styles.switchRow}>
                 <View style={styles.switchLabelRow}>
-                  <Ionicons name="attach-outline" size={18} color="#38BDF8" style={{ marginRight: 8 }} />
+                  <Ionicons name="attach-outline" size={18} color={t.accent} style={{ marginRight: 8 }} />
                   <ThemedText style={styles.switchLabel}>Attach Receipt</ThemedText>
                 </View>
                 <Switch
                   value={hasReceipt}
                   onValueChange={handleReceiptToggle}
-                  trackColor={{ false: "#334155", true: "#2563EB" }}
-                  thumbColor={hasReceipt ? "#38BDF8" : "#64748B"}
+                  trackColor={{ false: t.border, true: t.accent }}
+                  thumbColor={hasReceipt ? "#FFFFFF" : "#FFFFFF"}
                 />
               </View>
 
@@ -359,7 +612,7 @@ export default function AddExpenseScreen() {
                       style={styles.receiptPreview}
                     />
                     <View style={styles.previewBanner}>
-                      <Ionicons name="eye-outline" size={14} color="#F8FAFC" style={{ marginRight: 4 }} />
+                      <Ionicons name="eye-outline" size={14} color={t.text} style={{ marginRight: 4 }} />
                       <ThemedText style={styles.previewHint}>
                         Tap to view · Long press to remove
                       </ThemedText>
@@ -372,13 +625,13 @@ export default function AddExpenseScreen() {
                   >
                     {ocrLoading ? (
                       <View style={styles.ocrLoading}>
-                        <ActivityIndicator color="#38BDF8" size="large" />
+                        <ActivityIndicator color={t.accent} size="large" />
                         <ThemedText style={styles.ocrText}>Scanning receipt…</ThemedText>
                       </View>
                     ) : (
                       <>
                         <View style={styles.uploadIconWrap}>
-                          <Ionicons name="camera-outline" size={36} color="#38BDF8" />
+                          <Ionicons name="camera-outline" size={36} color={t.accent} />
                         </View>
                         <ThemedText style={styles.uploadTitle}>Scan Receipt</ThemedText>
                         <ThemedText style={styles.uploadSubtitle}>AI auto-fills amount, merchant & date</ThemedText>
@@ -390,17 +643,17 @@ export default function AddExpenseScreen() {
 
             {/* FORM */}
             <View style={styles.sectionLabel}>
-              <Ionicons name="create-outline" size={14} color="#475569" style={{ marginRight: 6 }} />
+              <Ionicons name="create-outline" size={14} color={t.textTertiary} style={{ marginRight: 6 }} />
               <ThemedText style={styles.sectionLabelText}>EXPENSE DETAILS</ThemedText>
             </View>
 
             <ThemedView style={styles.card}>
 
               <View style={styles.inputWrapper}>
-                <Ionicons name="cash-outline" size={16} color="#475569" style={styles.inputIcon} />
+                <Ionicons name="cash-outline" size={16} color={t.textTertiary} style={styles.inputIcon} />
                 <TextInput
                   placeholder="Amount (£)"
-                  placeholderTextColor="#475569"
+                  placeholderTextColor={t.textTertiary}
                   value={amount}
                   onChangeText={setAmount}
                   keyboardType="decimal-pad"
@@ -409,10 +662,10 @@ export default function AddExpenseScreen() {
               </View>
 
               <View style={styles.inputWrapper}>
-                <Ionicons name="storefront-outline" size={16} color="#475569" style={styles.inputIcon} />
+                <Ionicons name="storefront-outline" size={16} color={t.textTertiary} style={styles.inputIcon} />
                 <TextInput
                   placeholder="Merchant name"
-                  placeholderTextColor="#475569"
+                  placeholderTextColor={t.textTertiary}
                   value={merchant}
                   onChangeText={setMerchant}
                   style={styles.input}
@@ -424,12 +677,12 @@ export default function AddExpenseScreen() {
                 onPress={() => setShowDropdown(!showDropdown)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="pricetag-outline" size={16} color="#475569" style={styles.inputIcon} />
+                <Ionicons name="pricetag-outline" size={16} color={t.textTertiary} style={styles.inputIcon} />
                 <ThemedText style={styles.dropdownValue}>{category}</ThemedText>
                 <Ionicons
                   name={showDropdown ? "chevron-up" : "chevron-down"}
                   size={16}
-                  color="#475569"
+                  color={t.textTertiary}
                 />
               </TouchableOpacity>
 
@@ -448,7 +701,7 @@ export default function AddExpenseScreen() {
                         {cat}
                       </ThemedText>
                       {cat === category && (
-                        <Ionicons name="checkmark" size={16} color="#38BDF8" />
+                        <Ionicons name="checkmark" size={16} color={t.accent} />
                       )}
                     </TouchableOpacity>
                   ))}
@@ -456,10 +709,10 @@ export default function AddExpenseScreen() {
               )}
 
               <View style={styles.inputWrapper}>
-                <Ionicons name="calendar-outline" size={16} color="#475569" style={styles.inputIcon} />
+                <Ionicons name="calendar-outline" size={16} color={t.textTertiary} style={styles.inputIcon} />
                 <TextInput
                   placeholder="Purchase date (YYYY-MM-DD)"
-                  placeholderTextColor="#475569"
+                  placeholderTextColor={t.textTertiary}
                   value={purchaseDate}
                   onChangeText={setPurchaseDate}
                   style={styles.input}
@@ -473,10 +726,10 @@ export default function AddExpenseScreen() {
                 activeOpacity={0.85}
               >
                 {saving ? (
-                  <ActivityIndicator color="#fff" />
+                  <ActivityIndicator color={t.accentText} />
                 ) : (
                   <View style={styles.submitInner}>
-                    <Ionicons name="send-outline" size={16} color="#fff" style={{ marginRight: 8 }} />
+                    <Ionicons name="send-outline" size={16} color={t.accentText} style={{ marginRight: 8 }} />
                     <ThemedText style={styles.submitText}>Submit Claim</ThemedText>
                   </View>
                 )}
@@ -502,7 +755,7 @@ export default function AddExpenseScreen() {
               style={styles.closeBtn}
               onPress={() => setShowReceiptModal(false)}
             >
-              <ThemedText style={{ color: "#fff", fontWeight: "600" }}>
+              <ThemedText style={{ color: t.accentText, fontWeight: "600" }}>
                 Close
               </ThemedText>
             </TouchableOpacity>
@@ -512,254 +765,3 @@ export default function AddExpenseScreen() {
     </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: 20,
-    backgroundColor: "#0F172A",
-    flex: 1
-  },
-
-  /* Header */
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 24
-  },
-  headerIconWrap: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    backgroundColor: "#0F2A3D",
-    borderWidth: 1,
-    borderColor: "#1E3A5F",
-    justifyContent: "center",
-    alignItems: "center"
-  },
-  title: {
-    fontSize: 24,
-    color: "#F8FAFC",
-    fontWeight: "800",
-    lineHeight: 28
-  },
-  subtitle: {
-    color: "#475569",
-    fontSize: 12,
-    marginTop: 2
-  },
-
-  /* Section labels */
-  sectionLabel: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 10
-  },
-  sectionLabelText: {
-    color: "#475569",
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 1.2
-  },
-
-  /* Cards */
-  card: {
-    backgroundColor: "#1E293B",
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: "#334155"
-  },
-
-  /* Switch row */
-  switchRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 14
-  },
-  switchLabelRow: {
-    flexDirection: "row",
-    alignItems: "center"
-  },
-  switchLabel: {
-    color: "#E2E8F0",
-    fontSize: 15,
-    fontWeight: "500"
-  },
-
-  /* Upload box */
-  uploadBox: {
-    borderWidth: 1.5,
-    borderColor: "#334155",
-    borderStyle: "dashed",
-    borderRadius: 16,
-    paddingVertical: 32,
-    paddingHorizontal: 20,
-    alignItems: "center",
-    backgroundColor: "#0F172A"
-  },
-  uploadIconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 18,
-    backgroundColor: "#0F2A3D",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: "#1E3A5F"
-  },
-  uploadTitle: {
-    color: "#38BDF8",
-    fontSize: 16,
-    fontWeight: "700",
-    marginBottom: 4
-  },
-  uploadSubtitle: {
-    color: "#475569",
-    fontSize: 12,
-    textAlign: "center"
-  },
-  ocrLoading: {
-    alignItems: "center",
-    paddingVertical: 20,
-    gap: 12
-  },
-  ocrText: {
-    color: "#38BDF8",
-    fontSize: 14,
-    fontWeight: "600"
-  },
-
-  /* Receipt preview */
-  previewWrapper: {
-    borderRadius: 12,
-    overflow: "hidden"
-  },
-  receiptPreview: {
-    width: "100%",
-    height: 180,
-    borderRadius: 12
-  },
-  previewBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.6)",
-    paddingVertical: 8
-  },
-  previewHint: {
-    color: "#F8FAFC",
-    fontSize: 12,
-    fontWeight: "500"
-  },
-
-  /* Form inputs */
-  inputWrapper: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#0F172A",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#334155",
-    paddingHorizontal: 12,
-    marginBottom: 10
-  },
-  inputIcon: {
-    marginRight: 10
-  },
-  input: {
-    flex: 1,
-    color: "#F8FAFC",
-    fontSize: 15,
-    paddingVertical: 13
-  },
-
-  /* Dropdown */
-  dropdownTrigger: {
-    paddingVertical: 13
-  },
-  dropdownValue: {
-    flex: 1,
-    color: "#F8FAFC",
-    fontSize: 15
-  },
-  dropdown: {
-    backgroundColor: "#0F172A",
-    borderRadius: 12,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: "#334155",
-    overflow: "hidden"
-  },
-  dropdownItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#334155"
-  },
-  dropdownItemActive: {
-    backgroundColor: "#0D1F3C"
-  },
-  dropdownItemText: {
-    color: "#CBD5E1",
-    fontSize: 15
-  },
-  dropdownItemTextActive: {
-    color: "#38BDF8",
-    fontWeight: "600"
-  },
-
-  /* Submit */
-  submitButton: {
-    backgroundColor: "#2563EB",
-    paddingVertical: 15,
-    borderRadius: 14,
-    alignItems: "center",
-    marginTop: 4
-  },
-  submitDisabled: {
-    opacity: 0.6
-  },
-  submitInner: {
-    flexDirection: "row",
-    alignItems: "center"
-  },
-  submitText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 16
-  },
-
-  /* Modals */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.8)",
-    justifyContent: "center",
-    padding: 20
-  },
-  modalContent: {
-    backgroundColor: "#1E293B",
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#334155"
-  },
-  modalImage: {
-    width: "100%",
-    height: 350,
-    borderRadius: 12
-  },
-  closeBtn: {
-    marginTop: 16,
-    backgroundColor: "#2563EB",
-    paddingVertical: 13,
-    borderRadius: 12,
-    alignItems: "center"
-  }
-});
