@@ -28,7 +28,7 @@ import {
 } from "firebase/firestore";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../../hooks/useTheme";
 import { addListener } from "../../utils/listenerStore";
 import { useAuth } from "../context/AuthProvider";
@@ -189,7 +189,7 @@ export default function HomeScreen() {
   const styles = useMemo(() => StyleSheet.create({
 
     root: { flex: 1, backgroundColor: t.bg },
-    container: { paddingTop: 8 },
+    container: { paddingTop: 0 },   // insets.top already on root; extra pad added in headerRow
 
     /* ── Header ── */
     headerRow: {
@@ -197,10 +197,18 @@ export default function HomeScreen() {
       justifyContent: "space-between",
       alignItems: "center",
       paddingHorizontal: 24,
+      paddingTop: 16,     // spacing below the safe area (SafeAreaView owns the inset itself)
       marginBottom: 28,
     },
-    greetingLabel: { color: t.textSecondary, fontSize: 13, fontWeight: "500", marginBottom: 4 },
-    greeting:      { color: t.text, fontSize: 30, fontWeight: "800", letterSpacing: -0.5 },
+    greetingLabel: {
+      color: t.textSecondary, fontSize: 13, fontWeight: "500", marginBottom: 2,
+      includeFontPadding: false,
+    },
+    greeting: {
+      color: t.text, fontSize: 30, fontWeight: "800", letterSpacing: -0.5,
+      lineHeight: 44,            // extra room so Android heavy-font ascenders are never clipped
+      includeFontPadding: false, // Android: strip internal glyph padding
+    },
     avatarBtn: {
       width: 44, height: 44, borderRadius: 22,
       backgroundColor: t.surface,
@@ -295,7 +303,7 @@ export default function HomeScreen() {
       paddingHorizontal: 24, marginBottom: 16,
     },
     sectionTitle: { color: t.text, fontSize: 16, fontWeight: "700" },
-    actionsScroll: { paddingLeft: 24, paddingRight: 8 },
+    actionsScroll: { paddingLeft: 8, paddingRight: 8 },
     actionItem: { alignItems: "center", marginRight: 20 },
     actionCircle: {
       width: 60, height: 60, borderRadius: 30,
@@ -381,7 +389,7 @@ export default function HomeScreen() {
     : ["#EEF2FF", "#F0F4FF", "#FFFFFF"];
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
+    <SafeAreaView style={styles.root} edges={["top"]}>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 48 }]}
@@ -522,6 +530,7 @@ export default function HomeScreen() {
       </ScrollView>
 
       {/* ── BUDGET MODAL ── */}
+
       <Modal visible={budgetModalOpen} animationType="slide" transparent onRequestClose={closeBudgetModal}>
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : "height"}>
           <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={closeBudgetModal} />
@@ -578,7 +587,7 @@ export default function HomeScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -603,45 +612,30 @@ function StatCard({
 
   return (
     <View style={{
-      flex: 1,
-      backgroundColor: t.surface,
-      borderRadius: t.radius.lg,
-      padding: 16,
-      alignItems: "flex-start", // 👈 keep original layout
+      flex: 1, backgroundColor: t.surface,
+      borderRadius: t.radius.lg, padding: 16,
+      alignItems: "flex-start",
     }}>
-
-      {/* ICON */}
+      {/* Icon */}
       <View style={{
-        width: 38,
-        height: 38,
-        borderRadius: 12,
-        justifyContent: "center",
-        alignItems: "center",
-        backgroundColor: bg,
-
-        marginLeft: -11, // 
+        width: 38, height: 38, borderRadius: 12,
+        justifyContent: "center", alignItems: "center",
+        backgroundColor: bg, marginBottom: 10, marginLeft: -11,
       }}>
         <Ionicons name={icon} size={18} color={color} />
       </View>
-
-      {/* VALUE */}
+      {/* Number — includeFontPadding:false stops Android clipping the top of heavy digits */}
       <ThemedText style={{
-        fontSize: 28,
-        fontWeight: "800",
-        marginTop: 8,
-        color
+        fontSize: 28, fontWeight: "800", color,
+        lineHeight: 38,
+        includeFontPadding: false,
+        marginBottom: 2,
       }}>
         {value}
       </ThemedText>
-
-      {/* LABEL */}
-      <ThemedText style={{
-        color: t.textSecondary,
-        fontSize: 12
-      }}>
+      <ThemedText style={{ color: t.textSecondary, fontSize: 13 }}>
         {label}
       </ThemedText>
-
     </View>
   );
 }

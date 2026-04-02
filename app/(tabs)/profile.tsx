@@ -25,7 +25,7 @@ import {
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 
 import { useRouter } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
 import { auth, db } from "../../app/firebase/firebaseConfig";
@@ -403,7 +403,7 @@ export default function ProfileScreen() {
 
     container: {
       paddingHorizontal: 20,
-      paddingTop: 12
+      paddingTop: 0,      // insets.top already on root; avatar section supplies its own top space
     },
 
     loading: {
@@ -416,14 +416,15 @@ export default function ProfileScreen() {
     /* ── Avatar ── */
     avatarSection: {
       alignItems: "center",
-      paddingVertical: 28,
-      marginBottom: 8
+      paddingTop: 32,      // generous headroom below status bar
+      paddingBottom: 24,
+      marginBottom: 8,
     },
 
     avatarRing: {
-      width: 96,
-      height: 96,
-      borderRadius: 48,
+      width: 112,
+      height: 112,
+      borderRadius: 56,
       backgroundColor: t.accentSurface,
       justifyContent: "center",
       alignItems: "center",
@@ -431,9 +432,9 @@ export default function ProfileScreen() {
     },
 
     avatar: {
-      width: 96,
-      height: 96,
-      borderRadius: 48,
+      width: 112,
+      height: 112,
+      borderRadius: 56,
       backgroundColor: t.accentSurface,
       justifyContent: "center",
       alignItems: "center",
@@ -441,8 +442,10 @@ export default function ProfileScreen() {
 
     avatarText: {
       color: t.accent,
-      fontSize: 38,
-      fontWeight: "800",
+      fontSize: 34,              // reduced — letter no longer crowds the circle edges
+      fontWeight: "700",
+      lineHeight: 44,            // explicit lineHeight stops Android clipping the glyph top
+      includeFontPadding: false, // Android: strip internal font box padding
     },
 
     name: {
@@ -450,12 +453,15 @@ export default function ProfileScreen() {
       fontSize: 24,
       fontWeight: "800",
       letterSpacing: -0.3,
+      lineHeight: 32,
+      includeFontPadding: false,
     },
 
     email: {
       color: t.textSecondary,
       marginTop: 4,
       fontSize: 14,
+      includeFontPadding: false,
     },
 
     badgeRow: {
@@ -786,7 +792,7 @@ export default function ProfileScreen() {
   //////////////////////////////////////////////////////
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
+    <SafeAreaView style={styles.root} edges={["top"]}>
 
       <ScrollView
         style={{ flex: 1 }}
@@ -1132,6 +1138,6 @@ export default function ProfileScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-    </View>
+    </SafeAreaView>
   );
 }

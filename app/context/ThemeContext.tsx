@@ -61,3 +61,6 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 export function useThemeContext() {
   return useContext(ThemeContext);
 }
+
+// Required by Expo Router — every file inside app/ must have a default export
+export default ThemeProvider;
