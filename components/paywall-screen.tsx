@@ -275,7 +275,10 @@ export default function PaywallScreen() {
     const pkg = billingPeriod === "monthly"
       ? (plan === "pro" ? packages.proMonthly      : packages.businessMonthly)
       : (plan === "pro" ? packages.proAnnual        : packages.businessAnnual);
-    return pkg?.priceString ?? (plan === "pro" ? PLAN_LIMITS.pro.priceMonthly : PLAN_LIMITS.business.priceMonthly) ?? "—";
+    const fallback = billingPeriod === "annual"
+      ? (plan === "pro" ? PLAN_LIMITS.pro.priceAnnual    : PLAN_LIMITS.business.priceAnnual)
+      : (plan === "pro" ? PLAN_LIMITS.pro.priceMonthly   : PLAN_LIMITS.business.priceMonthly);
+    return pkg?.priceString ?? fallback ?? "—";
   };
 
   const isPurchasing = (plan: "pro" | "business") =>

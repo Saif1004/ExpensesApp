@@ -40,6 +40,13 @@ const usernameExists = async (username: string) => {
   return snap.exists();
 };
 
+const orgNameExists = async (nameLower: string) => {
+  const snap = await getDocs(
+    query(collection(db, "organisations"), where("nameLower", "==", nameLower))
+  );
+  return !snap.empty;
+};
+
 //////////////////////////////////////////////////////
 // Password strength validator
 // Requirements: 8+ chars, 1 uppercase, 1 lowercase, 1 number
@@ -127,6 +134,11 @@ export default function SignUp() {
 
     if (await usernameExists(normalizedUsername)) {
       Alert.alert("Username taken", "Please choose a different username.");
+      return;
+    }
+
+    if (await orgNameExists(normalizedOrg)) {
+      Alert.alert("Organisation name taken", "An organisation with that name already exists. Please choose a different name.");
       return;
     }
 
