@@ -1012,6 +1012,12 @@ export default function ProfileScreen() {
             onPress={() => router.push("/chatbot")}
           />
           <MenuRow
+            icon="help-circle-outline"
+            label="Help & Feedback"
+            sublabel="Report a bug or share a suggestion"
+            onPress={() => router.push("/help-feedback")}
+          />
+          <MenuRow
             icon="lock-closed-outline"
             label="Reset Password"
             onPress={resetPassword}

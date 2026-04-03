@@ -162,7 +162,7 @@ export default function PrivacyPolicyScreen() {
         <View style={styles.card}>
           <ThemedText style={styles.sectionHeading}>Contact Us</ThemedText>
           <ThemedText style={styles.body}>
-            For privacy concerns or data requests, contact us at support@claimio.app
+            For privacy concerns or data requests, contact us at support@claimio.org
           </ThemedText>
         </View>
 
