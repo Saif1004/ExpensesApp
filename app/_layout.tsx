@@ -130,6 +130,7 @@ function TermsGate({ children }: { children: React.ReactNode }) {
     declineBtn: {
       paddingVertical: 12,
       alignItems: "center",
+      marginBottom: 30,
     },
     declineText: {
       color: t.textTertiary,
@@ -189,7 +190,7 @@ function TermsGate({ children }: { children: React.ReactNode }) {
                 • Consent to Claimio processing your data as described in our Privacy Policy{"\n"}
                 • Acknowledge that subscriptions auto-renew unless cancelled before the renewal date{"\n"}
                 • Accept that Claimio is provided "as is" without warranty{"\n\n"}
-                These Terms are governed by the laws of England and Wales{"\n"}
+                These Terms are governed by the laws of England and Wales.{"\n"}
               </ThemedText>
             </ScrollView>
 
