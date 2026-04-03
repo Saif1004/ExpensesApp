@@ -1,19 +1,19 @@
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { StripeProvider } from "@stripe/stripe-react-native";
 import { Stack } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useState } from "react";
 import { Linking, Modal, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
-import { StatusBar } from "expo-status-bar";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { ThemedText } from "../components/themed-text";
+import { registerForPushNotifications } from "../utils/pushNotifications";
 import { AuthProvider, useAuth } from "./context/AuthProvider";
 import { ThemeProvider, useThemeContext } from "./context/ThemeContext";
-import { StripeProvider } from "@stripe/stripe-react-native";
-import { registerForPushNotifications } from "../utils/pushNotifications";
-import { ThemedText } from "../components/themed-text";
-import { Ionicons } from "@expo/vector-icons";
 
 const STRIPE_PK = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY!;
 const TC_ACCEPTED_KEY = "@claimio_tc_accepted";
-const TERMS_URL = "https://doc-hosting.flycricket.io/claimio-terms-of-use/862d3297-eafe-45a3-baea-403993b72e76/terms";
-const PRIVACY_URL = "https://doc-hosting.flycricket.io/claimio-privacy-policy/93cdb913-08e1-433c-970b-c7465830037b/privacy";
+const TERMS_URL   = "https://doc-hosting.flycricket.io/claimio-terms-of-use/1f9b2874-dd4b-4eea-b8e0-6ad1c9ab563b/terms";
+const PRIVACY_URL = "https://doc-hosting.flycricket.io/claimio-privacy-policy/b73958a1-ae06-494d-b3a9-2c9b7183d4b3/privacy";
 
 //////////////////////////////////////////////////////
 // T&C Gate — shown once on first launch

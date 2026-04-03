@@ -1,12 +1,12 @@
-import { useMemo } from "react";
-import { Linking, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useMemo } from "react";
+import { Linking, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ThemedText } from "../components/themed-text";
 import { useTheme } from "../hooks/useTheme";
 
-const TERMS_URL = "https://doc-hosting.flycricket.io/claimio-terms-of-use/862d3297-eafe-45a3-baea-403993b72e76/terms";
+const TERMS_URL = "https://doc-hosting.flycricket.io/claimio-terms-of-use/1f9b2874-dd4b-4eea-b8e0-6ad1c9ab563b/terms";
 
 export default function TermsScreen() {
   const router = useRouter();
@@ -85,6 +85,18 @@ export default function TermsScreen() {
       color: t.textSecondary,
       fontSize: 13,
       lineHeight: 20
+    },
+    contactBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginTop: 8,
+    },
+    contactBtnText: {
+      color: t.accent,
+      fontSize: 13,
+      fontWeight: "600",
+      textDecorationLine: "underline",
     },
     fullTermsBtn: {
       flexDirection: "row",
@@ -171,6 +183,21 @@ export default function TermsScreen() {
           <ThemedText style={styles.body}>
             These Terms are governed by the laws of England and Wales. Any disputes shall be subject to the exclusive jurisdiction of the courts of England and Wales.
           </ThemedText>
+        </View>
+
+        <View style={styles.card}>
+          <ThemedText style={styles.sectionHeading}>Contact Us</ThemedText>
+          <ThemedText style={styles.body}>
+            For questions about these Terms, please contact us at:
+          </ThemedText>
+          <TouchableOpacity
+            style={styles.contactBtn}
+            onPress={() => Linking.openURL("mailto:legal@claimio.org")}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="mail-outline" size={14} color={t.accent} />
+            <ThemedText style={styles.contactBtnText}>legal@claimio.org</ThemedText>
+          </TouchableOpacity>
         </View>
 
         <TouchableOpacity

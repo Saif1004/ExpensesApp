@@ -1,12 +1,12 @@
-import { useMemo } from "react";
-import { Linking, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useMemo } from "react";
+import { Linking, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ThemedText } from "../components/themed-text";
 import { useTheme } from "../hooks/useTheme";
 
-const PRIVACY_POLICY_URL = "https://doc-hosting.flycricket.io/claimio-privacy-policy/93cdb913-08e1-433c-970b-c7465830037b/privacy";
+const PRIVACY_POLICY_URL = "https://doc-hosting.flycricket.io/claimio-privacy-policy/b73958a1-ae06-494d-b3a9-2c9b7183d4b3/privacy";
 
 export default function PrivacyPolicyScreen() {
   const router = useRouter();
@@ -86,6 +86,18 @@ export default function PrivacyPolicyScreen() {
       fontSize: 13,
       lineHeight: 20
     },
+    contactBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginTop: 8,
+    },
+    contactBtnText: {
+      color: t.accent,
+      fontSize: 13,
+      fontWeight: "600",
+      textDecorationLine: "underline",
+    },
     fullPolicyBtn: {
       flexDirection: "row",
       alignItems: "center",
@@ -162,8 +174,16 @@ export default function PrivacyPolicyScreen() {
         <View style={styles.card}>
           <ThemedText style={styles.sectionHeading}>Contact Us</ThemedText>
           <ThemedText style={styles.body}>
-            For privacy concerns or data requests, contact us at support@claimio.org
+            For privacy concerns or data deletion requests, please contact us at:
           </ThemedText>
+          <TouchableOpacity
+            style={styles.contactBtn}
+            onPress={() => Linking.openURL("mailto:support@claimio.org")}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="mail-outline" size={14} color={t.accent} />
+            <ThemedText style={styles.contactBtnText}>support@claimio.org</ThemedText>
+          </TouchableOpacity>
         </View>
 
         <TouchableOpacity
