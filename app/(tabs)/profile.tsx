@@ -23,6 +23,7 @@ import {
 } from "firebase/auth";
 
 import { doc, getDoc, updateDoc } from "firebase/firestore";
+import * as StoreReview from "expo-store-review";
 
 import { useRouter } from "expo-router";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -208,6 +209,7 @@ export default function ProfileScreen() {
   const spinAnim = useRef(new Animated.Value(0)).current;
 
   const [username, setUsername] = useState("");
+  const [orgName, setOrgName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
   const [paymentInfo, setPaymentInfo] = useState<PaymentInfo>({});
@@ -239,6 +241,14 @@ export default function ProfileScreen() {
             stripePayoutBrand: data.stripePayoutBrand,
             stripePayoutLast4: data.stripePayoutLast4
           });
+        }
+
+        // Load organisation name
+        if (orgId) {
+          const orgSnap = await getDoc(doc(db, "organisations", orgId));
+          if (orgSnap.exists()) {
+            setOrgName(orgSnap.data().name ?? null);
+          }
         }
 
       } catch (err) {
@@ -356,6 +366,23 @@ export default function ProfileScreen() {
       setRefreshingRole(false);
       spinAnim.stopAnimation();
       spinAnim.setValue(0);
+    }
+  };
+
+  //////////////////////////////////////////////////////
+  // RATE THE APP
+  //////////////////////////////////////////////////////
+
+  const handleRateApp = async () => {
+    const available = await StoreReview.isAvailableAsync();
+    if (available) {
+      await StoreReview.requestReview();
+    } else {
+      // Fallback: open the store listing directly
+      const storeUrl = Platform.OS === "ios"
+        ? "https://apps.apple.com/app/id6746710023"
+        : "https://play.google.com/store/apps/details?id=com.saif1004.claimio";
+      Linking.openURL(storeUrl);
     }
   };
 
@@ -513,6 +540,19 @@ export default function ProfileScreen() {
       fontWeight: "700",
       textTransform: "uppercase",
       letterSpacing: 0.8
+    },
+
+    orgRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      marginTop: 6,
+    },
+
+    orgName: {
+      color: t.textSecondary,
+      fontSize: 13,
+      fontWeight: "500",
     },
 
     refreshBtn: {
@@ -811,6 +851,13 @@ export default function ProfileScreen() {
           <ThemedText style={styles.name}>{username || "User"}</ThemedText>
           <ThemedText style={styles.email}>{user?.email}</ThemedText>
 
+          {!!orgName && (
+            <View style={styles.orgRow}>
+              <Ionicons name="business-outline" size={13} color={t.textSecondary} />
+              <ThemedText style={styles.orgName}>{orgName}</ThemedText>
+            </View>
+          )}
+
           <View style={styles.badgeRow}>
             {/* Role badge */}
             <View style={[
@@ -1010,6 +1057,12 @@ export default function ProfileScreen() {
             label="AI Assistant"
             sublabel="Ask questions about claims & policy"
             onPress={() => router.push("/chatbot")}
+          />
+          <MenuRow
+            icon="star-outline"
+            label="Rate Claimio"
+            sublabel="Enjoying the app? Leave us a review!"
+            onPress={handleRateApp}
           />
           <MenuRow
             icon="help-circle-outline"

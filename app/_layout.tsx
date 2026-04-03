@@ -4,7 +4,12 @@ import { StripeProvider } from "@stripe/stripe-react-native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useState } from "react";
-import { Linking, Modal, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
+import { Linking, LogBox, Modal, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
+
+// expo-keep-awake is used internally by Expo dev-tools to keep the screen on
+// during development. On some devices/simulators the native module throws —
+// this is harmless and does not affect production builds.
+LogBox.ignoreLogs(["Unable to activate keep awake"]);
 import { ThemedText } from "../components/themed-text";
 import { registerForPushNotifications } from "../utils/pushNotifications";
 import { AuthProvider, useAuth } from "./context/AuthProvider";

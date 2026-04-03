@@ -494,15 +494,15 @@ export default function ManageEmployees() {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: t.surface,
+      backgroundColor: t.accentSurface,
       paddingVertical: 9,
       borderRadius: 10,
       borderWidth: 1,
-      borderColor: t.border
+      borderColor: t.accent + "66"
     },
     promoteBtnText: {
-      color: t.textSecondary,
-      fontWeight: "600",
+      color: t.accent,
+      fontWeight: "700",
       fontSize: 13
     },
     demoteBtn: {
@@ -526,7 +526,7 @@ export default function ManageEmployees() {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
-      backgroundColor: t.errorSurface,
+      backgroundColor: t.error,
       paddingVertical: 9,
       borderRadius: 10
     },
@@ -668,7 +668,7 @@ export default function ManageEmployees() {
                       onPress={() => promoteToAdmin(item)}
                       activeOpacity={0.8}
                     >
-                      <Ionicons name="shield-outline" size={14} color={t.textSecondary} style={{ marginRight: 4 }} />
+                      <Ionicons name="shield-outline" size={14} color={t.accent} style={{ marginRight: 4 }} />
                       <ThemedText style={styles.promoteBtnText}>Make Admin</ThemedText>
                     </TouchableOpacity>
                   )

@@ -15,15 +15,15 @@ type ThemeContextType = {
 };
 
 const ThemeContext = createContext<ThemeContextType>({
-  mode:        'dark',
-  tokens:      darkTheme,
+  mode:        'light',
+  tokens:      lightTheme,
   toggleTheme: () => {},
   setTheme:    () => {},
   isLoaded:    false,
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [mode, setMode]       = useState<ThemeMode>('dark');
+  const [mode, setMode]       = useState<ThemeMode>('light');
   const [isLoaded, setLoaded] = useState(false);
 
   // Load persisted preference on mount
