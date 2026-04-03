@@ -183,13 +183,13 @@ function TermsGate({ children }: { children: React.ReactNode }) {
 
             <ScrollView style={styles.scrollArea} showsVerticalScrollIndicator={false}>
               <ThemedText style={styles.scrollText}>
-                By tapping "Accept & Continue" you confirm that you:{"\n\n"}
-                • Are at least 18 years old{"\n"}
-                • Agree to use Claimio only for legitimate business expense management{"\n"}
-                • Understand that expense data is stored securely on Google Cloud (Firebase){"\n"}
-                • Consent to Claimio processing your data as described in our Privacy Policy{"\n"}
-                • Acknowledge that subscriptions auto-renew unless cancelled before the renewal date{"\n"}
-                • Accept that Claimio is provided "as is" without warranty{"\n\n"}
+                By tapping "Accept & Continue" you confirm that you:{"\n"}
+                • Are at least 18 years old.{"\n"}
+                • Agree to use Claimio only for legitimate business expense management.{"\n"}
+                • Understand that expense data is stored securely on Google Cloud (Firebase).{"\n"}
+                • Consent to Claimio processing your data as described in our Privacy Policy.{"\n"}
+                • Acknowledge that subscriptions auto-renew unless cancelled before the renewal date.{"\n"}
+                • Accept that Claimio is provided "as is" without warranty.{"\n\n"}
                 These Terms are governed by the laws of England and Wales.{"\n"}
               </ThemedText>
             </ScrollView>
