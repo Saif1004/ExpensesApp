@@ -6,7 +6,7 @@ import {
   where
 } from "firebase/firestore";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   ActivityIndicator,
@@ -14,11 +14,13 @@ import {
   Dimensions,
   ScrollView,
   StyleSheet,
+  Text,
   TouchableOpacity,
   View
 } from "react-native";
 
 import * as FileSystem from 'expo-file-system/legacy';
+import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
 import {
@@ -34,497 +36,779 @@ import { addListener } from "../../utils/listenerStore";
 import { useTheme } from "../../hooks/useTheme";
 
 const screenWidth = Dimensions.get("window").width;
-
 const AI_URL = process.env.EXPO_PUBLIC_ANALYTICS_AI_URL!;
 
-type Category = "Meals" | "Travel" | "Technology" | "Office";
+// 10 distinct colours for dynamic categories
+const CATEGORY_COLOURS = [
+  "#6366F1", "#22C55E", "#F59E0B", "#F97316",
+  "#EF4444", "#06B6D4", "#8B5CF6", "#EC4899",
+  "#14B8A6", "#84CC16"
+];
+
+type Period = "month" | "quarter" | "year" | "tax_year" | "all";
+type Scope  = "mine" | "org";
+
+const PERIOD_LABELS: Record<Period, string> = {
+  month:    "This Month",
+  quarter:  "This Quarter",
+  year:     "This Year",
+  tax_year: "Tax Year",
+  all:      "All Time"
+};
 
 type Claim = {
+  id: string;
   amount: number;
-  category: Category;
+  category: string;
   status: "pending" | "approved" | "rejected";
   suspicious?: boolean;
   merchant?: string;
   paymentStatus?: string;
+  purchaseDate?: string;
   createdAt?: { toDate: () => Date };
 };
 
-type CategoryStats = {
-  Meals: number;
-  Travel: number;
-  Technology: number;
-  Office: number;
-};
+// Purchase date from string field (YYYY-MM-DD)
+function formatDate(c: Claim): string {
+  if (c.purchaseDate) {
+    try { return new Date(c.purchaseDate).toLocaleDateString("en-GB"); } catch { return c.purchaseDate; }
+  }
+  return "—";
+}
+
+// Submitted date from Firestore timestamp
+function submittedDate(c: Claim): string {
+  try { return c.createdAt?.toDate().toLocaleDateString("en-GB") ?? "—"; } catch { return "—"; }
+}
+
+// UK tax year starts April 6
+function taxYearStart(): Date {
+  const now = new Date();
+  const year =
+    now.getMonth() < 3 || (now.getMonth() === 3 && now.getDate() < 6)
+      ? now.getFullYear() - 1
+      : now.getFullYear();
+  return new Date(year, 3, 6);
+}
+
+function filterByPeriod(claims: Claim[], period: Period): Claim[] {
+  if (period === "all") return claims;
+  const now = new Date();
+  let from: Date;
+  if (period === "month") {
+    from = new Date(now.getFullYear(), now.getMonth(), 1);
+  } else if (period === "quarter") {
+    const q = Math.floor(now.getMonth() / 3);
+    from = new Date(now.getFullYear(), q * 3, 1);
+  } else if (period === "year") {
+    from = new Date(now.getFullYear(), 0, 1);
+  } else {
+    from = taxYearStart();
+  }
+  return claims.filter(c => {
+    const d = c.purchaseDate ? new Date(c.purchaseDate) : c.createdAt?.toDate();
+    return d && d >= from;
+  });
+}
 
 export default function AnalyticsScreen() {
-
-  const { user, role, isPro, orgId } = useAuth();
+  const { user, role, isPro, orgId, orgCategories } = useAuth();
   const { tokens: t } = useTheme();
 
-  if(!isPro) return <PaywallScreen />;
+  if (!isPro) return <PaywallScreen />;
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]     = useState(true);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiInsight, setAiInsight] = useState("");
-
-  const [stats, setStats] = useState({
-    total: 0,
-    approved: 0,
-    pending: 0,
-    rejected: 0,
-    suspicious: 0,
-    avgValue: 0,
-    categories: {
-      Meals: 0,
-      Travel: 0,
-      Technology: 0,
-      Office: 0
-    } as CategoryStats
-  });
+  const [period, setPeriod]       = useState<Period>("month");
+  const [scope, setScope]         = useState<Scope>("mine");
+  const [allClaims, setAllClaims] = useState<Claim[]>([]);
 
   useEffect(() => {
-
     if (!user || !user.emailVerified) return;
-
-    // Admin: scope to org. Employee: scope to own userId.
-    // Unscoped queries fail Firestore rules (permission-denied).
     const q =
-      role === "admin" && orgId
+      scope === "org" && role === "admin" && orgId
         ? query(collection(db, "claims"), where("orgId", "==", orgId))
         : query(collection(db, "claims"), where("userId", "==", user.uid));
 
-    const unsub = addListener(onSnapshot(q, (snapshot) => {
-
-      const claims: Claim[] =
-        snapshot.docs.map((doc) => doc.data() as Claim);
-
-      let approved = 0;
-      let pending = 0;
-      let rejected = 0;
-      let suspicious = 0;
-      let totalAmount = 0;
-
-      const categories: CategoryStats = {
-        Meals: 0,
-        Travel: 0,
-        Technology: 0,
-        Office: 0
-      };
-
-      claims.forEach((c) => {
-
-        totalAmount += Number(c.amount);
-
-        if (c.status === "approved") approved++;
-        if (c.status === "pending") pending++;
-        if (c.status === "rejected") rejected++;
-
-        if (c.suspicious) suspicious++;
-
-        categories[c.category]++;
-
-      });
-
-      const total = claims.length;
-      const avgValue =
-        total > 0 ? totalAmount / total : 0;
-
-      const newStats = {
-        total,
-        approved,
-        pending,
-        rejected,
-        suspicious,
-        avgValue,
-        categories
-      };
-
-      setStats(newStats);
+    setLoading(true);
+    const unsub = addListener(onSnapshot(q, snap => {
+      const cs: Claim[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as Claim));
+      setAllClaims(cs);
       setLoading(false);
-
-    }, () => { /* silently swallow permission-denied on sign-out/delete */ }));
-
+    }, () => {}));
     return unsub;
+  }, [user, role, orgId, scope]);
 
-  }, [user, role, orgId]);
+  // Filtered claims for selected period
+  const claims = useMemo(() => filterByPeriod(allClaims, period), [allClaims, period]);
 
-  async function generateAIInsights(data:any){
+  // Computed stats
+  const stats = useMemo(() => {
+    let totalSpend = 0, approvedSpend = 0, pendingSpend = 0;
+    let approved = 0, pending = 0, rejected = 0, suspicious = 0;
+    const categoryCount: Record<string, number> = {};
+    const categorySpend: Record<string, number> = {};
+    const merchantSpend: Record<string, number> = {};
+    const monthly: Record<string, number> = {};
 
-    try{
+    claims.forEach(c => {
+      const amt = Number(c.amount) || 0;
+      totalSpend += amt;
+      if (c.status === "approved") { approved++; approvedSpend += amt; }
+      if (c.status === "pending")  { pending++;  pendingSpend  += amt; }
+      if (c.status === "rejected")   rejected++;
+      if (c.suspicious)              suspicious++;
 
-      setAiLoading(true);
+      const cat = c.category || "Other";
+      categoryCount[cat] = (categoryCount[cat] ?? 0) + 1;
+      categorySpend[cat] = (categorySpend[cat] ?? 0) + amt;
 
-      if(!user) return;
+      const m = c.merchant?.trim();
+      if (m) merchantSpend[m] = (merchantSpend[m] ?? 0) + amt;
 
-      const token = await user.getIdToken();
-
-      const res = await fetch(AI_URL,{
-        method:"POST",
-        headers:{
-          "Content-Type":"application/json",
-          "Authorization":`Bearer ${token}`
-        },
-        body: JSON.stringify({ stats:data })
-      });
-
-      const result = await res.json();
-
-      if(result?.error){
-        setAiInsight(result.error);
-      } else {
-        setAiInsight(result?.insight || "");
+      const d = c.purchaseDate ? new Date(c.purchaseDate) : c.createdAt?.toDate();
+      if (d) {
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        monthly[key] = (monthly[key] ?? 0) + amt;
       }
+    });
 
-    }catch{
+    const total = claims.length;
+    const avgValue = total > 0 ? totalSpend / total : 0;
+    const approvalRate = total > 0 ? ((approved / total) * 100).toFixed(1) : "0";
 
+    const topMerchants = Object.entries(merchantSpend)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+
+    // Last 6 calendar months
+    const now = new Date();
+    const last6 = Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      return { label: d.toLocaleString("default", { month: "short" }), value: monthly[key] ?? 0 };
+    });
+
+    return {
+      total, totalSpend, approvedSpend, pendingSpend,
+      approved, pending, rejected, suspicious,
+      avgValue, approvalRate,
+      categoryCount, categorySpend,
+      topMerchants, monthlyData: last6
+    };
+  }, [claims]);
+
+  const cats = orgCategories.length > 0 ? orgCategories : ["Meals", "Travel", "Technology", "Office"];
+
+  // Pie chart — only categories with claims > 0
+  const categoryPieData = useMemo(() =>
+    cats
+      .filter(cat => (stats.categoryCount[cat] ?? 0) > 0)
+      .map((cat, i) => ({
+        name: cat,
+        population: stats.categoryCount[cat] ?? 0,
+        color: CATEGORY_COLOURS[i % CATEGORY_COLOURS.length],
+        legendFontColor: t.text,
+        legendFontSize: 11
+      })),
+    [stats.categoryCount, cats, t]
+  );
+
+  // ── FORECASTS & PROJECTIONS ──────────────────────────
+  const forecast = useMemo(() => {
+    if (allClaims.length === 0) return null;
+
+    const now = new Date();
+
+    // UK tax year: April 6 – April 5
+    const tyStartYear =
+      now.getMonth() < 3 || (now.getMonth() === 3 && now.getDate() < 6)
+        ? now.getFullYear() - 1
+        : now.getFullYear();
+    const taxYearStart = new Date(tyStartYear, 3, 6);
+    const taxYearEnd   = new Date(tyStartYear + 1, 3, 5);
+
+    const daysInYear   = Math.round((taxYearEnd.getTime() - taxYearStart.getTime()) / 86400000);
+    const daysElapsed  = Math.max(1, Math.round((now.getTime() - taxYearStart.getTime()) / 86400000));
+    const daysRemaining = Math.max(0, daysInYear - daysElapsed);
+    const completionPct = (daysElapsed / daysInYear) * 100;
+
+    // Tax-year spend from allClaims (always full history, ignores period filter)
+    const tySpend = allClaims
+      .filter(c => {
+        const d = c.purchaseDate ? new Date(c.purchaseDate) : c.createdAt?.toDate();
+        return d && d >= taxYearStart;
+      })
+      .reduce((s, c) => s + (Number(c.amount) || 0), 0);
+
+    const dailyBurn       = tySpend / daysElapsed;
+    const projectedYearEnd = dailyBurn * daysInYear;
+    const projectedRemaining = dailyBurn * daysRemaining;
+
+    // Monthly buckets for trend
+    const monthly: Record<string, number> = {};
+    allClaims.forEach(c => {
+      const d = c.purchaseDate ? new Date(c.purchaseDate) : c.createdAt?.toDate();
+      if (d) {
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        monthly[key] = (monthly[key] ?? 0) + (Number(c.amount) || 0);
+      }
+    });
+
+    const monthKey = (offset: number) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    };
+
+    // 3-month rolling average (months 1-3 back) vs prior 3 (months 4-6 back)
+    const last3Avg = ([1,2,3].reduce((s, i) => s + (monthly[monthKey(i)] ?? 0), 0)) / 3;
+    const prev3Avg = ([4,5,6].reduce((s, i) => s + (monthly[monthKey(i)] ?? 0), 0)) / 3;
+    const trendPct = prev3Avg > 0 ? ((last3Avg - prev3Avg) / prev3Avg) * 100 : 0;
+
+    // Per-category year-end projections
+    const catProjections = cats
+      .map(cat => {
+        const current = allClaims
+          .filter(c => {
+            const d = c.purchaseDate ? new Date(c.purchaseDate) : c.createdAt?.toDate();
+            return c.category === cat && d && d >= taxYearStart;
+          })
+          .reduce((s, c) => s + (Number(c.amount) || 0), 0);
+        return { cat, current, projected: dailyBurn > 0 ? (current / tySpend) * projectedYearEnd : 0 };
+      })
+      .filter(cp => cp.current > 0);
+
+    return {
+      tyStartYear, daysElapsed, daysRemaining, daysInYear,
+      completionPct, tySpend, dailyBurn,
+      projectedYearEnd, projectedRemaining,
+      trendPct, nextMonthForecast: last3Avg,
+      catProjections
+    };
+  }, [allClaims, cats]);
+
+  // ── AI INSIGHTS ──────────────────────────────────────
+  async function generateAIInsights() {
+    try {
+      setAiLoading(true);
+      if (!user) return;
+      const token = await user.getIdToken();
+      const res = await fetch(AI_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body: JSON.stringify({ stats: { ...stats, period } })
+      });
+      const result = await res.json();
+      setAiInsight(result?.error ? result.error : (result?.insight ?? ""));
+    } catch {
       setAiInsight("Failed to generate insights.");
-
-    }finally{
-
+    } finally {
       setAiLoading(false);
-
     }
+  }
 
+  // ── EXPORT HELPERS ────────────────────────────────────
+  async function getExportClaims(): Promise<Claim[]> {
+    if (!user) return [];
+    const q = scope === "org" && role === "admin" && orgId
+      ? query(collection(db, "claims"), where("orgId", "==", orgId))
+      : query(collection(db, "claims"), where("userId", "==", user.uid));
+    const snap = await getDocs(q);
+    return filterByPeriod(
+      snap.docs.map(d => ({ id: d.id, ...d.data() } as Claim)),
+      period
+    );
+  }
+
+  function rowData(cs: Claim[]) {
+    return cs.map(c => ({
+      merchant:      c.merchant ?? "—",
+      amount:        Number(c.amount).toFixed(2),
+      category:      c.category ?? "—",
+      status:        c.status ?? "—",
+      paymentStatus: c.paymentStatus ?? "—",
+      purchaseDate:  formatDate(c),
+      submittedDate: submittedDate(c),
+    }));
   }
 
   async function exportCSV() {
     try {
-      if (!user) return;
-
-      const q =
-        role === "admin" && orgId
-          ? query(collection(db, "claims"), where("orgId", "==", orgId))
-          : query(collection(db, "claims"), where("userId", "==", user.uid));
-
-      const snapshot = await getDocs(q);
-      const claims: Claim[] = snapshot.docs.map((d) => d.data() as Claim);
-
-      const header = "Merchant,Amount,Category,Status,Payment Status,Date\n";
-      const rows = claims.map((c) => {
-        const merchant = (c.merchant ?? "").replace(/,/g, " ");
-        const amount = Number(c.amount).toFixed(2);
-        const category = (c.category ?? "").replace(/,/g, " ");
-        const status = c.status ?? "";
-        const paymentStatus = c.paymentStatus ?? "";
-        const date = c.createdAt ? c.createdAt.toDate().toISOString().split("T")[0] : "";
-        return `${merchant},${amount},${category},${status},${paymentStatus},${date}`;
-      });
-
-      const csv = header + rows.join("\n");
-      const fileUri = (FileSystem.documentDirectory ?? "") + "claims_export.csv";
-
-      await FileSystem.writeAsStringAsync(fileUri, csv, {
+      const cs = await getExportClaims();
+      const header = "Merchant,Amount (£),Category,Status,Payment Status,Purchase Date,Submitted Date\n";
+      const rows = rowData(cs).map(r =>
+        [r.merchant, r.amount, r.category, r.status, r.paymentStatus, r.purchaseDate, r.submittedDate]
+          .map(v => `"${String(v).replace(/"/g, '""')}"`)
+          .join(",")
+      );
+      const uri = (FileSystem.documentDirectory ?? "") + "claims_export.csv";
+      await FileSystem.writeAsStringAsync(uri, header + rows.join("\n"), {
         encoding: FileSystem.EncodingType.UTF8
       });
-
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(fileUri, { mimeType: "text/csv", dialogTitle: "Export Claims CSV" });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: "text/csv", dialogTitle: "Export CSV" });
       } else {
-        Alert.alert("Export saved", `CSV saved to:\n${fileUri}`);
+        Alert.alert("Saved", uri);
       }
-    } catch (e: any) {
-      Alert.alert("Export Error", e?.message ?? "Failed to export CSV.");
-    }
+    } catch (e: any) { Alert.alert("Export Error", e?.message ?? "Failed to export."); }
   }
 
-  const approvalRate =
-    stats.total > 0
-      ? ((stats.approved / stats.total) * 100).toFixed(1)
-      : "0";
+  async function exportExcel() {
+    try {
+      const cs = await getExportClaims();
+      const header = "Merchant\tAmount (£)\tCategory\tStatus\tPayment Status\tPurchase Date\tSubmitted Date\n";
+      const rows = rowData(cs).map(r =>
+        [r.merchant, r.amount, r.category, r.status, r.paymentStatus, r.purchaseDate, r.submittedDate].join("\t")
+      );
+      const uri = (FileSystem.documentDirectory ?? "") + "claims_export.xls";
+      await FileSystem.writeAsStringAsync(uri, header + rows.join("\n"), {
+        encoding: FileSystem.EncodingType.UTF8
+      });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: "application/vnd.ms-excel", dialogTitle: "Export Excel" });
+      } else {
+        Alert.alert("Saved", uri);
+      }
+    } catch (e: any) { Alert.alert("Export Error", e?.message ?? "Failed to export."); }
+  }
 
-  const { chartConfig, categoryData, styles } = useMemo(() => {
+  async function exportPDF() {
+    try {
+      const cs = await getExportClaims();
+      const rows = rowData(cs);
+      const grandTotal = rows.reduce((s, r) => s + parseFloat(r.amount), 0).toFixed(2);
+      const periodLabel = PERIOD_LABELS[period];
+
+      const tableRows = rows.map(r => `
+        <tr>
+          <td>${r.merchant}</td>
+          <td>£${r.amount}</td>
+          <td>${r.category}</td>
+          <td class="status-${r.status}">${r.status}</td>
+          <td>${r.paymentStatus}</td>
+          <td>${r.purchaseDate}</td>
+          <td>${r.submittedDate}</td>
+        </tr>`).join("");
+
+      const html = `
+<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+<style>
+  body { font-family: -apple-system, Helvetica, Arial, sans-serif; margin: 32px; color: #0D1B2A; font-size: 13px; }
+  h1 { font-size: 22px; margin-bottom: 4px; color: #0D1B2A; }
+  .meta { color: #6B7A8D; margin: 0 0 24px; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { background: #6366F1; color: #fff; padding: 9px 10px; text-align: left; font-size: 12px; }
+  td { padding: 8px 10px; border-bottom: 1px solid #E8ECF0; font-size: 12px; }
+  tr:nth-child(even) td { background: #F8F9FC; }
+  .status-approved { color: #16a34a; font-weight: 600; }
+  .status-pending  { color: #d97706; font-weight: 600; }
+  .status-rejected { color: #dc2626; font-weight: 600; }
+  .total-row { text-align: right; margin-top: 16px; font-weight: 700; font-size: 14px; color: #0D1B2A; }
+  .footer { margin-top: 32px; color: #A0ACBB; font-size: 11px; border-top: 1px solid #E8ECF0; padding-top: 12px; }
+</style></head>
+<body>
+  <h1>Claimio — Expense Report</h1>
+  <p class="meta">
+    Period: ${periodLabel} &nbsp;·&nbsp;
+    Generated: ${new Date().toLocaleDateString("en-GB")} &nbsp;·&nbsp;
+    ${rows.length} claim${rows.length !== 1 ? "s" : ""}
+  </p>
+  <table>
+    <thead><tr>
+      <th>Merchant</th><th>Amount</th><th>Category</th>
+      <th>Status</th><th>Payment</th><th>Purchase Date</th><th>Submitted</th>
+    </tr></thead>
+    <tbody>${tableRows}</tbody>
+  </table>
+  <p class="total-row">Total: £${grandTotal}</p>
+  <p class="footer">This report was generated by Claimio. For accounting and tax purposes only.</p>
+</body></html>`;
+
+      const { uri } = await Print.printToFileAsync({ html });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: "application/pdf", dialogTitle: "Export PDF" });
+      } else {
+        Alert.alert("Saved", uri);
+      }
+    } catch (e: any) { Alert.alert("Export Error", e?.message ?? "Failed to export."); }
+  }
+
+  // ── STYLES ────────────────────────────────────────────
+  const { chartConfig, styles } = useMemo(() => {
     const cfg = {
       backgroundGradientFrom: t.surface,
-      backgroundGradientTo: t.surface,
-
-      fillShadowGradient: t.accent,
+      backgroundGradientTo:   t.surface,
+      fillShadowGradient:        t.accent,
       fillShadowGradientOpacity: 1,
-
       decimalPlaces: 0,
-
-      color: () => t.accent,
+      color:      () => t.accent,
       labelColor: () => t.textSecondary,
-
-      propsForBackgroundLines: {
-        stroke: t.border,
-        strokeDasharray: ""
-      }
+      propsForBackgroundLines: { stroke: t.border, strokeDasharray: "" }
     };
 
-    const catData = [
-      {
-        name: "Meals",
-        population: stats.categories.Meals,
-        color: t.accent,
-        legendFontColor: "#FFF",
-        legendFontSize: 12
-      },
-      {
-        name: "Travel",
-        population: stats.categories.Travel,
-        color: t.success,
-        legendFontColor: "#FFF",
-        legendFontSize: 12
-      },
-      {
-        name: "Technology",
-        population: stats.categories.Technology,
-        color: t.warning,
-        legendFontColor: "#FFF",
-        legendFontSize: 12
-      },
-      {
-        name: "Office",
-        population: stats.categories.Office,
-        color: "#F97316",
-        legendFontColor: "#FFF",
-        legendFontSize: 12
-      }
-    ];
-
     const st = StyleSheet.create({
+      container:      { flex: 1, backgroundColor: t.bg },
+      inner:          { padding: 20, paddingBottom: 60 },
+      title:          { marginTop: 24, fontSize: 26, fontWeight: "800", color: t.text },
+      subtitle:       { color: t.textSecondary, fontSize: 13, marginTop: 2, marginBottom: 16 },
+      scopeRow:       { flexDirection: "row", backgroundColor: t.surface, borderRadius: 12,
+                        borderWidth: 1, borderColor: t.border, padding: 3, marginBottom: 20 },
+      scopeBtn:       { flex: 1, paddingVertical: 9, alignItems: "center", borderRadius: 10 },
+      scopeBtnActive: { backgroundColor: t.accent },
+      scopeText:      { fontSize: 13, fontWeight: "600", color: t.textSecondary },
+      scopeTextActive:{ color: "#fff" },
+      periodRow:      { flexDirection: "row", gap: 8, marginBottom: 20, flexWrap: "wrap" },
+      pill:           { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
+                        borderWidth: 1, borderColor: t.border, backgroundColor: t.surface },
+      pillActive:     { backgroundColor: t.accent, borderColor: t.accent },
+      pillText:       { color: t.textSecondary, fontSize: 12, fontWeight: "600" },
+      pillTextActive: { color: "#fff" },
+      grid:           { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 8 },
+      card:           { width: "47%", backgroundColor: t.surface, padding: 16, borderRadius: 14,
+                        borderWidth: 1, borderColor: t.border },
+      cardLabel:      { color: t.textSecondary, fontSize: 11, marginBottom: 4 },
+      cardValue:      { fontSize: 20, fontWeight: "800", color: t.text },
+      cardValueSm:    { fontSize: 16, fontWeight: "700", color: t.text },
+      sectionTitle:   { fontSize: 15, fontWeight: "700", color: t.text, marginTop: 24, marginBottom: 10 },
+      aiCard:         { backgroundColor: t.accentSurface, padding: 16, borderRadius: 14,
+                        borderWidth: 1, borderColor: t.accent + "33", marginBottom: 4 },
+      aiTitle:        { color: t.accent, fontWeight: "700", marginBottom: 6, fontSize: 13 },
+      aiText:         { color: t.text, lineHeight: 20, fontSize: 13 },
+      aiBtn:          { backgroundColor: t.accent, padding: 11, borderRadius: 10, marginTop: 10, alignItems: "center" },
+      exportRow:      { flexDirection: "row", gap: 10, marginBottom: 4 },
+      exportBtn:      { flex: 1, borderWidth: 1, borderColor: t.accent, borderRadius: 10,
+                        paddingVertical: 11, alignItems: "center" },
+      exportBtnText:  { color: t.accent, fontWeight: "700", fontSize: 12 },
+      chart:          { borderRadius: 14 },
+      merchantRow:    { flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+                        paddingVertical: 10, borderBottomWidth: 1, borderColor: t.border },
+      merchantName:   { color: t.text, fontSize: 13, fontWeight: "500", flex: 1 },
+      merchantAmt:    { color: t.accent, fontSize: 13, fontWeight: "700" },
+      catRow:         { flexDirection: "row", alignItems: "center", paddingVertical: 9,
+                        borderBottomWidth: 1, borderColor: t.border },
+      catDot:         { width: 10, height: 10, borderRadius: 5, marginRight: 10 },
+      catName:        { color: t.text, fontSize: 13, flex: 1 },
+      catCount:       { color: t.textSecondary, fontSize: 12, marginRight: 12 },
+      catAmt:         { color: t.text, fontSize: 13, fontWeight: "700", minWidth: 70, textAlign: "right" },
+      center:         { flex: 1, justifyContent: "center", alignItems: "center", paddingTop: 60 },
+      emptyNote:      { color: t.textSecondary, fontSize: 13, textAlign: "center", marginTop: 6, marginBottom: 4 },
 
-      container:{
-        flex:1,
-        padding:20,
-        backgroundColor: t.bg
-      },
-
-      title:{
-        marginTop:24,
-        fontSize:28,
-        fontWeight:"bold",
-        color: t.text
-      },
-
-      aiCard:{
-        backgroundColor: t.surface,
-        padding:16,
-        borderRadius:14,
-        marginTop:16
-      },
-
-      aiTitle:{
-        color: t.accent,
-        fontWeight:"600",
-        marginBottom:6
-      },
-
-      aiText:{
-        color: t.text,
-        lineHeight:20
-      },
-
-      grid:{
-        flexDirection:"row",
-        flexWrap:"wrap",
-        gap:14,
-        marginTop:20
-      },
-
-      card:{
-        width:"47%",
-        backgroundColor: t.surface,
-        padding:18,
-        borderRadius:14
-      },
-
-      label:{
-        color: t.textSecondary,
-        fontSize:12
-      },
-
-      value:{
-        marginTop:6,
-        fontSize:22,
-        fontWeight:"bold",
-        color: t.text
-      },
-
-      warning:{
-        marginTop:6,
-        fontSize:22,
-        fontWeight:"bold",
-        color:"#F97316"
-      },
-
-      exportBtn:{
-        marginTop:20,
-        borderWidth:1,
-        borderColor: t.accent,
-        borderRadius:10,
-        paddingVertical:12,
-        alignItems:"center"
-      },
-
-      exportBtnText:{
-        color: t.accent,
-        fontWeight:"700",
-        fontSize:14
-      },
-
-      chartTitle:{
-        marginTop:26,
-        marginBottom:10,
-        fontSize:16,
-        fontWeight:"600",
-        color: t.text
-      },
-
-      chart:{
-        borderRadius:16
-      },
-
-      center:{
-        flex:1,
-        justifyContent:"center",
-        alignItems:"center"
-      }
-
+      // Forecast styles
+      forecastCard:   { backgroundColor: t.surface, borderRadius: 14, padding: 16,
+                        borderWidth: 1, borderColor: t.border, marginBottom: 12 },
+      forecastHighlight: { borderColor: t.accent + "55", backgroundColor: t.accentSurface },
+      forecastCardTitle: { color: t.text, fontWeight: "700", fontSize: 14, marginBottom: 2 },
+      forecastCardSub:   { color: t.textSecondary, fontSize: 12 },
+      forecastMeta:   { color: t.textSecondary, fontSize: 11, marginTop: 8, textAlign: "right" },
+      forecastNote:   { color: t.textSecondary, fontSize: 10, marginTop: 2 },
+      progressTrack:  { height: 8, backgroundColor: t.border, borderRadius: 4, marginTop: 10, overflow: "hidden" },
+      progressFill:   { height: 8, backgroundColor: t.accent, borderRadius: 4 },
+      trendIconWrap:  { width: 40, height: 40, borderRadius: 12, justifyContent: "center", alignItems: "center" },
     });
 
-    return { chartConfig: cfg, categoryData: catData, styles: st };
-  }, [t, stats.categories]);
+    return { chartConfig: cfg, styles: st };
+  }, [t]);
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator size="large" color={t.accent} />
+      </View>
+    );
+  }
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.inner}>
 
-      <ThemedText type="title" style={styles.title}>
-        Analytics Dashboard
+      <ThemedText style={styles.title}>Analytics</ThemedText>
+      <ThemedText style={styles.subtitle}>
+        {stats.total} claim{stats.total !== 1 ? "s" : ""} · £{stats.totalSpend.toFixed(2)} total spend
       </ThemedText>
 
-      {/* AI INSIGHTS */}
+      {/* Admin scope toggle */}
+      {role === "admin" && (
+        <View style={styles.scopeRow}>
+          <TouchableOpacity
+            style={[styles.scopeBtn, scope === "mine" && styles.scopeBtnActive]}
+            onPress={() => setScope("mine")}
+          >
+            <Text style={[styles.scopeText as any, scope === "mine" && (styles.scopeTextActive as any)]}>
+              My Claims
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.scopeBtn, scope === "org" && styles.scopeBtnActive]}
+            onPress={() => setScope("org")}
+          >
+            <Text style={[styles.scopeText as any, scope === "org" && (styles.scopeTextActive as any)]}>
+              Organisation
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
-      <View style={styles.aiCard}>
-
-        <ThemedText style={styles.aiTitle}>
-          AI Insights
-        </ThemedText>
-
-        {aiLoading ? (
-          <ActivityIndicator color={t.accent}/>
-        ) : (
-          <ThemedText style={styles.aiText}>
-            {aiInsight || "No insights available yet."}
-          </ThemedText>
-        )}
-
-        {/* 🔥 BUTTON ADDED */}
-        <TouchableOpacity
-          onPress={()=>generateAIInsights(stats)}
-          style={{
-            backgroundColor: t.accent,
-            padding:12,
-            borderRadius:10,
-            marginTop:10
-          }}
-        >
-          <ThemedText style={{color: t.accentText, textAlign:"center"}}>
-            Generate AI Insight
-          </ThemedText>
-        </TouchableOpacity>
-
+      {/* Period filter */}
+      <View style={styles.periodRow}>
+        {(["month", "quarter", "year", "tax_year", "all"] as Period[]).map(p => (
+          <TouchableOpacity
+            key={p}
+            style={[styles.pill, period === p && styles.pillActive]}
+            onPress={() => setPeriod(p)}
+          >
+            <Text style={[styles.pillText as any, period === p && (styles.pillTextActive as any)]}>
+              {PERIOD_LABELS[p]}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={t.accent} />
+      {/* Summary cards */}
+      <View style={styles.grid}>
+        <View style={styles.card}>
+          <ThemedText style={styles.cardLabel}>Total Spend</ThemedText>
+          <ThemedText style={styles.cardValue}>£{stats.totalSpend.toFixed(2)}</ThemedText>
         </View>
+        <View style={styles.card}>
+          <ThemedText style={styles.cardLabel}>Approval Rate</ThemedText>
+          <ThemedText style={styles.cardValue}>{stats.approvalRate}%</ThemedText>
+        </View>
+        <View style={styles.card}>
+          <ThemedText style={styles.cardLabel}>Approved Spend</ThemedText>
+          <ThemedText style={[styles.cardValue, { color: t.success }]}>
+            £{stats.approvedSpend.toFixed(2)}
+          </ThemedText>
+        </View>
+        <View style={styles.card}>
+          <ThemedText style={styles.cardLabel}>Pending Spend</ThemedText>
+          <ThemedText style={[styles.cardValue, { color: t.warning }]}>
+            £{stats.pendingSpend.toFixed(2)}
+          </ThemedText>
+        </View>
+        <View style={styles.card}>
+          <ThemedText style={styles.cardLabel}>Avg Claim Value</ThemedText>
+          <ThemedText style={styles.cardValueSm}>£{stats.avgValue.toFixed(2)}</ThemedText>
+        </View>
+        <View style={styles.card}>
+          <ThemedText style={styles.cardLabel}>Suspicious Flags</ThemedText>
+          <ThemedText style={[styles.cardValue, { color: stats.suspicious > 0 ? t.warning : t.success }]}>
+            {stats.suspicious}
+          </ThemedText>
+        </View>
+      </View>
+
+      {/* Export */}
+      <ThemedText style={styles.sectionTitle}>Export</ThemedText>
+      <View style={styles.exportRow}>
+        <TouchableOpacity style={styles.exportBtn} onPress={exportCSV}>
+          <ThemedText style={styles.exportBtnText}>CSV</ThemedText>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.exportBtn} onPress={exportExcel}>
+          <ThemedText style={styles.exportBtnText}>Excel</ThemedText>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.exportBtn} onPress={exportPDF}>
+          <ThemedText style={styles.exportBtnText}>PDF</ThemedText>
+        </TouchableOpacity>
+      </View>
+
+      {/* AI Insights */}
+      <ThemedText style={styles.sectionTitle}>AI Insights</ThemedText>
+      <View style={styles.aiCard}>
+        <ThemedText style={styles.aiTitle}>✦ Spending Analysis</ThemedText>
+        {aiLoading ? (
+          <ActivityIndicator color={t.accent} />
+        ) : (
+          <ThemedText style={styles.aiText}>
+            {aiInsight || "Tap below to generate spending insights for this period."}
+          </ThemedText>
+        )}
+        <TouchableOpacity style={styles.aiBtn} onPress={generateAIInsights}>
+          <ThemedText style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>
+            Generate Insights
+          </ThemedText>
+        </TouchableOpacity>
+      </View>
+
+      {/* Claim status bar chart */}
+      <ThemedText style={styles.sectionTitle}>Claim Status</ThemedText>
+      <BarChart
+        data={{
+          labels: ["Approved", "Pending", "Rejected"],
+          datasets: [{ data: [stats.approved, stats.pending, stats.rejected] }]
+        }}
+        width={screenWidth - 40}
+        height={200}
+        chartConfig={chartConfig}
+        fromZero
+        showValuesOnTopOfBars
+        yAxisLabel=""
+        yAxisSuffix=""
+        style={styles.chart}
+      />
+
+      {/* Monthly spend (last 6 months) */}
+      <ThemedText style={styles.sectionTitle}>Monthly Spend</ThemedText>
+      <BarChart
+        data={{
+          labels: stats.monthlyData.map(m => m.label),
+          datasets: [{ data: stats.monthlyData.map(m => m.value) }]
+        }}
+        width={screenWidth - 40}
+        height={200}
+        chartConfig={chartConfig}
+        fromZero
+        showValuesOnTopOfBars
+        yAxisLabel="£"
+        yAxisSuffix=""
+        style={styles.chart}
+      />
+
+      {/* Claims by category pie */}
+      <ThemedText style={styles.sectionTitle}>Claims by Category</ThemedText>
+      {categoryPieData.length > 0 ? (
+        <PieChart
+          data={categoryPieData}
+          width={screenWidth - 40}
+          height={200}
+          chartConfig={chartConfig}
+          accessor="population"
+          backgroundColor="transparent"
+          paddingLeft="10"
+        />
       ) : (
+        <ThemedText style={styles.emptyNote}>No claims in this period.</ThemedText>
+      )}
+
+      {/* Category breakdown */}
+      <ThemedText style={styles.sectionTitle}>Category Breakdown</ThemedText>
+      {cats.filter(cat => (stats.categoryCount[cat] ?? 0) > 0).length > 0
+        ? cats
+            .filter(cat => (stats.categoryCount[cat] ?? 0) > 0)
+            .map((cat, i) => (
+              <View key={cat} style={styles.catRow}>
+                <View style={[styles.catDot, { backgroundColor: CATEGORY_COLOURS[i % CATEGORY_COLOURS.length] }]} />
+                <ThemedText style={styles.catName}>{cat}</ThemedText>
+                <ThemedText style={styles.catCount}>
+                  {stats.categoryCount[cat]} claim{stats.categoryCount[cat] !== 1 ? "s" : ""}
+                </ThemedText>
+                <ThemedText style={styles.catAmt}>£{(stats.categorySpend[cat] ?? 0).toFixed(2)}</ThemedText>
+              </View>
+            ))
+        : <ThemedText style={styles.emptyNote}>No claims in this period.</ThemedText>
+      }
+
+      {/* Forecasts & Projections */}
+      {forecast && (
         <>
+          <ThemedText style={styles.sectionTitle}>Forecasts & Projections</ThemedText>
 
-          <View style={styles.grid}>
-
-            <View style={styles.card}>
-              <ThemedText style={styles.label}>
-                Total Claims
+          {/* Tax year progress bar */}
+          <View style={styles.forecastCard}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <ThemedText style={styles.forecastCardTitle}>
+                Tax Year {forecast.tyStartYear}/{forecast.tyStartYear + 1}
               </ThemedText>
-              <ThemedText style={styles.value}>
-                {stats.total}
+              <ThemedText style={styles.forecastCardSub}>
+                {Math.round(forecast.completionPct)}% elapsed
               </ThemedText>
             </View>
-
-            <View style={styles.card}>
-              <ThemedText style={styles.label}>
-                Approval Rate
-              </ThemedText>
-              <ThemedText style={styles.value}>
-                {approvalRate}%
-              </ThemedText>
+            <View style={styles.progressTrack}>
+              <View style={[styles.progressFill, { width: `${Math.min(100, forecast.completionPct)}%` as any }]} />
             </View>
-
-            <View style={styles.card}>
-              <ThemedText style={styles.label}>
-                Average Claim
-              </ThemedText>
-              <ThemedText style={styles.value}>
-                £{stats.avgValue.toFixed(2)}
-              </ThemedText>
-            </View>
-
-            <View style={styles.card}>
-              <ThemedText style={styles.label}>
-                Suspicious Claims
-              </ThemedText>
-              <ThemedText style={styles.warning}>
-                {stats.suspicious}
-              </ThemedText>
-            </View>
-
+            <ThemedText style={styles.forecastMeta}>
+              {forecast.daysElapsed}d elapsed · {forecast.daysRemaining}d remaining
+            </ThemedText>
           </View>
 
-          {/* Export CSV */}
-          <TouchableOpacity
-            style={styles.exportBtn}
-            onPress={exportCSV}
-          >
-            <ThemedText style={styles.exportBtnText}>
-              Export CSV
-            </ThemedText>
-          </TouchableOpacity>
+          {/* Projection cards */}
+          <View style={styles.grid}>
+            <View style={[styles.card, styles.forecastHighlight]}>
+              <ThemedText style={styles.cardLabel}>Year-End Projected</ThemedText>
+              <ThemedText style={[styles.cardValue, { color: t.accent }]}>
+                £{forecast.projectedYearEnd.toFixed(0)}
+              </ThemedText>
+              <ThemedText style={styles.forecastNote}>at current pace</ThemedText>
+            </View>
+            <View style={styles.card}>
+              <ThemedText style={styles.cardLabel}>Remaining Forecast</ThemedText>
+              <ThemedText style={styles.cardValue}>
+                £{forecast.projectedRemaining.toFixed(0)}
+              </ThemedText>
+              <ThemedText style={styles.forecastNote}>next {forecast.daysRemaining}d</ThemedText>
+            </View>
+            <View style={styles.card}>
+              <ThemedText style={styles.cardLabel}>Daily Burn Rate</ThemedText>
+              <ThemedText style={styles.cardValueSm}>£{forecast.dailyBurn.toFixed(2)}</ThemedText>
+              <ThemedText style={styles.forecastNote}>avg per day</ThemedText>
+            </View>
+            <View style={styles.card}>
+              <ThemedText style={styles.cardLabel}>Next Month Est.</ThemedText>
+              <ThemedText style={styles.cardValueSm}>
+                £{forecast.nextMonthForecast.toFixed(0)}
+              </ThemedText>
+              <ThemedText style={styles.forecastNote}>3-month rolling avg</ThemedText>
+            </View>
+          </View>
 
-          <ThemedText style={styles.chartTitle}>
-            Claim Status
-          </ThemedText>
+          {/* MoM trend indicator */}
+          {Math.abs(forecast.trendPct) >= 1 && (
+            <View style={[styles.forecastCard, { flexDirection: "row", alignItems: "center", gap: 12 }]}>
+              <View style={[
+                styles.trendIconWrap,
+                { backgroundColor: forecast.trendPct > 0 ? t.errorSurface : t.successSurface }
+              ]}>
+                <Text style={{
+                  fontSize: 20,
+                  color: forecast.trendPct > 0 ? t.error : t.success
+                }}>
+                  {forecast.trendPct > 0 ? "↑" : "↓"}
+                </Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <ThemedText style={styles.forecastCardTitle}>
+                  Spending {forecast.trendPct > 0 ? "trending up" : "trending down"} {Math.abs(forecast.trendPct).toFixed(1)}%
+                </ThemedText>
+                <ThemedText style={styles.forecastCardSub}>
+                  Last 3 months vs previous 3 months
+                </ThemedText>
+              </View>
+            </View>
+          )}
 
-          <BarChart
-            data={{
-              labels: ["Approved", "Pending", "Rejected"],
-              datasets: [
-                {
-                  data: [
-                    stats.approved,
-                    stats.pending,
-                    stats.rejected
-                  ]
-                }
-              ]
-            }}
-            width={screenWidth - 40}
-            height={220}
-            chartConfig={chartConfig}
-            fromZero
-            showValuesOnTopOfBars
-            yAxisLabel=""
-            yAxisSuffix=""
-            style={styles.chart}
-          />
+          {/* Per-category year-end projections */}
+          {forecast.catProjections.length > 0 && (
+            <>
+              <ThemedText style={[styles.sectionTitle, { marginTop: 8 }]}>
+                Category Year-End Projections
+              </ThemedText>
+              {forecast.catProjections
+                .sort((a, b) => b.projected - a.projected)
+                .map((cp, i) => (
+                  <View key={cp.cat} style={styles.catRow}>
+                    <View style={[styles.catDot, { backgroundColor: CATEGORY_COLOURS[i % CATEGORY_COLOURS.length] }]} />
+                    <ThemedText style={styles.catName}>{cp.cat}</ThemedText>
+                    <ThemedText style={styles.catCount}>£{cp.current.toFixed(0)} so far</ThemedText>
+                    <ThemedText style={[styles.catAmt, { color: t.accent }]}>
+                      → £{cp.projected.toFixed(0)}
+                    </ThemedText>
+                  </View>
+                ))
+              }
+            </>
+          )}
+        </>
+      )}
 
-          <ThemedText style={styles.chartTitle}>
-            Claims by Category
-          </ThemedText>
-
-          <PieChart
-            data={categoryData}
-            width={screenWidth-40}
-            height={220}
-            chartConfig={chartConfig}
-            accessor="population"
-            backgroundColor="transparent"
-            paddingLeft="10"
-          />
-
+      {/* Top merchants */}
+      {stats.topMerchants.length > 0 && (
+        <>
+          <ThemedText style={styles.sectionTitle}>Top Merchants by Spend</ThemedText>
+          {stats.topMerchants.map(([name, amt]) => (
+            <View key={name} style={styles.merchantRow}>
+              <ThemedText style={styles.merchantName}>{name}</ThemedText>
+              <ThemedText style={styles.merchantAmt}>£{amt.toFixed(2)}</ThemedText>
+            </View>
+          ))}
         </>
       )}
 

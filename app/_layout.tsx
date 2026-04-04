@@ -1,41 +1,54 @@
 import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { StripeProvider } from "@stripe/stripe-react-native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useMemo, useState } from "react";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Linking, LogBox, Modal, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 
 // expo-keep-awake is used internally by Expo dev-tools to keep the screen on
 // during development. On some devices/simulators the native module throws —
 // this is harmless and does not affect production builds.
 LogBox.ignoreLogs(["Unable to activate keep awake"]);
+
 import { ThemedText } from "../components/themed-text";
 import { registerForPushNotifications } from "../utils/pushNotifications";
 import { AuthProvider, useAuth } from "./context/AuthProvider";
 import { ThemeProvider, useThemeContext } from "./context/ThemeContext";
+import { db } from "./firebase/firebaseConfig";
 
-const STRIPE_PK = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY!;
-const TC_ACCEPTED_KEY = "@claimio_tc_accepted";
+const STRIPE_PK  = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY!;
 const TERMS_URL   = "https://doc-hosting.flycricket.io/claimio-terms-of-use/1f9b2874-dd4b-4eea-b8e0-6ad1c9ab563b/terms";
 const PRIVACY_URL = "https://doc-hosting.flycricket.io/claimio-privacy-policy/b73958a1-ae06-494d-b3a9-2c9b7183d4b3/privacy";
 
 //////////////////////////////////////////////////////
-// T&C Gate — shown once on first launch
+// T&C Gate — shown once on FIRST LOGIN per account
+// (stored in Firestore users/{uid}.termsAccepted)
 //////////////////////////////////////////////////////
 
 function TermsGate({ children }: { children: React.ReactNode }) {
   const { tokens: t } = useThemeContext();
-  const [checking, setChecking]   = useState(true);
-  const [visible, setVisible]     = useState(false);
-  const [declined, setDeclined]   = useState(false);
+  const { user, authLoaded } = useAuth();
+  const [visible, setVisible]   = useState(false);
+  const [declined, setDeclined] = useState(false);
+  const checkedUidRef = useRef<string | null>(null);
 
   useEffect(() => {
-    AsyncStorage.getItem(TC_ACCEPTED_KEY).then(val => {
-      if (val !== "true") setVisible(true);
-      setChecking(false);
-    });
-  }, []);
+    if (!authLoaded || !user) {
+      // Not logged in — ensure modal is hidden
+      setVisible(false);
+      return;
+    }
+    // Only run the Firestore check once per uid
+    if (checkedUidRef.current === user.uid) return;
+    checkedUidRef.current = user.uid;
+
+    getDoc(doc(db, "users", user.uid))
+      .then(snap => {
+        if (snap.data()?.termsAccepted !== true) setVisible(true);
+      })
+      .catch(() => { /* fail open — don't block user if Firestore is unreachable */ });
+  }, [authLoaded, user?.uid]);
 
   const styles = useMemo(() => StyleSheet.create({
     overlay: {
@@ -151,15 +164,15 @@ function TermsGate({ children }: { children: React.ReactNode }) {
   }), [t]);
 
   const handleAccept = async () => {
-    await AsyncStorage.setItem(TC_ACCEPTED_KEY, "true");
+    if (user) {
+      try {
+        await setDoc(doc(db, "users", user.uid), { termsAccepted: true }, { merge: true });
+      } catch {}
+    }
     setVisible(false);
   };
 
-  const handleDecline = () => {
-    setDeclined(true);
-  };
-
-  if (checking) return null;
+  const handleDecline = () => setDeclined(true);
 
   return (
     <>
@@ -262,13 +275,15 @@ function AppShell() {
   const { tokens, isLoaded } = useThemeContext();
   if (!isLoaded) return null;
   return (
-    <TermsGate>
+    <>
       <StatusBar style={tokens.statusBar === 'dark-content' ? 'dark' : 'light'} />
       <AuthProvider>
         <PushNotificationRegistrar />
-        <Stack screenOptions={{ headerShown: false }} />
+        <TermsGate>
+          <Stack screenOptions={{ headerShown: false }} />
+        </TermsGate>
       </AuthProvider>
-    </TermsGate>
+    </>
   );
 }
 

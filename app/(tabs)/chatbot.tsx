@@ -247,6 +247,15 @@ export default function ChatbotScreen() {
       color: t.text
     },
 
+    disclaimer: {
+      textAlign: "center",
+      fontSize: 11,
+      color: t.textTertiary,
+      paddingHorizontal: 16,
+      paddingTop: 6,
+      paddingBottom: 2,
+    },
+
     inputWrapper: {
       flexDirection: "row",
       gap: 10,
@@ -381,6 +390,11 @@ export default function ChatbotScreen() {
               ) : null
             }
           />
+
+          {/* DISCLAIMER */}
+          <ThemedText style={styles.disclaimer}>
+            AI responses are for guidance only and do not constitute professional tax or financial advice.
+          </ThemedText>
 
           {/* INPUT */}
           <View style={styles.inputWrapper}>

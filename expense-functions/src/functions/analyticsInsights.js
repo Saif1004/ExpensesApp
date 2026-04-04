@@ -121,45 +121,74 @@ app.http("analyticsInsights", {
         return secureResponse({ error: "stats object is required" }, 400);
       }
 
-      const { total, approved, rejected, avgValue, categories } = stats;
+      const {
+        total, approved, rejected, pending,
+        totalSpend, approvedSpend, pendingSpend,
+        avgValue, approvalRate,
+        categoryCount, categorySpend,
+        topMerchants, monthlyData, period
+      } = stats;
 
-      if (typeof total    !== "number" || total    < 0 ||
-          typeof approved !== "number" || approved < 0 ||
-          typeof rejected !== "number" || rejected < 0 ||
-          typeof avgValue !== "number" || avgValue < 0) {
-        return secureResponse({ error: "stats fields must be non-negative numbers" }, 400);
+      if (typeof total !== "number" || total < 0) {
+        return secureResponse({ error: "stats.total must be a non-negative number" }, 400);
       }
 
-      if (!categories || typeof categories !== "object" || Array.isArray(categories)) {
-        return secureResponse({ error: "stats.categories must be an object" }, 400);
-      }
+      // ── Build prompt sections from dynamic data ───────
 
-      const ALLOWED_CATEGORIES = ["Meals", "Travel", "Technology", "Office"];
-      for (const key of Object.keys(categories)) {
-        if (!ALLOWED_CATEGORIES.includes(key)) {
-          return secureResponse({ error: `Unknown category: ${key}` }, 400);
-        }
-        if (typeof categories[key] !== "number" || categories[key] < 0) {
-          return secureResponse({ error: `categories.${key} must be a non-negative number` }, 400);
-        }
-      }
+      const periodLabel = {
+        month: "this month", quarter: "this quarter", year: "this year",
+        tax_year: "this tax year", all: "all time"
+      }[period] || "the selected period";
+
+      // Category breakdown
+      const catLines = categoryCount && typeof categoryCount === "object"
+        ? Object.entries(categoryCount)
+            .sort((a, b) => b[1] - a[1])
+            .map(([cat, count]) => {
+              const spend = (categorySpend?.[cat] ?? 0).toFixed(2);
+              return `  • ${cat}: ${count} claim${count !== 1 ? "s" : ""}, £${spend}`;
+            })
+            .join("\n")
+        : "  (no category data)";
+
+      // Top merchants
+      const merchantLines = Array.isArray(topMerchants) && topMerchants.length > 0
+        ? topMerchants.map(([name, amt]) => `  • ${name}: £${Number(amt).toFixed(2)}`).join("\n")
+        : "  (none)";
+
+      // Monthly trend
+      const monthlyLines = Array.isArray(monthlyData) && monthlyData.length > 0
+        ? monthlyData.map(m => `  ${m.label}: £${Number(m.value).toFixed(2)}`).join("  |  ")
+        : "(no data)";
 
       const prompt = `
-Generate short insights from this expense data.
+You are a financial analyst assistant. Generate concise, actionable insights for a business expense report.
 
-Total claims: ${stats.total}
-Approved: ${stats.approved}
-Rejected: ${stats.rejected}
+Period: ${periodLabel}
+Total claims: ${total ?? 0}
+Total spend: £${Number(totalSpend ?? 0).toFixed(2)}
+Approved: ${approved ?? 0} claims (£${Number(approvedSpend ?? 0).toFixed(2)})
+Pending:  ${pending  ?? 0} claims (£${Number(pendingSpend  ?? 0).toFixed(2)})
+Rejected: ${rejected ?? 0} claims
+Approval rate: ${approvalRate ?? 0}%
+Average claim: £${Number(avgValue ?? 0).toFixed(2)}
 
-Categories:
-Meals ${stats.categories.Meals}
-Travel ${stats.categories.Travel}
-Technology ${stats.categories.Technology}
-Office ${stats.categories.Office}
+Category breakdown:
+${catLines}
 
-Average claim: £${stats.avgValue}
+Top merchants by spend:
+${merchantLines}
 
-Write 2-3 short sentences of insights.
+Monthly spend trend (last 6 months):
+${monthlyLines}
+
+Write 3–4 short sentences of insights focused on:
+- Spending trends or anomalies worth flagging
+- Which categories or merchants are driving the highest spend
+- Whether the approval/rejection rate suggests any policy issues
+- Any tax or accounting observations (e.g. high entertainment spend, large pending amounts)
+
+Be specific, reference the actual numbers, and keep the tone professional.
 `;
 
       const res = await client.chat.completions.create({
@@ -168,7 +197,7 @@ Write 2-3 short sentences of insights.
           { role: "system", content: "You generate financial insights." },
           { role: "user", content: prompt }
         ],
-        max_tokens: 120
+        max_tokens: 220
       });
 
       return secureResponse({ insight: res.choices[0].message.content }, 200);

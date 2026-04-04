@@ -4,6 +4,7 @@ import {
   Alert,
   Animated,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -1082,10 +1083,16 @@ export default function ProfileScreen() {
         <SectionHeader label="LEGAL" />
         <View style={styles.card}>
           <MenuRow
+            icon="globe-outline"
+            label="Visit claimio.org"
+            sublabel="News, guides & support"
+            onPress={() => Linking.openURL("https://claimio.org")}
+            isFirst
+          />
+          <MenuRow
             icon="shield-checkmark-outline"
             label="Privacy Policy"
             onPress={() => router.push("/privacy-policy")}
-            isFirst
           />
           <MenuRow
             icon="document-text-outline"

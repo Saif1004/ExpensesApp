@@ -178,7 +178,28 @@ app.http("chatbot", {
       });
 
       ////////////////////////////////////////////////////
-      // CLAIM DATA
+      // POLICIES (live from Firestore)
+      ////////////////////////////////////////////////////
+
+      const policiesSnap = await db.collection("policies")
+        .where("orgId", "==", orgId)
+        .get();
+
+      let policyContext = "No expense policies set.";
+      if (!policiesSnap.empty) {
+        const lines = policiesSnap.docs.map(d => {
+          const p = d.data();
+          if (p.type === "receipt_required")   return `• Receipts required for claims over £${p.value}`;
+          if (p.type === "submission_window")  return `• Claims must be submitted within ${p.value} days of purchase`;
+          if (p.type === "category_limit")     return `• ${p.category} category limit: £${p.value}`;
+          if (p.type === "approval_required")  return `• All claims require manager approval`;
+          return `• ${p.displayText || p.originalText || p.type}`;
+        });
+        policyContext = "ORG EXPENSE POLICIES:\n" + lines.join("\n");
+      }
+
+      ////////////////////////////////////////////////////
+      // CLAIM DATA — full history with tax-year breakdown
       ////////////////////////////////////////////////////
 
       const claimsSnap = await db.collection("claims")
@@ -186,27 +207,100 @@ app.http("chatbot", {
         .get();
 
       const claims = claimsSnap.docs.map(d => d.data());
-      let claimsContext = "User has no claims.";
+      let claimsContext = "User has no claims on record.";
 
       if (claims.length) {
-        const total    = claims.reduce((s, c) => s + (Number(c.amount) || 0), 0);
-        const approved = claims.filter(c => c.status === "approved").length;
-        const pending  = claims.filter(c => c.status === "pending").length;
-        const rejected = claims.filter(c => c.status === "rejected").length;
-        const recent   = claims.slice(0, 5)
-          .map(c => `${c.category} £${c.amount} (${c.status})`)
-          .join("\n");
+        // UK tax year: April 6 – April 5
+        const now = new Date();
+        const taxYearStartYear =
+          now.getMonth() < 3 || (now.getMonth() === 3 && now.getDate() < 6)
+            ? now.getFullYear() - 1
+            : now.getFullYear();
+        const taxYearStart = new Date(taxYearStartYear, 3, 6);
+        const prevTaxYearStart = new Date(taxYearStartYear - 1, 3, 6);
+
+        const getDate = c => {
+          if (c.purchaseDate) return new Date(c.purchaseDate);
+          return c.createdAt?.toDate?.() ?? null;
+        };
+
+        const thisYearClaims = claims.filter(c => {
+          const d = getDate(c);
+          return d && d >= taxYearStart;
+        });
+        const lastYearClaims = claims.filter(c => {
+          const d = getDate(c);
+          return d && d >= prevTaxYearStart && d < taxYearStart;
+        });
+
+        // Summarise a set of claims
+        const summarise = (cs) => {
+          const total    = cs.reduce((s, c) => s + (Number(c.amount) || 0), 0);
+          const approved = cs.filter(c => c.status === "approved").reduce((s, c) => s + (Number(c.amount) || 0), 0);
+          const pending  = cs.filter(c => c.status === "pending").reduce((s, c) => s + (Number(c.amount) || 0), 0);
+          const rejected = cs.filter(c => c.status === "rejected").length;
+          const byCategory = {};
+          const byMerchant = {};
+          cs.forEach(c => {
+            const cat = c.category || "Uncategorised";
+            byCategory[cat] = (byCategory[cat] || 0) + (Number(c.amount) || 0);
+            const m = (c.merchant || "").trim();
+            if (m) byMerchant[m] = (byMerchant[m] || 0) + (Number(c.amount) || 0);
+          });
+          const catLines = Object.entries(byCategory)
+            .sort((a, b) => b[1] - a[1])
+            .map(([k, v]) => `    ${k}: £${v.toFixed(2)}`)
+            .join("\n");
+          const topMerchants = Object.entries(byMerchant)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([k, v]) => `    ${k}: £${v.toFixed(2)}`)
+            .join("\n");
+          return { total, approved, pending, rejected, catLines, topMerchants, count: cs.length };
+        };
+
+        const ty  = summarise(thisYearClaims);
+        const ly  = summarise(lastYearClaims);
+        const all = summarise(claims);
+
+        // Last 20 individual claims (most recent first)
+        const sorted = [...claims].sort((a, b) => {
+          const da = getDate(a), db2 = getDate(b);
+          return (db2?.getTime() ?? 0) - (da?.getTime() ?? 0);
+        });
+        const recentLines = sorted.slice(0, 20).map(c => {
+          const d = getDate(c);
+          const date = d ? d.toISOString().split("T")[0] : "unknown";
+          return `  • ${c.merchant || c.category || "—"} — £${Number(c.amount).toFixed(2)} (${c.category}, ${c.status}, ${date})`;
+        }).join("\n");
 
         claimsContext = `
-USER CLAIM DATA:
+USER EXPENSE DATA (all time: ${all.count} claims):
 
-Total Spend: £${total}
-Approved: ${approved}
-Pending: ${pending}
-Rejected: ${rejected}
+═══ CURRENT TAX YEAR (${taxYearStartYear}/${taxYearStartYear + 1}, from 6 Apr ${taxYearStartYear}) ═══
+Total claimed:  £${ty.total.toFixed(2)} across ${ty.count} claims
+Approved spend: £${ty.approved.toFixed(2)}
+Pending spend:  £${ty.pending.toFixed(2)}
+Rejected:       ${ty.rejected} claims
 
-Recent Claims:
-${recent}
+By category (current tax year):
+${ty.catLines || "    (none)"}
+
+Top merchants (current tax year):
+${ty.topMerchants || "    (none)"}
+
+═══ PREVIOUS TAX YEAR (${taxYearStartYear - 1}/${taxYearStartYear}) ═══
+Total claimed:  £${ly.total.toFixed(2)} across ${ly.count} claims
+Approved spend: £${ly.approved.toFixed(2)}
+
+By category (previous tax year):
+${ly.catLines || "    (none)"}
+
+═══ ALL-TIME SUMMARY ═══
+Total spend: £${all.total.toFixed(2)} | Approved: £${all.approved.toFixed(2)} | Pending: £${all.pending.toFixed(2)}
+
+═══ RECENT INDIVIDUAL CLAIMS (last 20) ═══
+${recentLines || "  (none)"}
 `;
       }
 
@@ -219,17 +313,30 @@ ${recent}
         messages: [
           {
             role: "system",
-            content: `You are a smart expense assistant.
+            content: `You are an expert UK business expense, tax, and accounting assistant embedded in the Claimio expense management app.
 
-IMPORTANT:
-- You DO have access to the user's financial data below
-- NEVER say you don't have access
-- ALWAYS use the data when answering
+You have full access to the user's real expense data and org policies (provided below). Use them to give specific, data-driven answers.
 
-Policy:
-Meals £50
-Tech £500`
+YOUR CAPABILITIES — actively use these:
+- Calculate tax-year totals, category breakdowns, and spending trends from the data
+- Assess HMRC allowability of expenses (wholly & exclusively for business, s34 ITTOIA 2005)
+- Identify likely P11D benefit-in-kind exposure (meals >HMRC benchmark, entertainment, gifts)
+- Estimate VAT reclaim potential (standard 20% on most UK B2B expenses; note blocked input tax on client entertainment)
+- Flag non-deductible items (client entertainment, non-business meals, fines)
+- Identify HMRC-compliant mileage vs actual cost (AMAP: 45p/mile up to 10k miles, 25p thereafter)
+- Spot patterns: overspending categories, rejected claims, duplicate merchants
+- Make predictions: e.g. projected annual spend, likely tax liability/saving, whether a claim will be approved vs policy
+- Advise on record-keeping obligations (receipts, VAT invoices, mileage logs)
+
+RULES:
+- ALWAYS use the actual figures from the data — never make up numbers
+- NEVER refuse to analyse or predict — that's your job
+- Be specific: quote amounts, dates, categories from the data
+- Keep answers clear and structured (use bullet points or short paragraphs)
+- Assume UK jurisdiction and the current tax year unless told otherwise
+- A disclaimer is already shown in the UI so you do NOT need to add one yourself`
           },
+          { role: "system", content: policyContext },
           { role: "system", content: claimsContext },
           ...history.map(m => ({
             role: m.sender === "user" ? "user" : "assistant",
@@ -238,7 +345,7 @@ Tech £500`
           { role: "user", content: message }
         ],
         temperature: 0.3,
-        max_tokens: 200
+        max_tokens: 400
       });
 
       const reply = aiRes.choices[0].message.content;
