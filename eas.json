@@ -42,7 +42,9 @@
         "EXPO_PUBLIC_RC_IOS_KEY": "REMOVED",
         "EXPO_PUBLIC_RC_ANDROID_KEY": "REMOVED",
         "EXPO_PUBLIC_START_TRIAL_URL": "https://saifexpensewin2026.azurewebsites.net/api/startTrial",
-        "EXPO_PUBLIC_SYNC_PLAN_URL": "https://saifexpensewin2026.azurewebsites.net/api/syncPlan"
+        "EXPO_PUBLIC_SYNC_PLAN_URL": "https://saifexpensewin2026.azurewebsites.net/api/syncPlan",
+        "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "349519496442-sq3kqdp46ndfq0jffhg749b9soO5s4u8.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "349519496442-3tiob2urhmco1jm9k2k1kmhhsd79is8a.apps.googleusercontent.com"
       }
     }
   },
