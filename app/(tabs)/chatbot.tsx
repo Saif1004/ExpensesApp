@@ -393,7 +393,7 @@ export default function ChatbotScreen() {
 
           {/* DISCLAIMER */}
           <ThemedText style={styles.disclaimer}>
-            AI responses are for guidance only and do not constitute professional tax or financial advice.
+            AI responses are for guidance only and do not constitute professional tax, accounting, or legal advice. Rules vary by country — always verify with a qualified adviser.
           </ThemedText>
 
           {/* INPUT */}
