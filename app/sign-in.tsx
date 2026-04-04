@@ -2,12 +2,19 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
+  GoogleSignin,
+} from "@react-native-google-signin/google-signin";
+import * as AppleAuthentication from "expo-apple-authentication";
+import {
+  GoogleAuthProvider,
+  OAuthProvider,
   sendEmailVerification,
   sendPasswordResetEmail,
+  signInWithCredential,
   signInWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
-import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore"; // getDocs/query/where used by checkMembership
+import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
 import { useRef, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -23,26 +30,36 @@ import {
 } from "react-native";
 import { auth, db } from "./firebase/firebaseConfig";
 import { useTheme } from "../hooks/useTheme";
+import GoogleLogo from "../components/GoogleLogo";
 
 //////////////////////////////////////////////////////
 // RATE LIMIT CONSTANTS
 //////////////////////////////////////////////////////
 
-const MAX_ATTEMPTS    = 5;
-const LOCKOUT_MS      = 15 * 60 * 1000; // 15 minutes
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_MS   = 15 * 60 * 1000; // 15 minutes
+
+//////////////////////////////////////////////////////
+// GOOGLE SIGN-IN CONFIG (once at module level)
+//////////////////////////////////////////////////////
+
+GoogleSignin.configure({
+  webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID!,
+  iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+});
 
 export default function SignIn() {
   const router = useRouter();
   const { tokens: t } = useTheme();
 
-  const [identifier, setIdentifier]       = useState("");
-  const [password, setPassword]           = useState("");
-  const [showPassword, setShowPassword]   = useState(false);
-  const [loading, setLoading]             = useState(false);
+  const [identifier, setIdentifier]     = useState("");
+  const [password, setPassword]         = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading]           = useState(false);
 
   // Client-side login rate limiting
-  const failedAttemptsRef = useRef(0);
-  const [lockedUntil, setLockedUntil]     = useState<number | null>(null);
+  const failedAttemptsRef             = useRef(0);
+  const [lockedUntil, setLockedUntil] = useState<number | null>(null);
 
   //////////////////////////////////////////////////////
   // FIND EMAIL FROM USERNAME
@@ -54,9 +71,7 @@ export default function SignIn() {
       const usernameDoc = await getDoc(doc(db, "usernames", normalized));
       if (!usernameDoc.exists()) return null;
       const data = usernameDoc.data();
-      // New accounts store email directly. Old accounts only have uid.
       if (data.email) return data.email;
-      // Old account — email not stored in username doc yet
       return "OLD_ACCOUNT";
     } catch {
       return null;
@@ -78,7 +93,85 @@ export default function SignIn() {
   };
 
   //////////////////////////////////////////////////////
-  // SIGN IN
+  // SOCIAL AUTH — shared membership routing
+  //////////////////////////////////////////////////////
+
+  const handleSocialAuth = async (uid: string) => {
+    const membership = await checkMembership(uid);
+
+    if (membership?.status === "approved") {
+      failedAttemptsRef.current = 0;
+      router.replace("/(tabs)/home");
+    } else if (membership?.status === "pending") {
+      await signOut(auth);
+      Alert.alert(
+        "Awaiting Approval",
+        "Your admin hasn't approved your account yet. Please check back later."
+      );
+    } else {
+      // New social user — needs to set up username + org
+      router.replace("/social-onboarding");
+    }
+  };
+
+  //////////////////////////////////////////////////////
+  // GOOGLE SIGN-IN
+  //////////////////////////////////////////////////////
+
+  const handleGoogleSignIn = async () => {
+    try {
+      setLoading(true);
+      await GoogleSignin.hasPlayServices();
+      const response = await GoogleSignin.signIn();
+      const idToken  = (response as any).data?.idToken ?? (response as any).idToken;
+      if (!idToken) throw new Error("No ID token returned");
+      const credential = GoogleAuthProvider.credential(idToken);
+      const result     = await signInWithCredential(auth, credential);
+      await handleSocialAuth(result.user.uid);
+    } catch (err: any) {
+      const code = err?.code ?? "";
+      if (
+        code !== "SIGN_IN_CANCELLED" &&
+        code !== "12501" /* Android cancelled */ &&
+        err?.message !== "SIGN_IN_CANCELLED"
+      ) {
+        Alert.alert("Google Sign-In failed", "Please try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  //////////////////////////////////////////////////////
+  // APPLE SIGN-IN
+  //////////////////////////////////////////////////////
+
+  const handleAppleSignIn = async () => {
+    try {
+      setLoading(true);
+      const appleCredential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      const provider       = new OAuthProvider("apple.com");
+      const oauthCredential = provider.credential({
+        idToken: appleCredential.identityToken!,
+      });
+      const result = await signInWithCredential(auth, oauthCredential);
+      await handleSocialAuth(result.user.uid);
+    } catch (err: any) {
+      if (err?.code !== "ERR_REQUEST_CANCELED") {
+        Alert.alert("Apple Sign-In failed", "Please try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  //////////////////////////////////////////////////////
+  // SIGN IN (email / password)
   //////////////////////////////////////////////////////
 
   const handleSignIn = async () => {
@@ -87,7 +180,6 @@ export default function SignIn() {
       return;
     }
 
-    // ── Client-side lockout check ──
     if (lockedUntil && Date.now() < lockedUntil) {
       const minsLeft = Math.ceil((lockedUntil - Date.now()) / 60_000);
       Alert.alert(
@@ -120,13 +212,10 @@ export default function SignIn() {
 
       const cred = await signInWithEmailAndPassword(auth, email, password);
 
-      // ── Reload + force-refresh JWT so Firestore rules see email_verified:true ──
       await cred.user.reload();
-      await cred.user.getIdToken(true); // must run BEFORE any Firestore reads
+      await cred.user.getIdToken(true);
 
-      // ── Email verification gate ──
       if (!cred.user.emailVerified) {
-        // Auto-resend verification email while still authenticated (Firebase rate-limits this)
         try { await sendEmailVerification(cred.user); } catch {}
         await signOut(auth);
         Alert.alert(
@@ -136,7 +225,6 @@ export default function SignIn() {
         return;
       }
 
-      // ── Membership check ──
       const uid        = cred.user.uid;
       const membership = await checkMembership(uid);
 
@@ -153,10 +241,8 @@ export default function SignIn() {
         return;
       }
 
-      // ── Success — reset attempt counter ──
       failedAttemptsRef.current = 0;
       setLockedUntil(null);
-
       router.replace("/(tabs)/home");
 
     } catch (err: any) {
@@ -167,7 +253,6 @@ export default function SignIn() {
         code === "auth/wrong-password" ||
         code === "auth/user-not-found"
       ) {
-        // ── Track failed attempts ──
         failedAttemptsRef.current += 1;
         const remaining = MAX_ATTEMPTS - failedAttemptsRef.current;
 
@@ -185,7 +270,6 @@ export default function SignIn() {
             `Email or password is incorrect. ${remaining} attempt${remaining !== 1 ? "s" : ""} remaining.`
           );
         }
-
       } else if (code === "auth/too-many-requests") {
         Alert.alert("Too many attempts", "Account temporarily locked by the server. Try again later.");
       } else {
@@ -197,7 +281,7 @@ export default function SignIn() {
   };
 
   //////////////////////////////////////////////////////
-  // FORGOT PASSWORD (supports email OR username)
+  // FORGOT PASSWORD
   //////////////////////////////////////////////////////
 
   const forgotPassword = async () => {
@@ -214,7 +298,6 @@ export default function SignIn() {
       if (!identifier.includes("@")) {
         const foundEmail = await findEmailFromUsername(identifier.trim().toLowerCase());
         if (!foundEmail || foundEmail === "OLD_ACCOUNT") {
-          // Don't reveal whether username/account exists
           Alert.alert("Email sent", "If an account exists, you will receive a password reset email.");
           return;
         }
@@ -227,7 +310,6 @@ export default function SignIn() {
         "If an account exists with that email, you will receive password reset instructions."
       );
     } catch {
-      // Generic message — never expose whether account exists
       Alert.alert("Email sent", "If an account exists, you will receive a password reset email.");
     } finally {
       setLoading(false);
@@ -365,6 +447,61 @@ export default function SignIn() {
       fontWeight: "700",
     },
 
+    // ── Divider ──
+    dividerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    dividerLine: {
+      flex: 1,
+      height: 1,
+      backgroundColor: t.border,
+    },
+    dividerText: {
+      color: t.textTertiary,
+      fontSize: 12,
+      marginHorizontal: 12,
+    },
+
+    // ── Social buttons ──
+    socialRow: {
+      flexDirection: "row",
+      gap: 12,
+      marginBottom: 24,
+    },
+    socialBtn: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      paddingVertical: 13,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: t.border,
+      backgroundColor: t.surface,
+    },
+    appleBtn: {
+      backgroundColor: "#000",
+      borderColor: "#000",
+    },
+    socialBtnText: {
+      color: t.text,
+      fontSize: 15,
+      fontWeight: "600",
+    },
+    appleBtnText: {
+      color: "#fff",
+    },
+    googleG: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: "#4285F4",
+      width: 18,
+      textAlign: "center",
+    },
+
     signUpRow: {
       alignItems: "center",
     },
@@ -477,6 +614,40 @@ export default function SignIn() {
               }
             </TouchableOpacity>
 
+          </View>
+
+          {/* Divider */}
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or continue with</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Social buttons */}
+          <View style={styles.socialRow}>
+            {/* Google */}
+            <TouchableOpacity
+              style={[styles.socialBtn, loading && styles.btnDisabled]}
+              onPress={handleGoogleSignIn}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              <GoogleLogo size={20} />
+              <Text style={styles.socialBtnText}>Google</Text>
+            </TouchableOpacity>
+
+            {/* Apple — iOS only */}
+            {Platform.OS === "ios" && (
+              <TouchableOpacity
+                style={[styles.socialBtn, styles.appleBtn, loading && styles.btnDisabled]}
+                onPress={handleAppleSignIn}
+                disabled={loading}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="logo-apple" size={18} color="#fff" />
+                <Text style={[styles.socialBtnText, styles.appleBtnText]}>Apple</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Sign up link */}

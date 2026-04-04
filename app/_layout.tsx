@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { StripeProvider } from "@stripe/stripe-react-native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Linking, LogBox, Modal, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
@@ -35,19 +36,36 @@ function TermsGate({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!authLoaded || !user) {
-      // Not logged in — ensure modal is hidden
       setVisible(false);
       return;
     }
-    // Only run the Firestore check once per uid
+    // Only run once per uid per session
     if (checkedUidRef.current === user.uid) return;
     checkedUidRef.current = user.uid;
 
-    getDoc(doc(db, "users", user.uid))
-      .then(snap => {
-        if (snap.data()?.termsAccepted !== true) setVisible(true);
-      })
-      .catch(() => { /* fail open — don't block user if Firestore is unreachable */ });
+    const cacheKey = `tc_accepted_${user.uid}`;
+
+    (async () => {
+      // 1. Check local cache first — instant, no network
+      const cached = await AsyncStorage.getItem(cacheKey).catch(() => null);
+      if (cached === "true") return; // already accepted on this device
+
+      // 2. Check Firestore (source of truth — catches sign-ins on new devices)
+      try {
+        const snap = await getDoc(doc(db, "users", user.uid));
+        if (snap.data()?.termsAccepted === true) {
+          // Accepted on another device — cache it locally so we don't check again
+          await AsyncStorage.setItem(cacheKey, "true").catch(() => {});
+          return;
+        }
+      } catch {
+        // Firestore unreachable — fail open, don't block the user
+        return;
+      }
+
+      // 3. Not accepted anywhere yet — show the modal
+      setVisible(true);
+    })();
   }, [authLoaded, user?.uid]);
 
   const styles = useMemo(() => StyleSheet.create({
@@ -165,9 +183,12 @@ function TermsGate({ children }: { children: React.ReactNode }) {
 
   const handleAccept = async () => {
     if (user) {
-      try {
-        await setDoc(doc(db, "users", user.uid), { termsAccepted: true }, { merge: true });
-      } catch {}
+      const cacheKey = `tc_accepted_${user.uid}`;
+      // Write to both — Firestore for cross-device, AsyncStorage for instant local cache
+      await Promise.allSettled([
+        setDoc(doc(db, "users", user.uid), { termsAccepted: true }, { merge: true }),
+        AsyncStorage.setItem(cacheKey, "true"),
+      ]);
     }
     setVisible(false);
   };

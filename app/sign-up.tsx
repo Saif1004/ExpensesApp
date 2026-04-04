@@ -1,8 +1,15 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import {
+  GoogleSignin,
+} from "@react-native-google-signin/google-signin";
+import * as AppleAuthentication from "expo-apple-authentication";
+import {
   createUserWithEmailAndPassword,
+  GoogleAuthProvider,
+  OAuthProvider,
   sendEmailVerification,
+  signInWithCredential,
   signOut,
   updateProfile,
 } from "firebase/auth";
@@ -24,6 +31,7 @@ import { useAuth } from "./context/AuthProvider";
 import { auth, db } from "./firebase/firebaseConfig";
 import { setIsSigningUp } from "./utils/signUpFlag";
 import { useTheme } from "../hooks/useTheme";
+import GoogleLogo from "../components/GoogleLogo";
 
 //////////////////////////////////////////////////////
 // Helpers
@@ -103,6 +111,84 @@ export default function SignUp() {
     setOrganisation("");
     setInviteCode("");
     setMode(m);
+  };
+
+  //////////////////////////////////////////////////////
+  // CHECK MEMBERSHIP
+  //////////////////////////////////////////////////////
+
+  const checkMembership = async (uid: string) => {
+    try {
+      const snap = await getDocs(query(collection(db, "memberships"), where("userId", "==", uid)));
+      if (snap.empty) return { status: "none" };
+      return snap.docs[0].data();
+    } catch {
+      return { status: "none" };
+    }
+  };
+
+  //////////////////////////////////////////////////////
+  // SOCIAL AUTH — shared routing
+  //////////////////////////////////////////////////////
+
+  const handleSocialAuth = async (uid: string) => {
+    const membership = await checkMembership(uid);
+    if (membership?.status === "approved") {
+      router.replace("/(tabs)/home");
+    } else if (membership?.status === "pending") {
+      await signOut(auth);
+      Alert.alert("Awaiting Approval", "Your admin hasn't approved your account yet.");
+    } else {
+      router.replace("/social-onboarding");
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    try {
+      setLoading(true);
+      await GoogleSignin.hasPlayServices();
+      const response = await GoogleSignin.signIn();
+      const idToken  = (response as any).data?.idToken ?? (response as any).idToken;
+      if (!idToken) throw new Error("No ID token");
+      const credential = GoogleAuthProvider.credential(idToken);
+      const result     = await signInWithCredential(auth, credential);
+      await handleSocialAuth(result.user.uid);
+    } catch (err: any) {
+      const code = err?.code ?? "";
+      if (
+        code !== "SIGN_IN_CANCELLED" &&
+        code !== "12501" &&
+        err?.message !== "SIGN_IN_CANCELLED"
+      ) {
+        Alert.alert("Google Sign-In failed", "Please try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAppleSignIn = async () => {
+    try {
+      setLoading(true);
+      const appleCredential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      const provider        = new OAuthProvider("apple.com");
+      const oauthCredential = provider.credential({
+        idToken: appleCredential.identityToken!,
+      });
+      const result = await signInWithCredential(auth, oauthCredential);
+      await handleSocialAuth(result.user.uid);
+    } catch (err: any) {
+      if (err?.code !== "ERR_REQUEST_CANCELED") {
+        Alert.alert("Apple Sign-In failed", "Please try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   //////////////////////////////////////////////////////
@@ -427,6 +513,60 @@ export default function SignUp() {
     signInText:     { color: t.textSecondary, fontSize: 14 },
     signInTextBold: { color: t.accent, fontWeight: "600" },
 
+    // ── Social ──
+    dividerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    dividerLine: {
+      flex: 1,
+      height: 1,
+      backgroundColor: t.border,
+    },
+    dividerText: {
+      color: t.textTertiary,
+      fontSize: 12,
+      marginHorizontal: 12,
+    },
+    socialRow: {
+      flexDirection: "row",
+      gap: 12,
+      marginBottom: 20,
+    },
+    socialBtn: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      paddingVertical: 13,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: t.border,
+      backgroundColor: t.surface,
+    },
+    appleBtn: {
+      backgroundColor: "#000",
+      borderColor: "#000",
+    },
+    socialBtnText: {
+      color: t.text,
+      fontSize: 15,
+      fontWeight: "600",
+    },
+    appleBtnText: {
+      color: "#fff",
+    },
+    googleG: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: "#4285F4",
+      width: 18,
+      textAlign: "center",
+    },
+    btnDisabled: { opacity: 0.6 },
+
     // ── Form screens ──
 
     formContainer: {
@@ -556,6 +696,35 @@ export default function SignUp() {
             </View>
             <Ionicons name="chevron-forward" size={20} color={t.accent} />
           </TouchableOpacity>
+
+          {/* Social sign-in */}
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or continue with</Text>
+            <View style={styles.dividerLine} />
+          </View>
+          <View style={styles.socialRow}>
+            <TouchableOpacity
+              style={[styles.socialBtn, loading && styles.btnDisabled]}
+              onPress={handleGoogleSignIn}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              <GoogleLogo size={20} />
+              <Text style={styles.socialBtnText}>Google</Text>
+            </TouchableOpacity>
+            {Platform.OS === "ios" && (
+              <TouchableOpacity
+                style={[styles.socialBtn, styles.appleBtn, loading && styles.btnDisabled]}
+                onPress={handleAppleSignIn}
+                disabled={loading}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="logo-apple" size={18} color="#fff" />
+                <Text style={[styles.socialBtnText, styles.appleBtnText]}>Apple</Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
           {/* Sign in link */}
           <TouchableOpacity onPress={() => router.push("/sign-in")} style={styles.signInLink}>

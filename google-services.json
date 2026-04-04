@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "349519496442",
+    "project_id": "expenseapp-3dafd",
+    "storage_bucket": "expenseapp-3dafd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:349519496442:android:6ec547599b9cd21a95b543",
+        "android_client_info": {
+          "package_name": "com.saif1004.claimio"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "349519496442-m9rfeg18nr87jrb2uh89rt99m94nhecm.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.saif1004.claimio",
+            "certificate_hash": "c1f5609ac875613a5935713e3e84c745811e4613"
+          }
+        },
+        {
+          "client_id": "349519496442-sq3kqdp46ndfq8jffhg749b9soo5s4u8.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCKdY1-JpDU4l_6LqLztZBwV7A7IAirKQU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "349519496442-sq3kqdp46ndfq8jffhg749b9soo5s4u8.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "349519496442-3tiob2urhmco1jm9k2k1kmhhsd79is8a.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.saif1004.claimio"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
