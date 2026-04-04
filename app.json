@@ -13,7 +13,8 @@
       "infoPlist": {
         "NSCameraUsageDescription": "This app uses the camera to scan receipts for expense claims.",
         "NSPhotoLibraryUsageDescription": "This app accesses your photos to upload receipt images.",
-        "NSPhotoLibraryAddUsageDescription": "This app may save receipt images for expense records."
+        "NSPhotoLibraryAddUsageDescription": "This app may save receipt images for expense records.",
+        "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "com.saif1004.claimio"
     },
