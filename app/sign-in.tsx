@@ -135,7 +135,7 @@ export default function SignIn() {
         code !== "12501" /* Android cancelled */ &&
         err?.message !== "SIGN_IN_CANCELLED"
       ) {
-        Alert.alert("Google Sign-In failed", "Please try again.");
+        Alert.alert("Google Sign-In failed", `Code: ${code}\nMessage: ${err?.message ?? "unknown"}`);
       }
     } finally {
       setLoading(false);

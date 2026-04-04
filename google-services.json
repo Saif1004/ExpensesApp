@@ -14,11 +14,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "349519496442-m9rfeg18nr87jrb2uh89rt99m94nhecm.apps.googleusercontent.com",
+          "client_id": "349519496442-8j48o63r5b08ee623s2hnqnahrqckjgk.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.saif1004.claimio",
-            "certificate_hash": "c1f5609ac875613a5935713e3e84c745811e4613"
+            "certificate_hash": "820090ff326676a1a1c9e5a20e40a8ff0e54b760"
           }
         },
         {
