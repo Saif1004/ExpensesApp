@@ -333,8 +333,7 @@ RULES:
 - NEVER refuse to analyse or predict — that's your job
 - Be specific: quote amounts, dates, categories from the data
 - Keep answers clear and structured (use bullet points or short paragraphs)
-- Assume UK jurisdiction and the current tax year unless told otherwise
-- A disclaimer is already shown in the UI so you do NOT need to add one yourself`
+- Assume UK jurisdiction and the current tax year unless told otherwise`
           },
           { role: "system", content: policyContext },
           { role: "system", content: claimsContext },
