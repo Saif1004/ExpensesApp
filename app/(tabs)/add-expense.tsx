@@ -19,12 +19,10 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
-import { doc, getDoc } from "firebase/firestore";
 import { ThemedText } from "../../components/themed-text";
 import { ThemedView } from "../../components/themed-view";
 import { IconSymbol } from "../../components/ui/icon-symbol";
 import { useAuth } from "../context/AuthProvider";
-import { db } from "../firebase/firebaseConfig";
 import { useTheme } from "../../hooks/useTheme";
 
 const AZURE_VALIDATE_URL = process.env.EXPO_PUBLIC_AZURE_VALIDATE_URL!;
@@ -34,29 +32,12 @@ const AZURE_UPLOAD_URL = process.env.EXPO_PUBLIC_UPLOAD_URL!;
 const DEFAULT_CATEGORIES = ["Meals", "Travel", "Technology", "Office"];
 
 export default function AddExpenseScreen() {
-  const { user, orgId } = useAuth();
+  const { user, orgCategories } = useAuth();
   const insets = useSafeAreaInsets();
   const { tokens: t } = useTheme();
 
-  const [dynamicCategories, setDynamicCategories] = useState<string[]>(DEFAULT_CATEGORIES);
-
-  useEffect(() => {
-    if (!orgId) return;
-
-    const fetchCategories = async () => {
-      try {
-        const snap = await getDoc(doc(db, "organisations", orgId));
-        const data = snap.data();
-        if (data?.categories && Array.isArray(data.categories) && data.categories.length > 0) {
-          setDynamicCategories(data.categories);
-        }
-      } catch {
-        // Fallback to default categories
-      }
-    };
-
-    fetchCategories();
-  }, [orgId]);
+  // Categories come from AuthProvider — updated instantly when hard refresh is pressed
+  const dynamicCategories = orgCategories.length > 0 ? orgCategories : DEFAULT_CATEGORIES;
 
   const [amount, setAmount] = useState("");
   const [merchant, setMerchant] = useState("");

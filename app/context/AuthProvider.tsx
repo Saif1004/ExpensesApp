@@ -53,6 +53,7 @@ type AuthContextType = {
   employeeLimit: number;
   trialEndsAt: Date | null;
   trialDaysLeft: number;
+  orgCategories: string[];
   authLoaded: boolean;
   refreshMembership: () => Promise<void>;
   refreshOrgPlan: () => Promise<void>;
@@ -73,6 +74,7 @@ export const AuthContext = createContext<AuthContextType>({
   employeeLimit: 5,
   trialEndsAt: null,
   trialDaysLeft: 0,
+  orgCategories: [],
   authLoaded: false,
   refreshMembership: async () => {},
   refreshOrgPlan: async () => {}
@@ -95,6 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [orgPlan, setOrgPlan]                       = useState<OrgPlan>("free");
   const [aiCreditsRemaining, setAiCreditsRemaining] = useState(0);
   const [trialEndsAt, setTrialEndsAt]               = useState<Date | null>(null);
+  const [orgCategories, setOrgCategories]           = useState<string[]>([]);
   const [authLoaded, setAuthLoaded]                 = useState(false);
 
   const router   = useRouter();
@@ -164,10 +167,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const plan       = (data.plan ?? "free") as OrgPlan;
     const trialEnd   = data.trialEndsAt?.toDate?.() ?? null;
     const credits    = data.aiCreditsRemaining ?? 0;
+    const categories = Array.isArray(data.categories) && data.categories.length > 0
+      ? data.categories
+      : ["Meals", "Travel", "Technology", "Office"];
 
     setOrgPlan(plan);
     setTrialEndsAt(trialEnd);
     setAiCreditsRemaining(credits);
+    setOrgCategories(categories);
 
     // Admin: sync RevenueCat → Firestore (fire-and-forget; plan refreshes on next loadOrgData)
     if (memberRole === "admin") {
@@ -178,6 +185,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setOrgPlan((d.plan ?? "free") as OrgPlan);
         setAiCreditsRemaining(d.aiCreditsRemaining ?? 0);
         setTrialEndsAt(d.trialEndsAt?.toDate?.() ?? null);
+        setOrgCategories(
+          Array.isArray(d.categories) && d.categories.length > 0
+            ? d.categories
+            : ["Meals", "Travel", "Technology", "Office"]
+        );
       }).catch(() => {});
     }
   }, [syncRevenueCat]);
@@ -277,6 +289,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setOrgPlan("free");
         setAiCreditsRemaining(0);
         setTrialEndsAt(null);
+        setOrgCategories([]);
         currentUidRef.current  = null;
         currentRoleRef.current = null;
         currentOrgRef.current  = null;
@@ -395,13 +408,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     employeeLimit,
     trialEndsAt,
     trialDaysLeft,
+    orgCategories,
     authLoaded,
     refreshMembership,
     refreshOrgPlan
   }), [
     user, role, status, orgId, orgPlan, isPro,
     aiCreditsRemaining, employeeLimit, trialEndsAt,
-    trialDaysLeft, authLoaded, refreshMembership, refreshOrgPlan
+    trialDaysLeft, orgCategories, authLoaded, refreshMembership, refreshOrgPlan
   ]);
 
   //////////////////////////////////////////////////////
