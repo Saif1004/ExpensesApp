@@ -125,12 +125,19 @@ Policy:
 
 Return JSON ONLY.
 
+Choose the type that best fits:
+
+- "receipt_required"  — policy sets an amount threshold above which a receipt must be attached
+- "category_limit"    — policy caps the amount for a specific spending category
+- "submission_window" — policy requires claims to be submitted within N days of purchase
+- "general_rule"      — any other rule that cannot be expressed as a number (e.g. banned items, vendor restrictions, class-of-travel rules, behaviour requirements)
+
 Format:
 
 {
-"type": "receipt_required | category_limit | approval_required | submission_window",
+"type": "receipt_required | category_limit | submission_window | general_rule",
 "category": "Meals | Travel | Office | Technology | null",
-"value": number,
+"value": number or null,
 "displayText": "Professional policy sentence"
 }
 
@@ -140,23 +147,37 @@ Input:
 Receipt required above 60
 
 Output:
-{
-"type":"receipt_required",
-"category":null,
-"value":60,
-"displayText":"Receipts must be provided for expenses exceeding £60."
-}
+{"type":"receipt_required","category":null,"value":60,"displayText":"Receipts must be provided for expenses exceeding £60."}
 
 Input:
 Meals limit 80
 
 Output:
-{
-"type":"category_limit",
-"category":"Meals",
-"value":80,
-"displayText":"Meal expenses are limited to £80 per claim."
-}
+{"type":"category_limit","category":"Meals","value":80,"displayText":"Meal expenses are limited to £80 per claim."}
+
+Input:
+Claims must be submitted within 14 days
+
+Output:
+{"type":"submission_window","category":null,"value":14,"displayText":"Claims must be submitted within 14 days of purchase."}
+
+Input:
+No alcohol purchases allowed
+
+Output:
+{"type":"general_rule","category":null,"value":null,"displayText":"Alcohol purchases are not permitted as business expenses."}
+
+Input:
+Only economy class flights
+
+Output:
+{"type":"general_rule","category":"Travel","value":null,"displayText":"All flights must be booked in economy class."}
+
+Input:
+No expenses at entertainment venues
+
+Output:
+{"type":"general_rule","category":null,"value":null,"displayText":"Expenses at entertainment venues are not permitted."}
 
 Return JSON only.
 `;

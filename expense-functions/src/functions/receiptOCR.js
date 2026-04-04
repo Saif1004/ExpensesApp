@@ -1,8 +1,25 @@
 const { app } = require("@azure/functions");
 const OpenAI = require("openai");
+const admin = require("firebase-admin");
 const { authAndLimit } = require("./rateLimit");
 const { secureResponse } = require("./security");
 const { checkAiKillSwitch } = require("./aiConfig");
+
+////////////////////////////////////////////////////
+// FIREBASE INIT
+////////////////////////////////////////////////////
+
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert({
+      projectId:   process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey:  process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+    }),
+  });
+}
+
+const db = admin.firestore();
 
 //////////////////////////////////////////////////////////
 // SAFE OPENAI CLIENT
@@ -134,6 +151,30 @@ app.http("receiptOCR", {
 
       const blocked = await checkAiKillSwitch("ocr");
       if (blocked) return blocked;
+
+      //////////////////////////////////////////////////////////
+      // PLAN CHECK — OCR requires a paid plan (trial / pro / business)
+      //////////////////////////////////////////////////////////
+
+      const membershipSnap = await db
+        .collection("memberships")
+        .where("userId", "==", auth.uid)
+        .where("status", "==", "approved")
+        .limit(1)
+        .get();
+
+      if (!membershipSnap.empty) {
+        const orgId  = membershipSnap.docs[0].data().orgId;
+        const orgDoc = await db.collection("organisations").doc(orgId).get();
+        const plan   = orgDoc.data()?.plan ?? "free";
+
+        if (plan === "free") {
+          return secureResponse(
+            { error: "Receipt scanning is not available on the free plan. Upgrade to Pro or Business to use this feature." },
+            403
+          );
+        }
+      }
 
       //////////////////////////////////////////////////////////
       // REQUEST BODY

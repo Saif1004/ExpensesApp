@@ -8,28 +8,32 @@ const PLAN_LIMITS = {
     aiCreditsPerPeriod: 0,
     chatbotRatePerMinute: 0,
     chatbotAccess: false,
-    analyticsAccess: false
+    analyticsAccess: false,
+    claimsPerMonth: 10       // max claims a free-tier user may submit per calendar month
   },
   trial: {
     employeeLimit: 20,
     aiCreditsPerPeriod: 50,
     chatbotRatePerMinute: 5,
     chatbotAccess: true,
-    analyticsAccess: true
+    analyticsAccess: true,
+    claimsPerMonth: null     // unlimited
   },
   pro: {
     employeeLimit: 20,
-    aiCreditsPerPeriod: 500,
+    aiCreditsPerPeriod: 50,
     chatbotRatePerMinute: 10,
     chatbotAccess: true,
-    analyticsAccess: true
+    analyticsAccess: true,
+    claimsPerMonth: null
   },
   business: {
     employeeLimit: 100,
-    aiCreditsPerPeriod: 2000,
+    aiCreditsPerPeriod: 150,
     chatbotRatePerMinute: 20,
     chatbotAccess: true,
-    analyticsAccess: true
+    analyticsAccess: true,
+    claimsPerMonth: null
   }
 };
 

@@ -1,5 +1,7 @@
 // Keep in sync with expense-functions/src/functions/planLimits.js
 
+// Keep in sync with expense-functions/src/functions/planLimits.js
+
 export type OrgPlan = "free" | "trial" | "pro" | "business";
 
 export const PLAN_LIMITS: Record<
@@ -10,6 +12,7 @@ export const PLAN_LIMITS: Record<
     aiCreditsPerPeriod: number;
     chatbotAccess: boolean;
     analyticsAccess: boolean;
+    claimsPerMonth: number | null;     // null = unlimited
     priceMonthly: string | null;
     priceAnnual: string | null;
     rcPackageId: string | null;        // RevenueCat monthly package identifier
@@ -23,6 +26,7 @@ export const PLAN_LIMITS: Record<
     aiCreditsPerPeriod: 0,
     chatbotAccess: false,
     analyticsAccess: false,
+    claimsPerMonth: 10,
     priceMonthly: null,
     priceAnnual: null,
     rcPackageId: null,
@@ -35,6 +39,7 @@ export const PLAN_LIMITS: Record<
     aiCreditsPerPeriod: 50,
     chatbotAccess: true,
     analyticsAccess: true,
+    claimsPerMonth: null,
     priceMonthly: null,
     priceAnnual: null,
     rcPackageId: null,
@@ -44,9 +49,10 @@ export const PLAN_LIMITS: Record<
   pro: {
     label: "Pro",
     employeeLimit: 20,
-    aiCreditsPerPeriod: 500,
+    aiCreditsPerPeriod: 50,
     chatbotAccess: true,
     analyticsAccess: true,
+    claimsPerMonth: null,
     priceMonthly: "£14.99",
     priceAnnual: "£143.88",           // £11.99/month billed annually (~20% saving)
     rcPackageId: "pro_monthly",       // RevenueCat package identifier (monthly)
@@ -56,9 +62,10 @@ export const PLAN_LIMITS: Record<
   business: {
     label: "Business",
     employeeLimit: 100,
-    aiCreditsPerPeriod: 2000,
+    aiCreditsPerPeriod: 150,
     chatbotAccess: true,
     analyticsAccess: true,
+    claimsPerMonth: null,
     priceMonthly: "£34.99",
     priceAnnual: "£335.88",           // £27.99/month billed annually (~20% saving)
     rcPackageId: "business_monthly",

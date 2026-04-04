@@ -396,21 +396,14 @@ export default function SignUp() {
       borderColor: t.accent,
     },
 
-    chooseCardSlate: {
-      backgroundColor: "#111827",
-      borderColor: t.border,
-    },
-
     chooseCardIcon: {
       width: 52,
       height: 52,
       borderRadius: 14,
       justifyContent: "center",
       alignItems: "center",
+      backgroundColor: t.accentSurface,
     },
-
-    chooseCardIconBlue:  { backgroundColor: t.accentSurface },
-    chooseCardIconSlate: { backgroundColor: t.surface },
 
     chooseCardText: { flex: 1 },
 
@@ -538,7 +531,7 @@ export default function SignUp() {
             onPress={() => goTo("create")}
             activeOpacity={0.8}
           >
-            <View style={[styles.chooseCardIcon, styles.chooseCardIconBlue]}>
+            <View style={styles.chooseCardIcon}>
               <Ionicons name="briefcase-outline" size={26} color={t.accent} />
             </View>
             <View style={styles.chooseCardText}>
@@ -550,18 +543,18 @@ export default function SignUp() {
 
           {/* Join card */}
           <TouchableOpacity
-            style={[styles.chooseCard, styles.chooseCardSlate]}
+            style={[styles.chooseCard, styles.chooseCardBlue]}
             onPress={() => goTo("join")}
             activeOpacity={0.8}
           >
-            <View style={[styles.chooseCardIcon, styles.chooseCardIconSlate]}>
-              <Ionicons name="person-add-outline" size={26} color={t.textSecondary} />
+            <View style={styles.chooseCardIcon}>
+              <Ionicons name="person-add-outline" size={26} color={t.accent} />
             </View>
             <View style={styles.chooseCardText}>
               <Text style={styles.chooseCardTitle}>Join Organisation</Text>
               <Text style={styles.chooseCardSub}>I have an invite code</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={t.textSecondary} />
+            <Ionicons name="chevron-forward" size={20} color={t.accent} />
           </TouchableOpacity>
 
           {/* Sign in link */}
@@ -717,7 +710,7 @@ export default function SignUp() {
             <Text style={styles.fieldLabel}>Invite Code</Text>
             <TextInput
               value={inviteCode}
-              onChangeText={(t) => setInviteCode(t.toUpperCase())}
+              onChangeText={(val) => setInviteCode(val.toUpperCase())}
               placeholder="e.g. ABC4X7"
               placeholderTextColor={t.textTertiary}
               style={[styles.input, styles.inviteCodeInput]}

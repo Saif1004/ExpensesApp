@@ -1,5 +1,6 @@
 const { app } = require("@azure/functions");
 const admin = require("firebase-admin");
+const OpenAI = require("openai");
 const { authAndLimit } = require("./rateLimit");
 const {
   secureResponse,
@@ -9,6 +10,17 @@ const {
   validateString,
   sanitize,
 } = require("./security");
+
+//////////////////////////////////////////////////////
+// OPENAI CLIENT
+//////////////////////////////////////////////////////
+
+function getOpenAIClient() {
+  return new OpenAI({
+    apiKey:   process.env.AZURE_OPENAI_KEY,
+    baseURL:  `${process.env.AZURE_OPENAI_ENDPOINT}/openai/v1`,
+  });
+}
 
 //////////////////////////////////////////////////////
 // FIREBASE INIT
@@ -98,6 +110,37 @@ app.http("validateClaim", {
       const orgId = membershipSnap.docs[0].data().orgId;
 
       ////////////////////////////////////////////////////
+      // FREE TIER MONTHLY CLAIM LIMIT
+      ////////////////////////////////////////////////////
+
+      // Monthly caps per plan — keep in sync with planLimits.js
+      const MONTHLY_CLAIM_LIMITS = { free: 10, trial: null, pro: null, business: null };
+
+      const orgDoc  = await db.collection("organisations").doc(orgId).get();
+      const orgPlan = orgDoc.data()?.plan ?? "free";
+      const monthlyLimit = MONTHLY_CLAIM_LIMITS[orgPlan] ?? null;
+
+      if (monthlyLimit !== null) {
+        const now          = new Date();
+        const startOfMonth = admin.firestore.Timestamp.fromDate(
+          new Date(now.getFullYear(), now.getMonth(), 1)
+        );
+
+        const monthClaimsSnap = await db
+          .collection("claims")
+          .where("userId",    "==", userId)
+          .where("createdAt", ">=", startOfMonth)
+          .get();
+
+        if (monthClaimsSnap.size >= monthlyLimit) {
+          return secureResponse(
+            { valid: false, reason: `Free plan limit reached. You can submit up to ${monthlyLimit} claims per month. Upgrade to Pro for unlimited submissions.` },
+            403
+          );
+        }
+      }
+
+      ////////////////////////////////////////////////////
       // LOAD + APPLY POLICIES
       ////////////////////////////////////////////////////
 
@@ -106,39 +149,114 @@ app.http("validateClaim", {
         .where("orgId", "==", orgId)
         .get();
 
-      let receiptThreshold = 25;
-      const categoryLimits = { Meals: 50, Travel: 300, Office: 500, Technology: 3000 };
+      // All limits start as null (inactive) — only activated if admin creates a policy
+      let receiptThreshold    = null;  // null = no receipt requirement
+      let submissionWindowDays = null; // null = no submission window
+      const categoryLimits    = {};   // empty = no category limits
 
       policiesSnap.forEach(doc => {
         const policy = doc.data();
-        if (policy.type === "receipt_required") receiptThreshold = policy.value ?? receiptThreshold;
-        if (policy.type === "category_limit" && policy.category) categoryLimits[policy.category] = policy.value;
+        if (policy.type === "receipt_required" && policy.value != null)
+          receiptThreshold = policy.value;
+        if (policy.type === "category_limit" && policy.category && policy.value != null)
+          categoryLimits[policy.category] = policy.value;
+        if (policy.type === "submission_window" && policy.value != null)
+          submissionWindowDays = policy.value;
       });
 
       ////////////////////////////////////////////////////
-      // RECEIPT POLICY
+      // RECEIPT POLICY (only enforced if admin has set one)
       ////////////////////////////////////////////////////
 
       const hasReceipt = !!receiptUrl;
 
-      if (numericAmount > receiptThreshold && !hasReceipt)
+      if (receiptThreshold !== null && numericAmount > receiptThreshold && !hasReceipt)
         return secureResponse({ valid: false, reason: `Receipt required for expenses above £${receiptThreshold}.` }, 400);
 
       ////////////////////////////////////////////////////
-      // CATEGORY LIMIT
+      // CATEGORY LIMIT (only enforced if admin has set one)
       ////////////////////////////////////////////////////
 
-      if (numericAmount > (categoryLimits[category] ?? Infinity))
-        return secureResponse({ valid: false, reason: `${category} limit exceeded.` }, 400);
+      if (category in categoryLimits && numericAmount > categoryLimits[category])
+        return secureResponse({ valid: false, reason: `${category} expenses are limited to £${categoryLimits[category]} per claim.` }, 400);
 
       ////////////////////////////////////////////////////
-      // SUBMISSION WINDOW (30 days)
+      // SUBMISSION WINDOW (only enforced if admin has set one)
       ////////////////////////////////////////////////////
 
       const diffDays = (Date.now() - new Date(purchaseDate).getTime()) / (1000 * 60 * 60 * 24);
 
-      if (diffDays > 30)
-        return secureResponse({ valid: false, reason: "Submission window expired (30 days)." }, 400);
+      if (submissionWindowDays !== null && diffDays > submissionWindowDays)
+        return secureResponse({ valid: false, reason: `Submission window expired. Claims must be submitted within ${submissionWindowDays} days of purchase.` }, 400);
+
+      ////////////////////////////////////////////////////
+      // AI GENERAL-RULE POLICY CHECK
+      // Runs any policy stored as "general_rule" (or any
+      // unrecognised type) through an LLM compliance check.
+      ////////////////////////////////////////////////////
+
+      const MECHANICAL_TYPES = new Set(["receipt_required", "category_limit", "submission_window", "approval_required"]);
+
+      const generalPolicies = [];
+      policiesSnap.forEach(doc => {
+        const p = doc.data();
+        if (!MECHANICAL_TYPES.has(p.type)) {
+          generalPolicies.push(p.displayText || p.originalText);
+        }
+      });
+
+      if (generalPolicies.length > 0) {
+        try {
+          const aiClient = getOpenAIClient();
+
+          const compliancePrompt = `You are a strict expense policy compliance checker for a company.
+
+Expense claim submitted:
+- Merchant: ${cleanMerchant}
+- Amount: £${numericAmount}
+- Category: ${category}
+- Purchase date: ${purchaseDate}
+
+Company policies to check against:
+${generalPolicies.map((p, i) => `${i + 1}. ${p}`).join("\n")}
+
+Does this expense claim violate ANY of the above policies?
+
+Reply with JSON only — no explanation outside the JSON:
+{"violated": true or false, "reason": "Which policy was violated and why (one sentence), or null if none violated"}`;
+
+          const completion = await aiClient.chat.completions.create({
+            model:       process.env.AZURE_OPENAI_DEPLOYMENT,
+            messages: [
+              { role: "system", content: "You enforce company expense policies. Be precise and strict." },
+              { role: "user",   content: compliancePrompt },
+            ],
+            temperature: 0,
+            max_tokens:  120,
+          });
+
+          const raw = completion?.choices?.[0]?.message?.content ?? "";
+
+          const cleaned = raw
+            .replace(/^```(?:json)?\s*/i, "")
+            .replace(/\s*```\s*$/, "")
+            .trim();
+
+          let aiResult;
+          try { aiResult = JSON.parse(cleaned); } catch { /* fail open */ }
+
+          if (aiResult?.violated === true) {
+            return secureResponse(
+              { valid: false, reason: aiResult.reason || "This expense violates a company policy." },
+              400
+            );
+          }
+
+        } catch (aiErr) {
+          context.log("AI policy check error (non-fatal):", aiErr);
+          // Fail open — do not block the claim if the AI check itself errors
+        }
+      }
 
       ////////////////////////////////////////////////////
       // SAVE CLAIM
