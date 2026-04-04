@@ -2,7 +2,7 @@
   "expo": {
     "name": "Claimio",
     "slug": "claimio",
-    "version": "2.7.0",
+    "version": "2.7.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "claimio",
@@ -29,7 +29,7 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.saif1004.claimio",
-      "versionCode": 10
+      "versionCode": 11
     },
     "web": {
       "output": "static",
