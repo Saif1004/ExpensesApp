@@ -134,30 +134,38 @@ app.http('stripeCheckOnboarding', {
       }
 
       const account = await stripe.accounts.retrieve(stripeAccountId);
-      const complete = account.details_submitted && account.charges_enabled && account.payouts_enabled;
 
-      if (complete) {
-        const updateData = { stripeOnboardingComplete: true };
+      const detailsSubmitted = account.details_submitted === true;
+      const payoutsEnabled   = account.payouts_enabled   === true;
+      const complete         = detailsSubmitted && payoutsEnabled;
 
-        try {
-          const externalAccounts = await stripe.accounts.listExternalAccounts(
-            stripeAccountId,
-            { limit: 1 }
-          );
-          const ext = externalAccounts.data[0];
-          if (ext) {
-            updateData.stripePayoutLast4 = ext.last4;
-            updateData.stripePayoutBrand = ext.object === 'card'
-              ? (ext.brand || 'Card')
-              : (ext.bank_name || 'Bank Account');
-            updateData.stripePayoutType = ext.object;
-          }
-        } catch (_) {}
+      context.log(`stripeCheckOnboarding uid=${uid} details_submitted=${detailsSubmitted} charges_enabled=${account.charges_enabled} payouts_enabled=${payoutsEnabled}`);
 
-        await admin.firestore().collection('users').doc(uid).update(updateData);
-      }
+      // Build update — always save progress so the client can show the right state
+      const updateData = {
+        stripeDetailsSubmitted:   detailsSubmitted,
+        stripeOnboardingComplete: complete,
+      };
 
-      return secureResponse({ complete }, 200);
+      // Fetch external account details whenever they exist
+      try {
+        const externalAccounts = await stripe.accounts.listExternalAccounts(
+          stripeAccountId,
+          { limit: 1 }
+        );
+        const ext = externalAccounts.data[0];
+        if (ext) {
+          updateData.stripePayoutLast4 = ext.last4;
+          updateData.stripePayoutBrand = ext.object === 'card'
+            ? (ext.brand || 'Card')
+            : (ext.bank_name || 'Bank Account');
+          updateData.stripePayoutType = ext.object;
+        }
+      } catch (_) {}
+
+      await admin.firestore().collection('users').doc(uid).update(updateData);
+
+      return secureResponse({ complete, detailsSubmitted, payoutsEnabled }, 200);
 
     } catch (err) {
       context.error('stripeCheckOnboarding error:', err);
