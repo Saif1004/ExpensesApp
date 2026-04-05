@@ -75,7 +75,11 @@ export default function SocialOnboarding() {
   const { tokens: t } = useTheme();
 
   const [mode, setMode]             = useState<Mode>("choose");
-  const [username, setUsername]     = useState("");
+  const [username, setUsername]     = useState(() => {
+    // Pre-fill from Google/Apple display name: "John Doe" → "johndoe"
+    const name = user?.displayName ?? "";
+    return name.toLowerCase().replace(/\s+/g, "").replace(/[^a-z0-9_]/g, "");
+  });
   const [organisation, setOrg]      = useState("");
   const [inviteCode, setInviteCode] = useState("");
   const [loading, setLoading]       = useState(false);
@@ -87,7 +91,6 @@ export default function SocialOnboarding() {
   }
 
   const goTo = (m: Mode) => {
-    setUsername("");
     setOrg("");
     setInviteCode("");
     setMode(m);

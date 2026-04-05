@@ -147,6 +147,7 @@ export default function SignUp() {
     try {
       setLoading(true);
       await GoogleSignin.hasPlayServices();
+      await GoogleSignin.signOut(); // clear cached session so the account picker always shows
       const response = await GoogleSignin.signIn();
       const idToken  = (response as any).data?.idToken ?? (response as any).idToken;
       if (!idToken) throw new Error("No ID token");

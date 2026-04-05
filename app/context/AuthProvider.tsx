@@ -349,26 +349,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!authLoaded || (user && role === null)) return;
 
-    const inTabs = segments[0] === "(tabs)";
-    const inAuth = segments[0] === "sign-in" || segments[0] === "sign-up";
+    const inTabs       = segments[0] === "(tabs)";
+    const inAuth       = segments[0] === "sign-in" || segments[0] === "sign-up";
+    const inOnboarding = segments[0] === "social-onboarding";
 
     if (!user) {
-      if (inTabs) router.replace("/sign-in");
+      if (inTabs || inOnboarding) router.replace("/sign-in");
       return;
     }
 
     // Extra guard: if somehow an unverified user's session survived, block them
     if (!user.emailVerified) {
-      if (inTabs) router.replace("/sign-in");
+      if (inTabs || inOnboarding) router.replace("/sign-in");
       return;
     }
 
     if (status === "pending") {
-      if (inTabs) router.replace("/sign-in");
+      if (inTabs || inOnboarding) router.replace("/sign-in");
       return;
     }
 
-    if (user && inAuth) {
+    // Authenticated but no org yet (new social user) — send to onboarding
+    if (status === "none") {
+      if (inTabs || inAuth) router.replace("/social-onboarding");
+      return; // stay on onboarding if already there
+    }
+
+    // Approved user on auth or onboarding screen → send to app
+    if (inAuth || inOnboarding) {
       router.replace("/(tabs)/home");
     }
   }, [user, status, authLoaded, role, segments]);

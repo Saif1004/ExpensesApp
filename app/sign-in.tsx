@@ -39,15 +39,6 @@ import GoogleLogo from "../components/GoogleLogo";
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MS   = 15 * 60 * 1000; // 15 minutes
 
-//////////////////////////////////////////////////////
-// GOOGLE SIGN-IN CONFIG (once at module level)
-//////////////////////////////////////////////////////
-
-GoogleSignin.configure({
-  webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID!,
-  iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-});
-
 export default function SignIn() {
   const router = useRouter();
   const { tokens: t } = useTheme();
@@ -122,6 +113,7 @@ export default function SignIn() {
     try {
       setLoading(true);
       await GoogleSignin.hasPlayServices();
+      await GoogleSignin.signOut(); // clear cached session so the account picker always shows
       const response = await GoogleSignin.signIn();
       const idToken  = (response as any).data?.idToken ?? (response as any).idToken;
       if (!idToken) throw new Error("No ID token returned");
