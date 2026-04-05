@@ -14,7 +14,8 @@
 
 const { app } = require("@azure/functions");
 const admin   = require("firebase-admin");
-const { requireAuth, secureResponse } = require("./security");
+const { secureResponse } = require("./security");
+const { authAndLimit, WINDOW_15_MIN } = require("./rateLimit");
 
 ////////////////////////////////////////////////////
 // FIREBASE INIT (shared across functions)
@@ -47,22 +48,28 @@ app.http("startTrial", {
     try {
 
       ////////////////////////////////////////////////////
-      // AUTH
+      // AUTH + RATE LIMIT (3 per 15 minutes)
       ////////////////////////////////////////////////////
 
-      const { uid, authError } = await requireAuth(request);
-      if (authError) return authError;
+      const auth = await authAndLimit(request, "rateLimitStartTrial", 3, WINDOW_15_MIN);
+      if (auth.error) return auth.error;
+      const uid = auth.uid;
 
       ////////////////////////////////////////////////////
-      // PARSE BODY
+      // DERIVE orgId FROM MEMBERSHIP — never trust client
       ////////////////////////////////////////////////////
 
-      const body  = await request.json();
-      const orgId = (body.orgId ?? "").trim();
+      const membershipSnap = await db.collection("memberships")
+        .where("userId", "==", uid)
+        .where("status", "==", "approved")
+        .limit(1)
+        .get();
 
-      if (!orgId) {
-        return secureResponse({ error: "Missing orgId" }, 400);
+      if (membershipSnap.empty) {
+        return secureResponse({ error: "Forbidden: no approved membership found" }, 403);
       }
+
+      const orgId = membershipSnap.docs[0].data().orgId;
 
       ////////////////////////////////////////////////////
       // VERIFY OWNERSHIP + ELIGIBILITY

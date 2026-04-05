@@ -18,7 +18,8 @@
 
 const { app } = require("@azure/functions");
 const admin   = require("firebase-admin");
-const { requireAuth, secureResponse } = require("./security");
+const { secureResponse } = require("./security");
+const { authAndLimit, WINDOW_15_MIN } = require("./rateLimit");
 const PLAN_LIMITS = require("./planLimits");
 
 ////////////////////////////////////////////////////
@@ -60,8 +61,9 @@ app.http("syncPlan", {
       // AUTH
       ////////////////////////////////////////////////////
 
-      const { uid, authError } = await requireAuth(request);
-      if (authError) return authError;
+      const auth = await authAndLimit(request, "rateLimitSyncPlan", 5, WINDOW_15_MIN);
+      if (auth.error) return auth.error;
+      const uid = auth.uid;
 
       ////////////////////////////////////////////////////
       // DERIVE orgId FROM MEMBERSHIP — never trust client
