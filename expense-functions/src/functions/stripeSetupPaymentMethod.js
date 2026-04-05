@@ -1,8 +1,8 @@
 const { app } = require('@azure/functions');
 const admin = require('firebase-admin');
 const Stripe = require('stripe');
-const { checkRateLimit, WINDOW_15_MIN } = require('./rateLimit');
-const { requireAuth, secureResponse } = require('./security');
+const { authAndLimit, WINDOW_15_MIN } = require('./rateLimit');
+const { secureResponse } = require('./security');
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -20,15 +20,9 @@ app.http('stripeSetupPaymentMethod', {
 
     try {
 
-      // OAUTH 2.0 Bearer verification
-      const { uid, authError } = await requireAuth(request);
-      if (authError) return authError;
-
-      // 5 per 15 minutes — payment setup is auth-sensitive
-      const { allowed } = await checkRateLimit(uid, 'rateLimitSetupPayment', 5, WINDOW_15_MIN);
-      if (!allowed) {
-        return secureResponse({ error: 'Too many requests. Max 5 per 15 minutes.' }, 429);
-      }
+      const auth = await authAndLimit(request, 'rateLimitSetupPayment', 5, WINDOW_15_MIN);
+      if (auth.error) return auth.error;
+      const uid = auth.uid;
 
       const userDoc = await admin.firestore().collection('users').doc(uid).get();
       const userData = userDoc.data();
@@ -75,8 +69,9 @@ app.http('stripeSavePaymentMethod', {
 
     try {
 
-      const { uid, authError } = await requireAuth(request);
-      if (authError) return authError;
+      const auth = await authAndLimit(request, 'rateLimitSavePayment', 5, WINDOW_15_MIN);
+      if (auth.error) return auth.error;
+      const uid = auth.uid;
 
       const { paymentMethodId } = await request.json();
 
@@ -127,8 +122,9 @@ app.http('stripeCheckOnboarding', {
 
     try {
 
-      const { uid, authError } = await requireAuth(request);
-      if (authError) return authError;
+      const auth = await authAndLimit(request, 'rateLimitCheckOnboarding', 10, WINDOW_15_MIN);
+      if (auth.error) return auth.error;
+      const uid = auth.uid;
 
       const userDoc = await admin.firestore().collection('users').doc(uid).get();
       const { stripeAccountId } = userDoc.data();

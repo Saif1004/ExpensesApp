@@ -1,8 +1,8 @@
 const { app } = require('@azure/functions');
 const admin = require('firebase-admin');
 const Stripe = require('stripe');
-const { checkRateLimit } = require('./rateLimit');
-const { requireAuth, secureResponse } = require('./security');
+const { authAndLimit } = require('./rateLimit');
+const { secureResponse } = require('./security');
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -23,19 +23,9 @@ app.http('stripeProcessReimbursement', {
       // OAUTH 2.0 — Bearer token verification
       ////////////////////////////////////////////////////
 
-      const { uid, authError } = await requireAuth(request);
-      if (authError) return authError;
-
-      const adminUid = uid;
-
-      ////////////////////////////////////////////////////
-      // RATE LIMIT (10 reimbursements per minute)
-      ////////////////////////////////////////////////////
-
-      const { allowed } = await checkRateLimit(adminUid, 'rateLimitReimburse', 10);
-      if (!allowed) {
-        return secureResponse({ error: 'Rate limit exceeded. Please slow down.' }, 429);
-      }
+      const auth = await authAndLimit(request, 'rateLimitReimburse', 10);
+      if (auth.error) return auth.error;
+      const adminUid = auth.uid;
 
       const body = await request.json();
       const { claimId } = body;

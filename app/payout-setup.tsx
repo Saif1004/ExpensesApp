@@ -1,12 +1,12 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, Alert,
-  ActivityIndicator, SafeAreaView, ScrollView, Linking,
+  ActivityIndicator, SafeAreaView, ScrollView, Linking, AppState,
 } from "react-native";
 import { auth, db } from "./firebase/firebaseConfig";
 import { doc, onSnapshot } from "firebase/firestore";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { useTheme } from "../hooks/useTheme";
 
 const CREATE_URL = process.env.EXPO_PUBLIC_STRIPE_CREATE_ACCOUNT_URL!;
@@ -20,7 +20,9 @@ export default function PayoutSetupScreen() {
   const [checking, setChecking] = useState(false);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [payoutAccount, setPayoutAccount] = useState<{ last4: string; brand: string; type: string } | null>(null);
+  const [awaitingReturn, setAwaitingReturn] = useState(false);
   const user = auth.currentUser;
+  const appState = useRef(AppState.currentState);
 
   useEffect(() => {
     if (!user) return;
@@ -38,12 +40,20 @@ export default function PayoutSetupScreen() {
     return unsub;
   }, [user]);
 
-  // Check onboarding status every time screen gains focus (after returning from Stripe)
-  useFocusEffect(
-    React.useCallback(() => {
-      checkOnboardingStatus();
-    }, [])
-  );
+  // Check when app returns to foreground — Linking.openURL doesn't blur the screen
+  // so useFocusEffect won't fire after the user returns from Stripe's browser.
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      if (appState.current.match(/inactive|background/) && nextState === "active") {
+        // App just came back to foreground (user closed the browser)
+        checkOnboardingStatus();
+        setAwaitingReturn(false);
+      }
+      appState.current = nextState;
+    });
+    return () => subscription.remove();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   const checkOnboardingStatus = async () => {
     if (!user) return;
@@ -84,6 +94,8 @@ export default function PayoutSetupScreen() {
 
       // Step 3: Open Stripe hosted onboarding in browser
       await Linking.openURL(linkData.url);
+      // Signal that we're waiting for the user to return from Stripe
+      setAwaitingReturn(true);
     } catch (err: any) {
       Alert.alert("Error", err.message);
     } finally {
@@ -220,6 +232,17 @@ export default function PayoutSetupScreen() {
                 </>
               )}
             </TouchableOpacity>
+
+            {awaitingReturn && !checking && (
+              <TouchableOpacity
+                style={[styles.button, { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, marginBottom: 12 }]}
+                onPress={checkOnboardingStatus}
+                disabled={checking}
+              >
+                <Ionicons name="refresh" size={18} color={t.accent} style={{ marginRight: 8 }} />
+                <Text style={[styles.buttonText, { color: t.accent }]}>I've finished — check status</Text>
+              </TouchableOpacity>
+            )}
 
             {checking && (
               <View style={styles.checkingRow}>

@@ -1,8 +1,8 @@
 const { app } = require('@azure/functions');
 const admin = require('firebase-admin');
 const Stripe = require('stripe');
-const { checkRateLimit, WINDOW_15_MIN } = require('./rateLimit');
-const { requireAuth, secureResponse } = require('./security');
+const { authAndLimit, WINDOW_15_MIN } = require('./rateLimit');
+const { secureResponse } = require('./security');
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -19,17 +19,9 @@ app.http('stripeCreateConnectAccount', {
       // OAUTH 2.0 — Bearer token verification
       ////////////////////////////////////////////////////
 
-      const { uid, authError } = await requireAuth(request);
-      if (authError) return authError;
-
-      ////////////////////////////////////////////////////
-      // RATE LIMIT (5 per 15 minutes — auth-sensitive)
-      ////////////////////////////////////////////////////
-
-      const { allowed } = await checkRateLimit(uid, 'rateLimitCreateAccount', 5, WINDOW_15_MIN);
-      if (!allowed) {
-        return secureResponse({ error: 'Too many requests. Max 5 per 15 minutes.' }, 429);
-      }
+      const auth = await authAndLimit(request, 'rateLimitCreateAccount', 5, WINDOW_15_MIN);
+      if (auth.error) return auth.error;
+      const uid = auth.uid;
 
       ////////////////////////////////////////////////////
       // LOAD USER
