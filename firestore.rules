@@ -69,14 +69,19 @@ service cloud.firestore {
       allow create: if request.auth != null
                     && request.auth.uid == uid;
 
-      // Update own profile — cannot touch sensitive server-managed fields
+      // Update own profile — cannot touch sensitive server-managed fields.
+      // uid: may be written but must always equal own auth uid.
+      // email: write-once — once the field exists in the doc it cannot change.
+      // (T&C acceptance can create the doc before social-onboarding writes uid/email,
+      //  so we allow adding those fields as long as they match the auth token.)
       allow update: if verified()
                     && request.auth.uid == uid
+                    && request.resource.data.get('uid', request.auth.uid) == request.auth.uid
+                    && (!('email' in resource.data)
+                        || request.resource.data.get('email', resource.data.email) == resource.data.email)
                     && !request.resource.data.diff(resource.data)
                         .affectedKeys()
                         .hasAny([
-                          'uid',
-                          'email',
                           'plan',
                           'stripeCustomerId',
                           'stripePaymentMethodId',

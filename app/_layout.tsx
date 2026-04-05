@@ -42,7 +42,12 @@ function TermsGate({ children }: { children: React.ReactNode }) {
   const checkedUidRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!authLoaded || !user) {
+    // Don't show T&C for unverified email users — they're mid sign-up.
+    // If we show it now and they accept, setDoc creates users/{uid} before
+    // the sign-up batch write does, which turns the batch's CREATE into an
+    // UPDATE that requires verified() → permission denied. T&C will show
+    // on their first proper sign-in after email verification.
+    if (!authLoaded || !user || !user.emailVerified) {
       setVisible(false);
       return;
     }
