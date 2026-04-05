@@ -143,7 +143,6 @@ export default function SocialOnboarding() {
         username:    normalizedUsername,
         displayName: trimmedUsername,
         createdAt:   serverTimestamp(),
-        plan:        "free",
       }, { merge: true });
       batch.set(usernameRef, { uid, email });
       batch.set(orgRef, {
@@ -230,7 +229,6 @@ export default function SocialOnboarding() {
         username:    normalizedUsername,
         displayName: trimmedUsername,
         createdAt:   serverTimestamp(),
-        plan:        "free",
       }, { merge: true });
       batch.set(usernameRef, { uid, email });
       batch.set(membershipRef, {
