@@ -243,12 +243,10 @@ export default function SocialOnboarding() {
 
       await batch.commit();
 
-      // Sign out — must wait for admin approval
-      await signOut(auth);
       Alert.alert(
         "Request sent",
         "Your request has been sent to the admin for approval. You'll be able to sign in once approved.",
-        [{ text: "OK", onPress: () => router.replace("/sign-in") }]
+        [{ text: "OK", onPress: () => signOut(auth) }]
       );
 
     } catch {
@@ -459,7 +457,7 @@ export default function SocialOnboarding() {
 
           <TouchableOpacity
             style={styles.cancelLink}
-            onPress={async () => { await signOut(auth); router.replace("/sign-in"); }}
+            onPress={() => signOut(auth)}
           >
             <Text style={styles.cancelText}>Cancel and sign out</Text>
           </TouchableOpacity>

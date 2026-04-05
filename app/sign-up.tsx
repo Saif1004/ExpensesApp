@@ -133,14 +133,12 @@ export default function SignUp() {
 
   const handleSocialAuth = async (uid: string) => {
     const membership = await checkMembership(uid);
-    if (membership?.status === "approved") {
-      router.replace("/(tabs)/home");
-    } else if (membership?.status === "pending") {
+    if (membership?.status === "pending") {
       await signOut(auth);
       Alert.alert("Awaiting Approval", "Your admin hasn't approved your account yet.");
-    } else {
-      router.replace("/social-onboarding");
     }
+    // All other routing (new user → social-onboarding, approved → home)
+    // is handled by AuthProvider once membership loads.
   };
 
   const handleGoogleSignIn = async () => {

@@ -90,19 +90,15 @@ export default function SignIn() {
   const handleSocialAuth = async (uid: string) => {
     const membership = await checkMembership(uid);
 
-    if (membership?.status === "approved") {
-      failedAttemptsRef.current = 0;
-      router.replace("/(tabs)/home");
-    } else if (membership?.status === "pending") {
+    if (membership?.status === "pending") {
       await signOut(auth);
       Alert.alert(
         "Awaiting Approval",
         "Your admin hasn't approved your account yet. Please check back later."
       );
-    } else {
-      // New social user — needs to set up username + org
-      router.replace("/social-onboarding");
     }
+    // All other routing (new user → social-onboarding, approved → home)
+    // is handled by AuthProvider once membership loads.
   };
 
   //////////////////////////////////////////////////////

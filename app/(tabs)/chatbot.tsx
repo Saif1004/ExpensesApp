@@ -251,19 +251,24 @@ export default function ChatbotScreen() {
       textAlign: "center",
       fontSize: 11,
       color: t.textTertiary,
-      paddingHorizontal: 16,
+      paddingHorizontal: 4,
       paddingTop: 6,
-      paddingBottom: 2,
+      paddingBottom: 4,
     },
 
     inputWrapper: {
-      flexDirection: "row",
-      gap: 10,
+      flexDirection: "column",
       paddingHorizontal: 12,
-      paddingVertical: 10,
+      paddingTop: 6,
+      paddingBottom: 10,
       backgroundColor: t.bg,
       borderTopWidth: 1,
       borderTopColor: t.surface,
+    },
+
+    inputRow: {
+      flexDirection: "row",
+      gap: 10,
     },
 
     input: {
@@ -391,35 +396,36 @@ export default function ChatbotScreen() {
             }
           />
 
-          {/* DISCLAIMER */}
-          <ThemedText style={styles.disclaimer}>
-            AI responses are for guidance only and do not constitute professional tax, accounting, or legal advice. Rules vary by country — always verify with a qualified adviser.
-          </ThemedText>
-
-          {/* INPUT */}
+          {/* INPUT + DISCLAIMER */}
           <View style={styles.inputWrapper}>
 
-            <TextInput
-              value={input}
-              onChangeText={setInput}
-              placeholder="Ask something..."
-              placeholderTextColor={t.textTertiary}
-              style={styles.input}
-              multiline
-            />
+            <ThemedText style={styles.disclaimer}>
+              AI responses are for guidance only and do not constitute professional tax, accounting, or legal advice. Rules vary by country — always verify with a qualified adviser.
+            </ThemedText>
 
-            <TouchableOpacity
-              style={[
-                styles.sendButton,
-                sending && { opacity: 0.5 }
-              ]}
-              onPress={() => sendMessage()}
-              disabled={sending}
-            >
-              <ThemedText style={styles.sendText}>
-                Send
-              </ThemedText>
-            </TouchableOpacity>
+            <View style={styles.inputRow}>
+              <TextInput
+                value={input}
+                onChangeText={setInput}
+                placeholder="Ask something..."
+                placeholderTextColor={t.textTertiary}
+                style={styles.input}
+                multiline
+              />
+
+              <TouchableOpacity
+                style={[
+                  styles.sendButton,
+                  sending && { opacity: 0.5 }
+                ]}
+                onPress={() => sendMessage()}
+                disabled={sending}
+              >
+                <ThemedText style={styles.sendText}>
+                  Send
+                </ThemedText>
+              </TouchableOpacity>
+            </View>
 
           </View>
 
