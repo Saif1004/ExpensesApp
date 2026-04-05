@@ -64,15 +64,20 @@ app.http("syncPlan", {
       if (authError) return authError;
 
       ////////////////////////////////////////////////////
-      // PARSE BODY
+      // DERIVE orgId FROM MEMBERSHIP — never trust client
       ////////////////////////////////////////////////////
 
-      const body  = await request.json();
-      const orgId = (body.orgId ?? "").trim();
+      const membershipSnap = await db.collection("memberships")
+        .where("userId", "==", uid)
+        .where("status", "==", "approved")
+        .limit(1)
+        .get();
 
-      if (!orgId) {
-        return secureResponse({ error: "Missing orgId" }, 400);
+      if (membershipSnap.empty) {
+        return secureResponse({ error: "Forbidden: no approved membership found" }, 403);
       }
+
+      const orgId = membershipSnap.docs[0].data().orgId;
 
       ////////////////////////////////////////////////////
       // VERIFY OWNERSHIP

@@ -67,8 +67,7 @@ app.http("parsePolicy", {
 // READ REQUEST
 ////////////////////////////////////////////////////
 
-      const body = await request.json();
-      const orgId = sanitize(body.orgId ?? "");
+      const body   = await request.json();
       const userId = auth.uid; // use verified uid, not body
 
       // Validate text input
@@ -78,9 +77,22 @@ app.http("parsePolicy", {
       }
       const text = sanitize(textResult.value);
 
-      if (!orgId) {
-        return secureResponse({ success: false, error: "Missing required fields" }, 400);
+////////////////////////////////////////////////////
+// DERIVE orgId FROM MEMBERSHIP — never trust client
+////////////////////////////////////////////////////
+
+      const membershipSnap = await db.collection("memberships")
+        .where("userId", "==", userId)
+        .where("status", "==", "approved")
+        .where("role", "==", "admin")
+        .limit(1)
+        .get();
+
+      if (membershipSnap.empty) {
+        return secureResponse({ success: false, error: "Forbidden: admin access required" }, 403);
       }
+
+      const orgId = membershipSnap.docs[0].data().orgId;
 
 ////////////////////////////////////////////////////
 // USER COOLDOWN (ANTI-SPAM)
