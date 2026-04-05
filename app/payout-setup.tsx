@@ -1,8 +1,9 @@
-import React, { useMemo, useState, useEffect, useRef } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, Alert,
-  ActivityIndicator, SafeAreaView, ScrollView, Linking, AppState,
+  ActivityIndicator, SafeAreaView, ScrollView, RefreshControl,
 } from "react-native";
+import * as WebBrowser from "expo-web-browser";
 import { auth, db } from "./firebase/firebaseConfig";
 import { doc, onSnapshot } from "firebase/firestore";
 import { Ionicons } from "@expo/vector-icons";
@@ -17,13 +18,12 @@ export default function PayoutSetupScreen() {
   const router = useRouter();
   const { tokens: t } = useTheme();
   const [loading, setLoading] = useState(false);
-  const [checking, setChecking] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   const [payoutAccount, setPayoutAccount] = useState<{ last4: string; brand: string; type: string } | null>(null);
-  const [awaitingReturn, setAwaitingReturn] = useState(false);
   const user = auth.currentUser;
-  const appState = useRef(AppState.currentState);
 
+  // Real-time listener — updates UI as soon as Firestore is written
   useEffect(() => {
     if (!user) return;
     const unsub = onSnapshot(doc(db, "users", user.uid), (snap) => {
@@ -35,39 +35,28 @@ export default function PayoutSetupScreen() {
           brand: data.stripePayoutBrand,
           type: data.stripePayoutType || "bank_account",
         });
+      } else {
+        setPayoutAccount(null);
       }
     });
     return unsub;
   }, [user]);
 
-  // Check when app returns to foreground — Linking.openURL doesn't blur the screen
-  // so useFocusEffect won't fire after the user returns from Stripe's browser.
-  useEffect(() => {
-    const subscription = AppState.addEventListener("change", (nextState) => {
-      if (appState.current.match(/inactive|background/) && nextState === "active") {
-        // App just came back to foreground (user closed the browser)
-        checkOnboardingStatus();
-        setAwaitingReturn(false);
-      }
-      appState.current = nextState;
-    });
-    return () => subscription.remove();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
-
   const checkOnboardingStatus = async () => {
     if (!user) return;
-    setChecking(true);
     try {
       const token = await user.getIdToken();
       await fetch(CHECK_URL, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       });
-    } catch (_) {
-    } finally {
-      setChecking(false);
-    }
+    } catch (_) {}
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await checkOnboardingStatus();
+    setRefreshing(false);
   };
 
   const handleSetupPayout = async () => {
@@ -92,10 +81,17 @@ export default function PayoutSetupScreen() {
       const linkData = await linkRes.json();
       if (linkData.error) throw new Error(linkData.error);
 
-      // Step 3: Open Stripe hosted onboarding in browser
-      await Linking.openURL(linkData.url);
-      // Signal that we're waiting for the user to return from Stripe
-      setAwaitingReturn(true);
+      // Step 3: Open Stripe onboarding — openBrowserAsync resolves when the user
+      // closes the browser on both iOS and Android (unlike Linking.openURL which
+      // doesn't resolve reliably on Android Chrome Custom Tabs).
+      await WebBrowser.openBrowserAsync(linkData.url, {
+        dismissButtonStyle: "close",
+        presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+      });
+
+      // Step 4: Browser closed — check if onboarding completed
+      await checkOnboardingStatus();
+
     } catch (err: any) {
       Alert.alert("Error", err.message);
     } finally {
@@ -144,8 +140,6 @@ export default function PayoutSetupScreen() {
     accountText: { fontSize: 16, color: t.text, fontWeight: "600" },
     updateButton: { marginTop: 16, paddingVertical: 8, paddingHorizontal: 20 },
     updateButtonText: { color: t.accent, fontSize: 13, fontWeight: "600" },
-    checkingRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
-    checkingText: { color: t.textSecondary, fontSize: 13 },
     infoBox: {
       flexDirection: "row", alignItems: "flex-start", gap: 8,
       backgroundColor: t.surface, borderRadius: 10, padding: 14,
@@ -158,7 +152,17 @@ export default function PayoutSetupScreen() {
       <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
         <Ionicons name="arrow-back" size={24} color={t.text} />
       </TouchableOpacity>
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={t.accent}
+            colors={[t.accent]}
+          />
+        }
+      >
         <Text style={styles.title}>Payout Account</Text>
         <Text style={styles.subtitle}>
           Set up your payout account so you can receive reimbursements directly when your expense claims are approved.
@@ -232,24 +236,6 @@ export default function PayoutSetupScreen() {
                 </>
               )}
             </TouchableOpacity>
-
-            {awaitingReturn && !checking && (
-              <TouchableOpacity
-                style={[styles.button, { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border, marginBottom: 12 }]}
-                onPress={checkOnboardingStatus}
-                disabled={checking}
-              >
-                <Ionicons name="refresh" size={18} color={t.accent} style={{ marginRight: 8 }} />
-                <Text style={[styles.buttonText, { color: t.accent }]}>I've finished — check status</Text>
-              </TouchableOpacity>
-            )}
-
-            {checking && (
-              <View style={styles.checkingRow}>
-                <ActivityIndicator size="small" color={t.textSecondary} />
-                <Text style={styles.checkingText}>Checking account status...</Text>
-              </View>
-            )}
           </>
         )}
 
