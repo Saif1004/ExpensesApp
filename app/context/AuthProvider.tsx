@@ -279,7 +279,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         setUser(firebaseUser);
         currentUidRef.current = firebaseUser.uid;
-        await loadMembership(firebaseUser.uid);
+
+        if (firebaseUser.emailVerified) {
+          // Only verified users have memberships — avoids a permission error
+          // on the memberships query for unverified email sign-up users.
+          await loadMembership(firebaseUser.uid);
+        } else {
+          // Unverified user mid sign-up — no membership to load yet
+          setRole("employee");
+          setStatus("none");
+        }
       } else {
         unsubscribeAll();
         setUser(null);
