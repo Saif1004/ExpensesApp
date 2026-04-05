@@ -97,7 +97,7 @@ app.http("uploadReceipt", {
       const sharedKeyCredential = new StorageSharedKeyCredential(accountName, accountKey);
 
       const expiresOn = new Date();
-      expiresOn.setFullYear(expiresOn.getFullYear() + 10);
+      expiresOn.setFullYear(expiresOn.getFullYear() + 1);
 
       const sasToken = generateBlobSASQueryParameters(
         {

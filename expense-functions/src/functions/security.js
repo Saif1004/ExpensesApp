@@ -22,6 +22,12 @@ const SECURITY_HEADERS = {
   "Cache-Control": "no-store, no-cache, must-revalidate",
   "Pragma": "no-cache",
   "Referrer-Policy": "no-referrer",
+  // CORS — only allow requests from the Claimio web domain.
+  // Mobile app requests don't send an Origin header so are unaffected.
+  "Access-Control-Allow-Origin": "https://claimio.org",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Max-Age": "86400",
 };
 
 /**

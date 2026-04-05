@@ -10,6 +10,7 @@ const {
   validateString,
   sanitize,
 } = require("./security");
+const { checkAiKillSwitch } = require("./aiConfig");
 
 //////////////////////////////////////////////////////
 // OPENAI CLIENT
@@ -206,6 +207,12 @@ app.http("validateClaim", {
       });
 
       if (generalPolicies.length > 0) {
+        // Check kill switch before making AI call
+        const aiBlocked = await checkAiKillSwitch("validateClaim");
+        if (aiBlocked) {
+          // Kill switch active — skip AI check, fail open
+          context.log("AI kill switch active for validateClaim — skipping policy AI check");
+        } else
         try {
           const aiClient = getOpenAIClient();
 

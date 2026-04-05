@@ -3,6 +3,61 @@ const admin = require("firebase-admin");
 const WINDOW_1_MIN    = 60 * 1000;
 const WINDOW_15_MIN   = 15 * 60 * 1000;
 
+////////////////////////////////////////////////////
+// IP RATE LIMITING (in-memory sliding window)
+// Defends against unauthenticated flood attacks and
+// credential-stuffing before the token is verified.
+// Limits: 60 req/min per IP globally (across all endpoints).
+////////////////////////////////////////////////////
+
+const IP_MAX_PER_MIN = 60;
+const ipStore = new Map(); // ip -> { count, windowStart }
+
+/**
+ * Extract the real client IP from Azure Functions request headers.
+ * Azure sets x-forwarded-for or client-ip (with optional port).
+ */
+function getClientIp(request) {
+  const xff = request.headers.get("x-forwarded-for");
+  if (xff) return xff.split(",")[0].trim();
+  const clientIp = request.headers.get("client-ip") || "";
+  return clientIp.split(":")[0].trim() || "unknown";
+}
+
+/**
+ * In-memory sliding-window rate limit per IP.
+ * Returns { allowed: boolean }.
+ * Periodically self-cleans stale entries (1% chance per call).
+ */
+function checkIpRateLimit(request, maxRequests = IP_MAX_PER_MIN, windowMs = WINDOW_1_MIN) {
+  const ip = getClientIp(request);
+  if (!ip || ip === "unknown") return { allowed: true }; // can't block unknown IPs
+
+  const now    = Date.now();
+  const entry  = ipStore.get(ip) || { count: 0, windowStart: now };
+  const expired = now - entry.windowStart > windowMs;
+  const newCount = expired ? 1 : entry.count + 1;
+
+  ipStore.set(ip, {
+    count:       newCount,
+    windowStart: expired ? now : entry.windowStart,
+  });
+
+  // Probabilistic cleanup — remove entries older than 2× the window
+  if (Math.random() < 0.01) {
+    const cutoff = now - windowMs * 2;
+    for (const [k, v] of ipStore.entries()) {
+      if (v.windowStart < cutoff) ipStore.delete(k);
+    }
+  }
+
+  return { allowed: newCount <= maxRequests };
+}
+
+////////////////////////////////////////////////////
+// TOKEN VERIFICATION
+////////////////////////////////////////////////////
+
 /**
  * Verify Firebase ID token and return decoded payload.
  * Returns null if missing or invalid.
@@ -17,6 +72,12 @@ async function verifyToken(request) {
     return null;
   }
 }
+
+////////////////////////////////////////////////////
+// PER-USER RATE LIMITING (Firestore sliding window)
+// Persists across function instances — prevents a
+// single account from abusing the API at scale.
+////////////////////////////////////////////////////
 
 /**
  * Check and update per-user sliding-window rate limit stored in Firestore.
@@ -49,16 +110,34 @@ async function checkRateLimit(userId, field, maxRequests, windowMs = WINDOW_1_MI
   return { allowed: newCount <= maxRequests };
 }
 
+////////////////////////////////////////////////////
+// COMBINED AUTH + IP + USER RATE LIMIT
+////////////////////////////////////////////////////
+
 /**
- * Verify token + rate limit in one call.
+ * Verify token + IP rate limit + per-user rate limit in one call.
+ * IP check runs first (before token verification) to block floods early.
  * Returns { uid } on success, or { error: Response } on failure.
  *
  * @param {Request} request
  * @param {string}  field        - Firestore field key
- * @param {number}  maxRequests  - Max requests in the window
+ * @param {number}  maxRequests  - Max requests in the window (per user)
  * @param {number}  windowMs     - Window in ms (default 1 min)
  */
 async function authAndLimit(request, field, maxRequests, windowMs = WINDOW_1_MIN) {
+
+  // 1. IP rate limit — checked before token verification to stop floods cheaply
+  const ipCheck = checkIpRateLimit(request);
+  if (!ipCheck.allowed) {
+    return {
+      error: new Response(
+        JSON.stringify({ error: "Too many requests from your IP. Please slow down." }),
+        { status: 429, headers: { "Content-Type": "application/json", "Retry-After": "60" } }
+      ),
+    };
+  }
+
+  // 2. Token verification
   const decoded = await verifyToken(request);
   if (!decoded) {
     return {
@@ -69,13 +148,14 @@ async function authAndLimit(request, field, maxRequests, windowMs = WINDOW_1_MIN
     };
   }
 
+  // 3. Per-user rate limit (Firestore-backed, survives across instances)
   const { allowed } = await checkRateLimit(decoded.uid, field, maxRequests, windowMs);
   if (!allowed) {
     const windowLabel = windowMs === WINDOW_15_MIN ? "15 minutes" : "minute";
     return {
       error: new Response(
         JSON.stringify({ error: `Too many requests. Max ${maxRequests} per ${windowLabel}.` }),
-        { status: 429, headers: { "Content-Type": "application/json" } }
+        { status: 429, headers: { "Content-Type": "application/json", "Retry-After": windowMs === WINDOW_15_MIN ? "900" : "60" } }
       ),
     };
   }
@@ -83,4 +163,4 @@ async function authAndLimit(request, field, maxRequests, windowMs = WINDOW_1_MIN
   return { uid: decoded.uid };
 }
 
-module.exports = { verifyToken, checkRateLimit, authAndLimit, WINDOW_1_MIN, WINDOW_15_MIN };
+module.exports = { verifyToken, checkRateLimit, checkIpRateLimit, authAndLimit, WINDOW_1_MIN, WINDOW_15_MIN };
