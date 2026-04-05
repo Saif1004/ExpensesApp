@@ -50,6 +50,7 @@ app.http('stripeCreateConnectAccount', {
         email: userData.email,
         capabilities: { transfers: { requested: true } },
         business_type: 'individual',
+        business_profile: { url: 'https://claimio.org' },
         metadata: { uid },
       });
 
