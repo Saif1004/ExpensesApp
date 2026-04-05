@@ -169,8 +169,8 @@ export default function SocialOnboarding() {
       await refreshMembership();
       router.replace("/(tabs)/home");
 
-    } catch (err: any) {
-      Alert.alert("Setup failed", err?.message ?? "Unknown error");
+    } catch {
+      Alert.alert("Setup failed", "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
