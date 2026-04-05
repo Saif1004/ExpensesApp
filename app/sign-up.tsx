@@ -219,13 +219,9 @@ export default function SignUp() {
       return;
     }
 
+    // Username check is unauthenticated-safe (usernames are public read)
     if (await usernameExists(normalizedUsername)) {
       Alert.alert("Username taken", "Please choose a different username.");
-      return;
-    }
-
-    if (await orgNameExists(normalizedOrg)) {
-      Alert.alert("Organisation name taken", "An organisation with that name already exists. Please choose a different name.");
       return;
     }
 
@@ -235,6 +231,13 @@ export default function SignUp() {
     try {
       cred = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
       const uid  = cred.user.uid;
+
+      // Org name check must happen AFTER auth — organisations require request.auth != null
+      if (await orgNameExists(normalizedOrg)) {
+        await cred.user.delete();
+        Alert.alert("Organisation name taken", "An organisation with that name already exists. Please choose a different name.");
+        return;
+      }
 
       await updateProfile(cred.user, { displayName: trimmedUsername });
 
