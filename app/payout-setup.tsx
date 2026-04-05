@@ -71,14 +71,8 @@ export default function PayoutSetupScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    const result = await checkOnboardingStatus();
+    await checkOnboardingStatus();
     setRefreshing(false);
-    if (result && !result.complete && result.detailsSubmitted) {
-      Alert.alert(
-        "Almost there",
-        "Your details have been submitted but payouts aren't enabled yet. Stripe may need a moment to verify your account — try refreshing again shortly."
-      );
-    }
   };
 
   const handleSetupPayout = async () => {
@@ -105,9 +99,9 @@ export default function PayoutSetupScreen() {
 
       // Step 3: Open Stripe onboarding — promise resolves when user closes browser
       // (works reliably on both iOS and Android, unlike Linking.openURL)
+      // Note: presentationStyle is iOS-only — omitting it avoids Android issues
       await WebBrowser.openBrowserAsync(linkData.url, {
         dismissButtonStyle: "close",
-        presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
       });
 
       // Step 4: Browser closed — check status and update Firestore
@@ -116,14 +110,11 @@ export default function PayoutSetupScreen() {
       if (result && !result.complete && result.detailsSubmitted) {
         Alert.alert(
           "Almost there",
-          "Your details were submitted but payouts aren't enabled yet. Stripe may need a moment to verify your account — pull down to refresh this screen in a few seconds."
-        );
-      } else if (result && !result.detailsSubmitted) {
-        Alert.alert(
-          "Setup incomplete",
-          "It looks like the Stripe form wasn't fully completed. Tap 'Set Up Payout Account' to try again."
+          "Your details were submitted. Stripe is verifying your account — pull down to refresh in a few seconds."
         );
       }
+      // If detailsSubmitted is false the user just closed early — UI already shows
+      // the setup button so no extra alert needed
     } catch (err: any) {
       Alert.alert("Error", err.message);
     } finally {
