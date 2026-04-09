@@ -26,6 +26,9 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 
 import { ThemedText } from "../../components/themed-text";
 import { ThemedView } from "../../components/themed-view";
@@ -35,6 +38,7 @@ import { addListener } from "../../utils/listenerStore";
 import { useTheme } from "../../hooks/useTheme";
 
 const REIMBURSE_URL = process.env.EXPO_PUBLIC_STRIPE_REIMBURSE_URL!;
+const NOTIFY_URL    = process.env.EXPO_PUBLIC_NOTIFY_CLAIM_STATUS_URL!;
 
 type Claim = {
   id: string;
@@ -50,6 +54,8 @@ type Claim = {
   status?: string;
   approvedBy?: string;
   adminFeedback?: string;
+  purchaseDate?: string;
+  createdAt?: { toDate?: () => Date; seconds?: number };
 };
 
 type ConfirmModal = {
@@ -77,6 +83,7 @@ export default function AdminScreen() {
   });
 
   // Search & filter state
+  const [exportLoading, setExportLoading]           = useState(false);
   const [search, setSearch]                         = useState("");
   const [categoryFilter, setCategoryFilter]         = useState<string | null>(null);
   const [historyFilter, setHistoryFilter]           = useState<HistoryFilter>("all");
@@ -182,6 +189,107 @@ export default function AdminScreen() {
   }, [historyClaims, historyFilter, search]);
 
   //////////////////////////////////////////////////////
+  // EXPORT HELPERS
+  //////////////////////////////////////////////////////
+
+  function claimToRow(c: Claim) {
+    const fmtDate = (val?: string) => val ? new Date(val).toLocaleDateString("en-GB") : "—";
+    const fmtCreated = (c: Claim) => {
+      if (!c.createdAt) return "—";
+      const d = c.createdAt.toDate?.() ?? (c.createdAt.seconds ? new Date(c.createdAt.seconds * 1000) : null);
+      return d ? d.toLocaleDateString("en-GB") : "—";
+    };
+    return {
+      claimRef:      c.id.slice(0, 8).toUpperCase(),
+      employee:      c.userEmail ?? "—",
+      merchant:      c.merchant ?? "—",
+      amount:        Number(c.amount).toFixed(2),
+      category:      c.category ?? "—",
+      status:        c.status ?? "—",
+      paymentStatus: c.paymentStatus ?? "—",
+      approvedBy:    c.approvedBy ?? "—",
+      notes:         c.adminFeedback ?? c.description ?? "—",
+      purchaseDate:  fmtDate(c.purchaseDate),
+      submittedDate: fmtCreated(c),
+    };
+  }
+
+  async function handleExportCSV() {
+    if (exportLoading || filteredHistory.length === 0) return;
+    setExportLoading(true);
+    try {
+      const header = "Reference,Employee,Merchant,Amount (£),Category,Status,Payment Status,Approved By,Notes,Purchase Date,Submitted Date\n";
+      const rows = filteredHistory.map(c => {
+        const r = claimToRow(c);
+        return [r.claimRef, r.employee, r.merchant, r.amount, r.category, r.status, r.paymentStatus, r.approvedBy, r.notes, r.purchaseDate, r.submittedDate]
+          .map(v => `"${String(v).replace(/"/g, '""')}"`)
+          .join(",");
+      });
+      const uri = (FileSystem.documentDirectory ?? "") + "claimio_export.csv";
+      await FileSystem.writeAsStringAsync(uri, header + rows.join("\n"), { encoding: FileSystem.EncodingType.UTF8 });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: "text/csv", dialogTitle: "Export Claims CSV" });
+      } else {
+        Alert.alert("Saved", uri);
+      }
+    } catch (e: any) {
+      Alert.alert("Export Error", e?.message ?? "Failed to export.");
+    } finally {
+      setExportLoading(false);
+    }
+  }
+
+  async function handleExportPDF() {
+    if (exportLoading || filteredHistory.length === 0) return;
+    setExportLoading(true);
+    try {
+      const rows = filteredHistory.map(claimToRow);
+      const grandTotal = rows.reduce((s, r) => s + parseFloat(r.amount), 0).toFixed(2);
+      const tableRows = rows.map(r => `
+        <tr>
+          <td>${r.claimRef}</td><td>${r.employee}</td><td>${r.merchant}</td>
+          <td>£${r.amount}</td><td>${r.category}</td>
+          <td class="s-${r.status}">${r.status}</td><td>${r.paymentStatus}</td>
+          <td>${r.approvedBy}</td><td>${r.notes}</td>
+          <td>${r.purchaseDate}</td><td>${r.submittedDate}</td>
+        </tr>`).join("");
+      const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+<style>
+  body{font-family:-apple-system,Helvetica,Arial,sans-serif;margin:28px;color:#0D1B2A;font-size:10px}
+  h1{font-size:20px;margin-bottom:4px}
+  .meta{color:#6B7A8D;margin:0 0 20px;font-size:10px}
+  table{width:100%;border-collapse:collapse}
+  th{background:#6366F1;color:#fff;padding:6px 7px;text-align:left;font-size:9px}
+  td{padding:5px 7px;border-bottom:1px solid #E8ECF0;font-size:9px}
+  tr:nth-child(even) td{background:#F8F9FC}
+  .s-approved{color:#16a34a;font-weight:600}
+  .s-rejected{color:#dc2626;font-weight:600}
+  .total{text-align:right;margin-top:14px;font-weight:700;font-size:12px}
+  .footer{margin-top:28px;color:#A0ACBB;font-size:9px;border-top:1px solid #E8ECF0;padding-top:10px}
+</style></head><body>
+  <h1>Claimio — Expense Report</h1>
+  <p class="meta">Generated: ${new Date().toLocaleDateString("en-GB")} &nbsp;·&nbsp; ${rows.length} claim${rows.length !== 1 ? "s" : ""}</p>
+  <table><thead><tr>
+    <th>Ref</th><th>Employee</th><th>Merchant</th><th>Amount</th><th>Category</th>
+    <th>Status</th><th>Payment</th><th>Approved By</th><th>Notes</th><th>Purchase Date</th><th>Submitted</th>
+  </tr></thead><tbody>${tableRows}</tbody></table>
+  <p class="total">Total: £${grandTotal}</p>
+  <p class="footer">Generated by Claimio. For accounting and tax purposes only.</p>
+</body></html>`;
+      const { uri } = await Print.printToFileAsync({ html });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: "application/pdf", dialogTitle: "Export Claims PDF" });
+      } else {
+        Alert.alert("Saved", uri);
+      }
+    } catch (e: any) {
+      Alert.alert("Export Error", e?.message ?? "Failed to export.");
+    } finally {
+      setExportLoading(false);
+    }
+  }
+
+  //////////////////////////////////////////////////////
   // CONFIRM MODAL
   //////////////////////////////////////////////////////
 
@@ -216,24 +324,18 @@ export default function AdminScreen() {
         : { rejectedAt: serverTimestamp() }),
     });
 
-    // Push notification to employee (fire-and-forget via Expo push API)
-    try {
-      const empDoc   = await getDoc(doc(db, "users", claim.userId));
-      const empToken = empDoc.data()?.expoPushToken;
-      if (empToken) {
-        const label = `£${Number(claim.amount).toFixed(2)} claim at ${claim.merchant}`;
-        fetch("https://exp.host/--/api/v2/push/send", {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify({
-            to:    empToken,
-            sound: "default",
-            title: action === "approved" ? "Claim Approved ✅" : "Claim Rejected",
-            body:  action === "approved" ? `Your ${label} was approved` : `Your ${label} was rejected`,
-          }),
-        }).catch(() => {});
-      }
-    } catch {}
+    // Push + email notification to employee via Azure Function (fire-and-forget)
+    currentUser?.getIdToken().then((token) => {
+      fetch(NOTIFY_URL, {
+        method:  "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          claimId:       claim.id,
+          status:        action,
+          adminFeedback: adminMessage.trim() || null,
+        }),
+      }).catch(() => {});
+    }).catch(() => {});
 
     if (action === "approved") {
       try {
@@ -400,6 +502,27 @@ export default function AdminScreen() {
     historyFilterTextActive: {
       color: t.accent,
       fontWeight: "700"
+    },
+    exportRow: {
+      flexDirection: "row",
+      gap: 8,
+      marginBottom: 12,
+    },
+    exportBtn: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingVertical: 7,
+      borderRadius: 10,
+      backgroundColor: t.surface,
+      borderWidth: 1,
+      borderColor: t.accent,
+    },
+    exportBtnText: {
+      color: t.accent,
+      fontSize: 12,
+      fontWeight: "600",
     },
 
     /* Empty state */
@@ -804,22 +927,56 @@ export default function AdminScreen() {
   //////////////////////////////////////////////////////
 
   const HistoryStatusFilter = (
-    <View style={styles.historyFilterRow}>
-      {(["all", "approved", "rejected"] as HistoryFilter[]).map((f) => (
-        <TouchableOpacity
-          key={f}
-          style={[styles.historyFilterBtn, historyFilter === f && styles.historyFilterBtnActive]}
-          onPress={() => setHistoryFilter(f)}
-          activeOpacity={0.7}
-        >
-          <ThemedText style={[
-            styles.historyFilterText,
-            historyFilter === f && styles.historyFilterTextActive
-          ]}>
-            {f === "all" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)}
-          </ThemedText>
-        </TouchableOpacity>
-      ))}
+    <View>
+      <View style={styles.historyFilterRow}>
+        {(["all", "approved", "rejected"] as HistoryFilter[]).map((f) => (
+          <TouchableOpacity
+            key={f}
+            style={[styles.historyFilterBtn, historyFilter === f && styles.historyFilterBtnActive]}
+            onPress={() => setHistoryFilter(f)}
+            activeOpacity={0.7}
+          >
+            <ThemedText style={[
+              styles.historyFilterText,
+              historyFilter === f && styles.historyFilterTextActive
+            ]}>
+              {f === "all" ? "All" : f.charAt(0).toUpperCase() + f.slice(1)}
+            </ThemedText>
+          </TouchableOpacity>
+        ))}
+      </View>
+      {filteredHistory.length > 0 && (
+        <View style={styles.exportRow}>
+          <TouchableOpacity
+            style={styles.exportBtn}
+            onPress={handleExportCSV}
+            disabled={exportLoading}
+            activeOpacity={0.7}
+          >
+            {exportLoading
+              ? <ActivityIndicator size="small" color={t.accent} />
+              : <>
+                  <Ionicons name="document-text-outline" size={14} color={t.accent} style={{ marginRight: 5 }} />
+                  <ThemedText style={styles.exportBtnText}>CSV</ThemedText>
+                </>
+            }
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.exportBtn}
+            onPress={handleExportPDF}
+            disabled={exportLoading}
+            activeOpacity={0.7}
+          >
+            {exportLoading
+              ? <ActivityIndicator size="small" color={t.accent} />
+              : <>
+                  <Ionicons name="print-outline" size={14} color={t.accent} style={{ marginRight: 5 }} />
+                  <ThemedText style={styles.exportBtnText}>PDF</ThemedText>
+                </>
+            }
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 

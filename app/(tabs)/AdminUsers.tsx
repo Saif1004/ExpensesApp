@@ -172,6 +172,19 @@ export default function AdminUsers() {
         return;
       }
       await updateDoc(doc(db, "memberships", membershipId), { status: "approved" });
+
+      // Notify employee — fire-and-forget
+      const notifyUrl = process.env.EXPO_PUBLIC_NOTIFY_MEMBERSHIP_STATUS_URL;
+      if (notifyUrl) {
+        user?.getIdToken().then(token =>
+          fetch(notifyUrl, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ membershipId, status: 'approved' }),
+          })
+        ).catch(() => {});
+      }
+
       loadUsers();
       loadPendingCount();
     } catch (error) {
@@ -187,6 +200,19 @@ export default function AdminUsers() {
   const rejectUser = async (membershipId: string) => {
     try {
       await updateDoc(doc(db, "memberships", membershipId), { status: "rejected" });
+
+      // Notify employee — fire-and-forget
+      const notifyUrl = process.env.EXPO_PUBLIC_NOTIFY_MEMBERSHIP_STATUS_URL;
+      if (notifyUrl) {
+        user?.getIdToken().then(token =>
+          fetch(notifyUrl, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ membershipId, status: 'rejected' }),
+          })
+        ).catch(() => {});
+      }
+
       loadUsers();
       loadPendingCount();
     } catch (error) {

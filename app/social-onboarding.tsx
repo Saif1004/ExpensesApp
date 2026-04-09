@@ -243,6 +243,18 @@ export default function SocialOnboarding() {
 
       await batch.commit();
 
+      // Notify admins — fire-and-forget
+      const notifyJoinUrl = process.env.EXPO_PUBLIC_NOTIFY_JOIN_REQUEST_URL;
+      if (notifyJoinUrl) {
+        user?.getIdToken().then(token =>
+          fetch(notifyJoinUrl, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orgId }),
+          })
+        ).catch(() => {});
+      }
+
       Alert.alert(
         "Request sent",
         "Your request has been sent to the admin for approval. You'll be able to sign in once approved.",

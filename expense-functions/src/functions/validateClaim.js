@@ -11,6 +11,7 @@ const {
   sanitize,
 } = require("./security");
 const { checkAiKillSwitch } = require("./aiConfig");
+const { sendEmail, sendPush, newClaimAdminEmail } = require("./notify");
 
 //////////////////////////////////////////////////////
 // OPENAI CLIENT
@@ -282,6 +283,47 @@ Reply with JSON only — no explanation outside the JSON:
         status: "pending",
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+
+      ////////////////////////////////////////////////////
+      // NOTIFY ADMINS — fire-and-forget, never blocks response
+      ////////////////////////////////////////////////////
+
+      (async () => {
+        try {
+          const adminSnap = await db.collection("memberships")
+            .where("orgId",  "==", orgId)
+            .where("role",   "==", "admin")
+            .where("status", "==", "approved")
+            .get();
+
+          await Promise.all(adminSnap.docs.map(async (memberDoc) => {
+            const adminUserId = memberDoc.data().userId;
+            const adminUserDoc = await db.collection("users").doc(adminUserId).get();
+            if (!adminUserDoc.exists) return;
+            const adminUser = adminUserDoc.data();
+            const adminName = adminUser.displayName || adminUser.email || "Admin";
+
+            const pushTitle = "New Expense Claim";
+            const pushBody  = `${cleanUserEmail} submitted a £${numericAmount.toFixed(2)} claim at ${cleanMerchant}`;
+
+            if (adminUser.expoPushToken) {
+              await sendPush(adminUser.expoPushToken, pushTitle, pushBody, { claimId: claimRef.id }).catch(() => {});
+            }
+            if (adminUser.email) {
+              const html = newClaimAdminEmail({
+                adminName,
+                employeeEmail: cleanUserEmail,
+                amount:   numericAmount.toFixed(2),
+                merchant: cleanMerchant,
+                category,
+              });
+              await sendEmail(adminUser.email, `New claim: £${numericAmount.toFixed(2)} from ${cleanUserEmail}`, html).catch(() => {});
+            }
+          }));
+        } catch (notifyErr) {
+          context.warn("Admin notification failed:", notifyErr?.message);
+        }
+      })();
 
       ////////////////////////////////////////////////////
       // RESPONSE — HTTPS headers via secureResponse

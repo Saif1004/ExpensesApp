@@ -323,27 +323,39 @@ export default function AnalyticsScreen() {
 
   function rowData(cs: Claim[]) {
     return cs.map(c => ({
+      claimRef:      c.id ? c.id.slice(0, 8).toUpperCase() : "—",
+      employee:      (c as any).userEmail ?? "—",
       merchant:      c.merchant ?? "—",
       amount:        Number(c.amount).toFixed(2),
       category:      c.category ?? "—",
       status:        c.status ?? "—",
       paymentStatus: c.paymentStatus ?? "—",
+      approvedBy:    (c as any).approvedBy ?? "—",
+      notes:         (c as any).adminFeedback ?? (c as any).description ?? "—",
       purchaseDate:  formatDate(c),
       submittedDate: submittedDate(c),
     }));
   }
 
+  const CSV_HEADER = "Reference,Employee,Merchant,Amount (£),Category,Status,Payment Status,Approved By,Notes,Purchase Date,Submitted Date\n";
+  const XLS_HEADER = "Reference\tEmployee\tMerchant\tAmount (£)\tCategory\tStatus\tPayment Status\tApproved By\tNotes\tPurchase Date\tSubmitted Date\n";
+
+  function rowToCSV(r: ReturnType<typeof rowData>[0]) {
+    return [r.claimRef, r.employee, r.merchant, r.amount, r.category, r.status, r.paymentStatus, r.approvedBy, r.notes, r.purchaseDate, r.submittedDate]
+      .map(v => `"${String(v).replace(/"/g, '""')}"`)
+      .join(",");
+  }
+
+  function rowToXLS(r: ReturnType<typeof rowData>[0]) {
+    return [r.claimRef, r.employee, r.merchant, r.amount, r.category, r.status, r.paymentStatus, r.approvedBy, r.notes, r.purchaseDate, r.submittedDate].join("\t");
+  }
+
   async function exportCSV() {
     try {
       const cs = await getExportClaims();
-      const header = "Merchant,Amount (£),Category,Status,Payment Status,Purchase Date,Submitted Date\n";
-      const rows = rowData(cs).map(r =>
-        [r.merchant, r.amount, r.category, r.status, r.paymentStatus, r.purchaseDate, r.submittedDate]
-          .map(v => `"${String(v).replace(/"/g, '""')}"`)
-          .join(",")
-      );
+      const rows = rowData(cs).map(rowToCSV);
       const uri = (FileSystem.documentDirectory ?? "") + "claims_export.csv";
-      await FileSystem.writeAsStringAsync(uri, header + rows.join("\n"), {
+      await FileSystem.writeAsStringAsync(uri, CSV_HEADER + rows.join("\n"), {
         encoding: FileSystem.EncodingType.UTF8
       });
       if (await Sharing.isAvailableAsync()) {
@@ -357,12 +369,9 @@ export default function AnalyticsScreen() {
   async function exportExcel() {
     try {
       const cs = await getExportClaims();
-      const header = "Merchant\tAmount (£)\tCategory\tStatus\tPayment Status\tPurchase Date\tSubmitted Date\n";
-      const rows = rowData(cs).map(r =>
-        [r.merchant, r.amount, r.category, r.status, r.paymentStatus, r.purchaseDate, r.submittedDate].join("\t")
-      );
+      const rows = rowData(cs).map(rowToXLS);
       const uri = (FileSystem.documentDirectory ?? "") + "claims_export.xls";
-      await FileSystem.writeAsStringAsync(uri, header + rows.join("\n"), {
+      await FileSystem.writeAsStringAsync(uri, XLS_HEADER + rows.join("\n"), {
         encoding: FileSystem.EncodingType.UTF8
       });
       if (await Sharing.isAvailableAsync()) {
@@ -382,11 +391,15 @@ export default function AnalyticsScreen() {
 
       const tableRows = rows.map(r => `
         <tr>
+          <td>${r.claimRef}</td>
+          <td>${r.employee}</td>
           <td>${r.merchant}</td>
           <td>£${r.amount}</td>
           <td>${r.category}</td>
           <td class="status-${r.status}">${r.status}</td>
           <td>${r.paymentStatus}</td>
+          <td>${r.approvedBy}</td>
+          <td>${r.notes}</td>
           <td>${r.purchaseDate}</td>
           <td>${r.submittedDate}</td>
         </tr>`).join("");
@@ -394,18 +407,18 @@ export default function AnalyticsScreen() {
       const html = `
 <!DOCTYPE html><html><head><meta charset="UTF-8"/>
 <style>
-  body { font-family: -apple-system, Helvetica, Arial, sans-serif; margin: 32px; color: #0D1B2A; font-size: 13px; }
+  body { font-family: -apple-system, Helvetica, Arial, sans-serif; margin: 32px; color: #0D1B2A; font-size: 11px; }
   h1 { font-size: 22px; margin-bottom: 4px; color: #0D1B2A; }
-  .meta { color: #6B7A8D; margin: 0 0 24px; font-size: 12px; }
+  .meta { color: #6B7A8D; margin: 0 0 24px; font-size: 11px; }
   table { width: 100%; border-collapse: collapse; }
-  th { background: #6366F1; color: #fff; padding: 9px 10px; text-align: left; font-size: 12px; }
-  td { padding: 8px 10px; border-bottom: 1px solid #E8ECF0; font-size: 12px; }
+  th { background: #6366F1; color: #fff; padding: 7px 8px; text-align: left; font-size: 10px; }
+  td { padding: 6px 8px; border-bottom: 1px solid #E8ECF0; font-size: 10px; }
   tr:nth-child(even) td { background: #F8F9FC; }
   .status-approved { color: #16a34a; font-weight: 600; }
   .status-pending  { color: #d97706; font-weight: 600; }
   .status-rejected { color: #dc2626; font-weight: 600; }
-  .total-row { text-align: right; margin-top: 16px; font-weight: 700; font-size: 14px; color: #0D1B2A; }
-  .footer { margin-top: 32px; color: #A0ACBB; font-size: 11px; border-top: 1px solid #E8ECF0; padding-top: 12px; }
+  .total-row { text-align: right; margin-top: 16px; font-weight: 700; font-size: 13px; color: #0D1B2A; }
+  .footer { margin-top: 32px; color: #A0ACBB; font-size: 10px; border-top: 1px solid #E8ECF0; padding-top: 12px; }
 </style></head>
 <body>
   <h1>Claimio — Expense Report</h1>
@@ -416,8 +429,9 @@ export default function AnalyticsScreen() {
   </p>
   <table>
     <thead><tr>
-      <th>Merchant</th><th>Amount</th><th>Category</th>
-      <th>Status</th><th>Payment</th><th>Purchase Date</th><th>Submitted</th>
+      <th>Ref</th><th>Employee</th><th>Merchant</th><th>Amount</th>
+      <th>Category</th><th>Status</th><th>Payment</th>
+      <th>Approved By</th><th>Notes</th><th>Purchase Date</th><th>Submitted</th>
     </tr></thead>
     <tbody>${tableRows}</tbody>
   </table>
