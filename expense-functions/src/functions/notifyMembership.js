@@ -51,7 +51,7 @@ app.http('notifyJoinRequest', {
         const adminUser = adminUserDoc.data();
         const adminName = adminUser.displayName || adminUser.email || 'Admin';
 
-        if (adminUser.expoPushToken) {
+        if (adminUser.expoPushToken && adminUser.notifPushEnabled !== false) {
           await sendPush(
             adminUser.expoPushToken,
             'New Join Request',
@@ -59,7 +59,7 @@ app.http('notifyJoinRequest', {
             { orgId }
           ).catch(() => {});
         }
-        if (adminUser.email) {
+        if (adminUser.email && adminUser.notifEmailEnabled !== false) {
           await sendEmail(
             adminUser.email,
             `New join request from ${employeeName}`,
@@ -125,7 +125,7 @@ app.http('notifyMembershipStatus', {
 
       const empName = emp.displayName || emp.email || 'there';
 
-      if (emp.expoPushToken) {
+      if (emp.expoPushToken && emp.notifPushEnabled !== false) {
         await sendPush(
           emp.expoPushToken,
           status === 'approved' ? 'Request Approved ✅' : 'Request Not Approved',
@@ -136,7 +136,7 @@ app.http('notifyMembershipStatus', {
         ).catch(() => {});
       }
 
-      if (emp.email) {
+      if (emp.email && emp.notifEmailEnabled !== false) {
         const subject = status === 'approved'
           ? `You've been approved to join ${orgName} ✅`
           : `Your request to join ${orgName} was not approved`;

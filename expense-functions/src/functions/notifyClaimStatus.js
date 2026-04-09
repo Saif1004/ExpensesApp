@@ -52,7 +52,7 @@ app.http('notifyClaimStatus', {
       const feedback = adminFeedback || null;
 
       // Send push notification
-      if (emp.expoPushToken) {
+      if (emp.expoPushToken && emp.notifPushEnabled !== false) {
         await sendPush(
           emp.expoPushToken,
           status === 'approved' ? 'Claim Approved ✅' : 'Claim Rejected',
@@ -64,7 +64,7 @@ app.http('notifyClaimStatus', {
       }
 
       // Send email
-      if (emp.email) {
+      if (emp.email && emp.notifEmailEnabled !== false) {
         const subject = status === 'approved'
           ? `Your £${amount} claim has been approved ✅`
           : `Your £${amount} claim has been rejected`;

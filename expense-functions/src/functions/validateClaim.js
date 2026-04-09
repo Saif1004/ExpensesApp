@@ -306,10 +306,10 @@ Reply with JSON only — no explanation outside the JSON:
             const pushTitle = "New Expense Claim";
             const pushBody  = `${cleanUserEmail} submitted a £${numericAmount.toFixed(2)} claim at ${cleanMerchant}`;
 
-            if (adminUser.expoPushToken) {
+            if (adminUser.expoPushToken && adminUser.notifPushEnabled !== false) {
               await sendPush(adminUser.expoPushToken, pushTitle, pushBody, { claimId: claimRef.id }).catch(() => {});
             }
-            if (adminUser.email) {
+            if (adminUser.email && adminUser.notifEmailEnabled !== false) {
               const html = newClaimAdminEmail({
                 adminName,
                 employeeEmail: cleanUserEmail,

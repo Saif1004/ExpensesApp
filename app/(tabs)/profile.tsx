@@ -1048,6 +1048,12 @@ export default function ProfileScreen() {
             }
           />
           <MenuRow
+            icon="notifications-outline"
+            label="Notifications"
+            sublabel="Push & email preferences"
+            onPress={() => router.push("/notifications")}
+          />
+          <MenuRow
             icon="card-outline"
             label="Manage Subscription"
             sublabel={`Current plan: ${planLabel}`}
