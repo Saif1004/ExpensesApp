@@ -7,6 +7,7 @@ import {
   getDoc,
   getDocs,
   query,
+  setDoc,
   where
 } from "firebase/firestore";
 import React, {
@@ -19,6 +20,7 @@ import React, {
   useState
 } from "react";
 import { AppState, Platform } from "react-native";
+import * as Notifications from "expo-notifications";
 import { PLAN_LIMITS, OrgPlan } from "../../constants/planLimits";
 import { auth, db } from "../firebase/firebaseConfig";
 import { unsubscribeAll } from "../../utils/listenerStore";
@@ -254,6 +256,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [loadMembership]);
 
   //////////////////////////////////////////////////////
+  // PUSH NOTIFICATION REGISTRATION
+  //////////////////////////////////////////////////////
+
+  async function registerPushToken(uid: string) {
+    if (Platform.OS === "web" || isExpoGo) return;
+    try {
+      // Android: create a default notification channel
+      if (Platform.OS === "android") {
+        await Notifications.setNotificationChannelAsync("default", {
+          name: "Default",
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: "#6366F1",
+        });
+      }
+
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+
+      if (existingStatus !== "granted") {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+
+      if (finalStatus !== "granted") return; // user denied
+
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+      if (!projectId) return;
+
+      const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+
+      // Save to Firestore user doc — merge so we don't overwrite other fields
+      await setDoc(doc(db, "users", uid), { expoPushToken: token }, { merge: true });
+    } catch {
+      // Non-fatal — app works without push
+    }
+  }
+
+  //////////////////////////////////////////////////////
   // AUTH STATE LISTENER
   //////////////////////////////////////////////////////
 
@@ -285,6 +326,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Only verified users have memberships — avoids a permission error
           // on the memberships query for unverified email sign-up users.
           await loadMembership(firebaseUser.uid);
+          // Register for push notifications and save token to Firestore
+          registerPushToken(firebaseUser.uid).catch(() => {});
         } else {
           // Unverified user mid sign-up — no membership to load yet
           setRole("employee");
