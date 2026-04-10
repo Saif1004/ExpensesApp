@@ -44,17 +44,22 @@ type PlanPackages = {
 
 const FEATURES_FREE = [
   "Submit & track expense claims",
-  "Receipt uploads & photo scanning",
+  "Receipt photo uploads",
   "Real-time claim status updates",
-  "Up to 5 team members"
+  "Up to 5 team members",
+  "Up to 10 claims per month"
 ];
 
 const FEATURES_PRO = [
   "Everything in Free",
+  "Unlimited claims",
   "AI-powered receipt OCR scanning",
   "Analytics & spending reports",
+  "CSV, Excel & PDF exports",
+  "Email & push notifications",
+  "Admin digest emails (daily/weekly)",
   "AI expense assistant chatbot",
-  "500 AI credits / month",
+  "50 AI credits / month",
   "Custom expense categories",
   "Stripe automated reimbursements",
   "Up to 20 team members"
@@ -62,8 +67,9 @@ const FEATURES_PRO = [
 
 const FEATURES_BUSINESS = [
   "Everything in Pro",
-  "2,000 AI credits / month",
-  "Bulk expense policy management",
+  "Xero, QuickBooks & Sage exports",
+  "Custom accounting codes per category",
+  "150 AI credits / month",
   "Up to 100 team members",
   "Priority support"
 ];
@@ -589,9 +595,9 @@ export default function PaywallScreen() {
       {/* FREE TRIAL CTA — shown once, for free plan orgs that haven't started a trial */}
       {orgPlan === "free" && !trialEndsAt && (
         <View style={styles.freeTrialCard}>
-          <ThemedText style={styles.freeTrialTitle}>Try Pro free for 7 days</ThemedText>
+          <ThemedText style={styles.freeTrialTitle}>Try Business free for 7 days</ThemedText>
           <ThemedText style={styles.freeTrialSub}>
-            No payment required. Your whole organisation gets Analytics, AI assistant, and 50 AI credits during the trial.
+            No payment required. Get full Business-tier access — Xero/QBO/Sage exports, AI assistant, analytics, notifications, accounting codes, and 50 AI credits. Up to 25 claims during the trial.
           </ThemedText>
           {role === "admin" ? (
             <TouchableOpacity

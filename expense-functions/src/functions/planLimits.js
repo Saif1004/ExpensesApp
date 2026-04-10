@@ -12,12 +12,12 @@ const PLAN_LIMITS = {
     claimsPerMonth: 10       // max claims a free-tier user may submit per calendar month
   },
   trial: {
-    employeeLimit: 20,
-    aiCreditsPerPeriod: 50,
-    chatbotRatePerMinute: 5,
+    employeeLimit: 100,        // business-level — try the full product
+    aiCreditsPerPeriod: 50,    // one-time allotment (no monthly reset — trial expires)
+    chatbotRatePerMinute: 10,
     chatbotAccess: true,
     analyticsAccess: true,
-    claimsPerMonth: null     // unlimited
+    claimsPerMonth: 25         // capped during trial to limit abuse
   },
   pro: {
     employeeLimit: 20,

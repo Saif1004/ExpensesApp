@@ -4,6 +4,7 @@ const admin = require("firebase-admin");
 const PLAN_LIMITS = require("./planLimits");
 const { requireAuth, secureResponse } = require("./security");
 const { checkAiKillSwitch } = require("./aiConfig");
+const { checkAndDeductCredit } = require("./aiCredits");
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -121,32 +122,11 @@ app.http("chatbot", {
       }
 
       ////////////////////////////////////////////////////
-      // MONTHLY CREDIT RESET (pro / business)
+      // CREDIT RESET + CHECK + DEDUCT (shared utility)
       ////////////////////////////////////////////////////
 
-      let aiCreditsRemaining = orgData.aiCreditsRemaining ?? 0;
-
-      if (plan === "pro" || plan === "business") {
-        const resetAt = orgData.aiCreditsResetAt?.toDate?.() ?? null;
-        if (!resetAt || resetAt < new Date()) {
-          aiCreditsRemaining = planConfig.aiCreditsPerPeriod;
-          await orgRef.update({
-            aiCreditsRemaining,
-            aiCreditsResetAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-          });
-        }
-      }
-
-      ////////////////////////////////////////////////////
-      // CREDIT CHECK
-      ////////////////////////////////////////////////////
-
-      if (aiCreditsRemaining <= 0) {
-        return secureResponse({
-          success: false,
-          error: "No AI credits remaining. Upgrade your plan or wait for the monthly reset."
-        }, 429);
-      }
+      const { creditError, remaining: creditsAfter } = await checkAndDeductCredit(orgRef, orgData, planConfig, plan);
+      if (creditError) return creditError;
 
       ////////////////////////////////////////////////////
       // RATE LIMIT (per user, per minute)
@@ -354,21 +334,11 @@ GENERAL RULES:
 
       const reply = aiRes.choices[0].message.content;
 
-      ////////////////////////////////////////////////////
-      // DEDUCT CREDIT FROM ORG
-      ////////////////////////////////////////////////////
-
-      await orgRef.update({
-        aiCreditsRemaining: admin.firestore.FieldValue.increment(-1)
-      });
-
-      const updatedOrgSnap = await orgRef.get();
-      const remaining = updatedOrgSnap.data().aiCreditsRemaining ?? 0;
-
+      // Credit was already deducted by checkAndDeductCredit above
       return secureResponse({
         success: true,
         reply,
-        remaining,
+        remaining: creditsAfter,
         limit: planConfig.aiCreditsPerPeriod
       }, 200);
 

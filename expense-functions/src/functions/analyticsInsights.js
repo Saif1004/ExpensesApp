@@ -4,6 +4,7 @@ const admin = require("firebase-admin");
 const PLAN_LIMITS = require("./planLimits");
 const { requireAuth, secureResponse } = require("./security");
 const { checkAiKillSwitch } = require("./aiConfig");
+const { checkAndDeductCredit } = require("./aiCredits");
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -106,6 +107,14 @@ app.http("analyticsInsights", {
           windowStart: windowExpired ? now : rw.windowStart
         }
       });
+
+      ////////////////////////////////////////////////////
+      // CREDIT RESET + CHECK + DEDUCT
+      ////////////////////////////////////////////////////
+
+      const orgRef = db.collection("organisations").doc(orgId);
+      const { creditError } = await checkAndDeductCredit(orgRef, orgData, planConfig, plan);
+      if (creditError) return creditError;
 
       ////////////////////////////////////////////////////
       // AI CALL

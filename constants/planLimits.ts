@@ -35,11 +35,11 @@ export const PLAN_LIMITS: Record<
   },
   trial: {
     label: "7-Day Trial",
-    employeeLimit: 20,
-    aiCreditsPerPeriod: 50,
+    employeeLimit: 100,           // business-level — try the full product
+    aiCreditsPerPeriod: 50,       // one-time allotment (no monthly reset)
     chatbotAccess: true,
     analyticsAccess: true,
-    claimsPerMonth: null,
+    claimsPerMonth: 25,           // capped during trial
     priceMonthly: null,
     priceAnnual: null,
     rcPackageId: null,

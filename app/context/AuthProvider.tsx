@@ -49,6 +49,7 @@ type AuthContextType = {
   orgId: string | null;
   orgPlan: OrgPlan;
   isPro: boolean;
+  isBusiness: boolean;
   aiCreditsRemaining: number;
   employeeLimit: number;
   trialEndsAt: Date | null;
@@ -400,6 +401,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return false;
   }, [orgPlan, trialEndsAt]);
 
+  // During an active trial, expose business-tier features (user is trialling Business plan)
+  const isBusiness = useMemo(() => {
+    if (orgPlan === "business") return true;
+    if (orgPlan === "trial" && trialEndsAt && trialEndsAt > new Date()) return true;
+    return false;
+  }, [orgPlan, trialEndsAt]);
+
   const employeeLimit = useMemo(() => {
     return PLAN_LIMITS[orgPlan]?.employeeLimit ?? 5;
   }, [orgPlan]);
@@ -421,6 +429,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     orgId,
     orgPlan,
     isPro,
+    isBusiness,
     aiCreditsRemaining,
     employeeLimit,
     trialEndsAt,
@@ -430,7 +439,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refreshMembership,
     refreshOrgPlan
   }), [
-    user, role, status, orgId, orgPlan, isPro,
+    user, role, status, orgId, orgPlan, isPro, isBusiness,
     aiCreditsRemaining, employeeLimit, trialEndsAt,
     trialDaysLeft, orgCategories, authLoaded, refreshMembership, refreshOrgPlan
   ]);

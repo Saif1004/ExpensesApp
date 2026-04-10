@@ -16,6 +16,7 @@ require("./syncPlan");
 require("./notify");
 require("./notifyClaimStatus");
 require("./notifyMembership");
+require("./digestEmail");
 require("./rateLimit");
 require("./security");
 require("./aiConfig");

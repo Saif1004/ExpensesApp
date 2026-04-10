@@ -4,6 +4,8 @@ const admin = require("firebase-admin");
 const { authAndLimit } = require("./rateLimit");
 const { secureResponse, validateString, sanitize } = require("./security");
 const { checkAiKillSwitch } = require("./aiConfig");
+const PLAN_LIMITS = require("./planLimits");
+const { checkAndDeductCredit } = require("./aiCredits");
 
 ////////////////////////////////////////////////////
 // FIREBASE INITIALIZATION
@@ -109,7 +111,7 @@ app.http("parsePolicy", {
       }
 
 ////////////////////////////////////////////////////
-// ORG USAGE LIMIT
+// ORG CREDIT CHECK + DEDUCT
 ////////////////////////////////////////////////////
 
       const orgRef = db.collection("organisations").doc(orgId);
@@ -119,11 +121,18 @@ app.http("parsePolicy", {
         return secureResponse({ success: false, error: "Organisation not found" }, 404);
       }
 
-      const aiUsage = orgDoc.data()?.aiUsage || 0;
+      const orgData = orgDoc.data() || {};
 
-      if (aiUsage >= MAX_AI) {
-        return secureResponse({ success: false, error: "🚫 AI limit reached. Upgrade to continue using AI features." }, 403);
+      // Resolve effective plan (expired trial → free)
+      let orgPlan = orgData.plan ?? "free";
+      if (orgPlan === "trial") {
+        const trialEndsAt = orgData.trialEndsAt?.toDate?.() ?? null;
+        if (trialEndsAt && trialEndsAt < new Date()) orgPlan = "free";
       }
+
+      const planConfig = PLAN_LIMITS[orgPlan] || PLAN_LIMITS.free;
+      const { creditError } = await checkAndDeductCredit(orgRef, orgData, planConfig, orgPlan);
+      if (creditError) return creditError;
 
 ////////////////////////////////////////////////////
 // AI PROMPT
@@ -285,20 +294,12 @@ Return JSON only.
       }
 
 ////////////////////////////////////////////////////
-// UPDATE USAGE + COOLDOWN
+// UPDATE COOLDOWN (credit already deducted above)
 ////////////////////////////////////////////////////
 
-      await Promise.all([
-
-        orgRef.update({
-          aiUsage: aiUsage + 1
-        }),
-
-        userRef.set({
-          lastAiCall: new Date()
-        }, { merge: true })
-
-      ]);
+      await userRef.set({
+        lastAiCall: new Date()
+      }, { merge: true });
 
 ////////////////////////////////////////////////////
 // SAVE POLICY

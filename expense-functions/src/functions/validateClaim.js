@@ -12,6 +12,8 @@ const {
 } = require("./security");
 const { checkAiKillSwitch } = require("./aiConfig");
 const { sendEmail, sendPush, newClaimAdminEmail } = require("./notify");
+const PLAN_LIMITS = require("./planLimits");
+const { checkAndDeductCredit } = require("./aiCredits");
 
 //////////////////////////////////////////////////////
 // OPENAI CLIENT
@@ -112,15 +114,22 @@ app.http("validateClaim", {
       const orgId = membershipSnap.docs[0].data().orgId;
 
       ////////////////////////////////////////////////////
-      // FREE TIER MONTHLY CLAIM LIMIT
+      // MONTHLY CLAIM LIMIT (from planLimits.js)
       ////////////////////////////////////////////////////
 
-      // Monthly caps per plan — keep in sync with planLimits.js
-      const MONTHLY_CLAIM_LIMITS = { free: 10, trial: null, pro: null, business: null };
+      const orgRef  = db.collection("organisations").doc(orgId);
+      const orgDoc  = await orgRef.get();
+      const orgData = orgDoc.data() || {};
 
-      const orgDoc  = await db.collection("organisations").doc(orgId).get();
-      const orgPlan = orgDoc.data()?.plan ?? "free";
-      const monthlyLimit = MONTHLY_CLAIM_LIMITS[orgPlan] ?? null;
+      // Resolve effective plan (expired trial → free)
+      let orgPlan = orgData.plan ?? "free";
+      if (orgPlan === "trial") {
+        const trialEndsAt = orgData.trialEndsAt?.toDate?.() ?? null;
+        if (trialEndsAt && trialEndsAt < new Date()) orgPlan = "free";
+      }
+
+      const planConfig   = PLAN_LIMITS[orgPlan] || PLAN_LIMITS.free;
+      const monthlyLimit = planConfig.claimsPerMonth ?? null;
 
       if (monthlyLimit !== null) {
         const now          = new Date();
@@ -135,8 +144,9 @@ app.http("validateClaim", {
           .get();
 
         if (monthClaimsSnap.size >= monthlyLimit) {
+          const planLabel = orgPlan === "trial" ? "trial" : "free plan";
           return secureResponse(
-            { valid: false, reason: `Free plan limit reached. You can submit up to ${monthlyLimit} claims per month. Upgrade to Pro for unlimited submissions.` },
+            { valid: false, reason: `Monthly limit reached. You can submit up to ${monthlyLimit} claims per month on the ${planLabel}. Upgrade to Pro for unlimited submissions.` },
             403
           );
         }
@@ -215,6 +225,13 @@ app.http("validateClaim", {
           context.log("AI kill switch active for validateClaim — skipping policy AI check");
         } else
         try {
+          // Deduct 1 AI credit for the policy compliance check
+          const { creditError: policyCheckCreditError } = await checkAndDeductCredit(orgRef, orgData, planConfig, orgPlan);
+          if (policyCheckCreditError) {
+            // No credits — skip AI check, fail open (don't block submission)
+            context.log("No AI credits remaining — skipping policy AI check");
+          } else {
+
           const aiClient = getOpenAIClient();
 
           const compliancePrompt = `You are a strict expense policy compliance checker for a company.
@@ -260,6 +277,7 @@ Reply with JSON only — no explanation outside the JSON:
             );
           }
 
+          } // end: else (credits available)
         } catch (aiErr) {
           context.log("AI policy check error (non-fatal):", aiErr);
           // Fail open — do not block the claim if the AI check itself errors

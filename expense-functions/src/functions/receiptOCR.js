@@ -4,6 +4,8 @@ const admin = require("firebase-admin");
 const { authAndLimit } = require("./rateLimit");
 const { secureResponse } = require("./security");
 const { checkAiKillSwitch } = require("./aiConfig");
+const PLAN_LIMITS = require("./planLimits");
+const { checkAndDeductCredit } = require("./aiCredits");
 
 ////////////////////////////////////////////////////
 // FIREBASE INIT
@@ -153,7 +155,7 @@ app.http("receiptOCR", {
       if (blocked) return blocked;
 
       //////////////////////////////////////////////////////////
-      // PLAN CHECK — OCR requires a paid plan (trial / pro / business)
+      // PLAN CHECK + CREDIT DEDUCTION
       //////////////////////////////////////////////////////////
 
       const membershipSnap = await db
@@ -164,9 +166,17 @@ app.http("receiptOCR", {
         .get();
 
       if (!membershipSnap.empty) {
-        const orgId  = membershipSnap.docs[0].data().orgId;
-        const orgDoc = await db.collection("organisations").doc(orgId).get();
-        const plan   = orgDoc.data()?.plan ?? "free";
+        const orgId   = membershipSnap.docs[0].data().orgId;
+        const orgRef  = db.collection("organisations").doc(orgId);
+        const orgDoc  = await orgRef.get();
+        const orgData = orgDoc.data() || {};
+
+        // Resolve effective plan (expired trial → free)
+        let plan = orgData.plan ?? "free";
+        if (plan === "trial") {
+          const trialEndsAt = orgData.trialEndsAt?.toDate?.() ?? null;
+          if (trialEndsAt && trialEndsAt < new Date()) plan = "free";
+        }
 
         if (plan === "free") {
           return secureResponse(
@@ -174,6 +184,10 @@ app.http("receiptOCR", {
             403
           );
         }
+
+        const planConfig = PLAN_LIMITS[plan];
+        const { creditError } = await checkAndDeductCredit(orgRef, orgData, planConfig, plan);
+        if (creditError) return creditError;
       }
 
       //////////////////////////////////////////////////////////

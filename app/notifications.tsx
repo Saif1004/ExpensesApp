@@ -20,10 +20,19 @@ import { useTheme } from "../hooks/useTheme";
 // Types
 //////////////////////////////////////////////////////
 
+type DigestFreq = "off" | "daily" | "weekly";
+
 type Prefs = {
-  notifPushEnabled: boolean;
+  notifPushEnabled:  boolean;
   notifEmailEnabled: boolean;
+  digestFrequency:   DigestFreq;
 };
+
+const DIGEST_OPTIONS: { value: DigestFreq; label: string }[] = [
+  { value: "off",    label: "Off"    },
+  { value: "daily",  label: "Daily"  },
+  { value: "weekly", label: "Weekly" },
+];
 
 //////////////////////////////////////////////////////
 // Screen
@@ -35,9 +44,13 @@ export default function NotificationsScreen() {
   const { tokens: t } = useTheme();
   const user = auth.currentUser;
 
-  const [prefs, setPrefs] = useState<Prefs>({ notifPushEnabled: true, notifEmailEnabled: true });
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState<string | null>(null);
+  const [prefs, setPrefs] = useState<Prefs>({
+    notifPushEnabled:  true,
+    notifEmailEnabled: true,
+    digestFrequency:   "off",
+  });
+  const [loading,  setLoading]  = useState(true);
+  const [saving,   setSaving]   = useState<string | null>(null);
 
   //////////////////////////////////////////////////////
   // Load prefs
@@ -51,16 +64,17 @@ export default function NotificationsScreen() {
         setPrefs({
           notifPushEnabled:  data.notifPushEnabled  !== false,
           notifEmailEnabled: data.notifEmailEnabled !== false,
+          digestFrequency:   (data.digestFrequency as DigestFreq) ?? "off",
         });
       }
     }).finally(() => setLoading(false));
   }, []);
 
   //////////////////////////////////////////////////////
-  // Toggle handler
+  // Toggle boolean pref
   //////////////////////////////////////////////////////
 
-  const toggle = async (key: keyof Prefs) => {
+  const toggle = async (key: "notifPushEnabled" | "notifEmailEnabled") => {
     if (!user || saving) return;
     const next = !prefs[key];
     setPrefs(prev => ({ ...prev, [key]: next }));
@@ -68,8 +82,25 @@ export default function NotificationsScreen() {
     try {
       await updateDoc(doc(db, "users", user.uid), { [key]: next });
     } catch {
-      // revert on failure
       setPrefs(prev => ({ ...prev, [key]: !next }));
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  //////////////////////////////////////////////////////
+  // Set digest frequency
+  //////////////////////////////////////////////////////
+
+  const setDigest = async (value: DigestFreq) => {
+    if (!user || saving) return;
+    const prev = prefs.digestFrequency;
+    setPrefs(p => ({ ...p, digestFrequency: value }));
+    setSaving("digestFrequency");
+    try {
+      await updateDoc(doc(db, "users", user.uid), { digestFrequency: value });
+    } catch {
+      setPrefs(p => ({ ...p, digestFrequency: prev }));
     } finally {
       setSaving(null);
     }
@@ -138,11 +169,6 @@ export default function NotificationsScreen() {
       gap: 14,
     },
 
-    rowBorder: {
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: t.border,
-    },
-
     iconWrap: {
       width: 38,
       height: 38,
@@ -171,6 +197,50 @@ export default function NotificationsScreen() {
       lineHeight: 18,
       marginHorizontal: 4,
       marginBottom: 24,
+    },
+
+    // Digest pill row
+    digestRow: {
+      paddingHorizontal: 18,
+      paddingVertical: 14,
+      gap: 10,
+    },
+
+    digestLabel: {
+      color: t.text,
+      fontSize: 15,
+      fontWeight: "500",
+      marginBottom: 10,
+    },
+
+    pillRow: {
+      flexDirection: "row",
+      gap: 8,
+    },
+
+    pill: {
+      flex: 1,
+      paddingVertical: 8,
+      borderRadius: 20,
+      alignItems: "center",
+      borderWidth: 1.5,
+      borderColor: t.border,
+      backgroundColor: t.surfaceAlt,
+    },
+
+    pillActive: {
+      borderColor: t.accent,
+      backgroundColor: t.accentSurface,
+    },
+
+    pillText: {
+      color: t.textSecondary,
+      fontSize: 13,
+      fontWeight: "600",
+    },
+
+    pillTextActive: {
+      color: t.accent,
     },
 
     loading: {
@@ -216,7 +286,7 @@ export default function NotificationsScreen() {
         {/* Push */}
         <ThemedText style={styles.sectionHeader}>PUSH NOTIFICATIONS</ThemedText>
         <View style={styles.card}>
-          <View style={[styles.row]}>
+          <View style={styles.row}>
             <View style={styles.iconWrap}>
               <Ionicons name="notifications-outline" size={18} color={t.accent} />
             </View>
@@ -245,7 +315,7 @@ export default function NotificationsScreen() {
         {/* Email */}
         <ThemedText style={styles.sectionHeader}>EMAIL NOTIFICATIONS</ThemedText>
         <View style={styles.card}>
-          <View style={[styles.row]}>
+          <View style={styles.row}>
             <View style={styles.iconWrap}>
               <Ionicons name="mail-outline" size={18} color={t.accent} />
             </View>
@@ -268,7 +338,41 @@ export default function NotificationsScreen() {
           </View>
         </View>
         <ThemedText style={styles.hint}>
-          Receive email summaries at your registered address for the same events.
+          Receive email summaries at your registered address for claim updates and membership changes.
+        </ThemedText>
+
+        {/* Digest */}
+        <ThemedText style={styles.sectionHeader}>EMAIL DIGEST (ADMINS)</ThemedText>
+        <View style={styles.card}>
+          <View style={styles.digestRow}>
+            <ThemedText style={styles.digestLabel}>
+              Pending claims summary
+            </ThemedText>
+            <View style={styles.pillRow}>
+              {DIGEST_OPTIONS.map(opt => (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[styles.pill, prefs.digestFrequency === opt.value && styles.pillActive]}
+                  onPress={() => setDigest(opt.value)}
+                  activeOpacity={0.7}
+                  disabled={saving === "digestFrequency"}
+                >
+                  <ThemedText style={[
+                    styles.pillText,
+                    prefs.digestFrequency === opt.value && styles.pillTextActive
+                  ]}>
+                    {opt.label}
+                  </ThemedText>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {saving === "digestFrequency" && (
+              <ActivityIndicator size="small" color={t.accent} style={{ marginTop: 8 }} />
+            )}
+          </View>
+        </View>
+        <ThemedText style={styles.hint}>
+          Admins receive a digest email showing pending claims that need attention. Daily sends every morning; Weekly sends every Monday.
         </ThemedText>
 
       </ScrollView>

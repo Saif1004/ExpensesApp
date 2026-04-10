@@ -1,5 +1,7 @@
 import {
   collection,
+  doc,
+  getDoc,
   getDocs,
   onSnapshot,
   query,
@@ -28,6 +30,7 @@ import {
   PieChart
 } from "react-native-chart-kit";
 
+import { Ionicons } from "@expo/vector-icons";
 import PaywallScreen from "../../components/paywall-screen";
 import { ThemedText } from "../../components/themed-text";
 import { useAuth } from "../context/AuthProvider";
@@ -112,17 +115,18 @@ function filterByPeriod(claims: Claim[], period: Period): Claim[] {
 }
 
 export default function AnalyticsScreen() {
-  const { user, role, isPro, orgId, orgCategories } = useAuth();
+  const { user, role, isPro, isBusiness, orgId, orgCategories } = useAuth();
   const { tokens: t } = useTheme();
 
   if (!isPro) return <PaywallScreen />;
 
-  const [loading, setLoading]     = useState(true);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiInsight, setAiInsight] = useState("");
-  const [period, setPeriod]       = useState<Period>("month");
-  const [scope, setScope]         = useState<Scope>("mine");
-  const [allClaims, setAllClaims] = useState<Claim[]>([]);
+  const [loading, setLoading]               = useState(true);
+  const [aiLoading, setAiLoading]           = useState(false);
+  const [aiInsight, setAiInsight]           = useState("");
+  const [period, setPeriod]                 = useState<Period>("month");
+  const [scope, setScope]                   = useState<Scope>("mine");
+  const [allClaims, setAllClaims]           = useState<Claim[]>([]);
+  const [accountCodes, setAccountCodes]     = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!user || !user.emailVerified) return;
@@ -139,6 +143,14 @@ export default function AnalyticsScreen() {
     }, () => {}));
     return unsub;
   }, [user, role, orgId, scope]);
+
+  // Load org account codes for exports
+  useEffect(() => {
+    if (!orgId) return;
+    getDoc(doc(db, "organisations", orgId)).then(snap => {
+      if (snap.exists()) setAccountCodes(snap.data().categoryAccountCodes ?? {});
+    }).catch(() => {});
+  }, [orgId]);
 
   // Filtered claims for selected period
   const claims = useMemo(() => filterByPeriod(allClaims, period), [allClaims, period]);
@@ -340,6 +352,38 @@ export default function AnalyticsScreen() {
   const CSV_HEADER = "Reference,Employee,Merchant,Amount (£),Category,Status,Payment Status,Approved By,Notes,Purchase Date,Submitted Date\n";
   const XLS_HEADER = "Reference\tEmployee\tMerchant\tAmount (£)\tCategory\tStatus\tPayment Status\tApproved By\tNotes\tPurchase Date\tSubmitted Date\n";
 
+  // Default nominal codes (UK standard) — overridden by org's custom accountCodes
+  const DEFAULT_ACCOUNT_CODES: Record<string, string> = {
+    "Meals": "420", "Travel": "493", "Technology": "404", "Office": "429",
+  };
+  function getAccountCode(category: string) {
+    return accountCodes[category] ?? DEFAULT_ACCOUNT_CODES[category] ?? "429";
+  }
+
+  // Xero "Spend Money" import
+  const XERO_HEADER = "Date,Amount,Payee,Description,Reference,Account Code,Tax Rate,Currency\n";
+  function rowToXero(r: ReturnType<typeof rowData>[0]) {
+    return [r.purchaseDate, r.amount, r.merchant, r.category, r.claimRef, getAccountCode(r.category), "20% (VAT on Expenses)", "GBP"]
+      .map(v => `"${String(v).replace(/"/g, '""')}"`)
+      .join(",");
+  }
+
+  // QuickBooks Online expense import
+  const QBO_HEADER = "Date,Amount,Description,Account,Payee,Ref No.,Memo\n";
+  function rowToQBO(r: ReturnType<typeof rowData>[0]) {
+    return [r.purchaseDate, r.amount, r.category, getAccountCode(r.category), r.merchant, r.claimRef, r.notes]
+      .map(v => `"${String(v).replace(/"/g, '""')}"`)
+      .join(",");
+  }
+
+  // Sage 50 expense import
+  const SAGE_HEADER = "Date,Reference,Description,Net,Tax Code,Account Ref,Department\n";
+  function rowToSage(r: ReturnType<typeof rowData>[0]) {
+    return [r.purchaseDate, r.claimRef, `${r.category} - ${r.merchant}`, r.amount, "T1", getAccountCode(r.category), ""]
+      .map(v => `"${String(v).replace(/"/g, '""')}"`)
+      .join(",");
+  }
+
   function rowToCSV(r: ReturnType<typeof rowData>[0]) {
     return [r.claimRef, r.employee, r.merchant, r.amount, r.category, r.status, r.paymentStatus, r.approvedBy, r.notes, r.purchaseDate, r.submittedDate]
       .map(v => `"${String(v).replace(/"/g, '""')}"`)
@@ -379,6 +423,84 @@ export default function AnalyticsScreen() {
       } else {
         Alert.alert("Saved", uri);
       }
+    } catch (e: any) { Alert.alert("Export Error", e?.message ?? "Failed to export."); }
+  }
+
+  function requireBusiness() {
+    if (!isBusiness) {
+      Alert.alert(
+        "Business Plan Required",
+        "Accounting software exports (Xero, QuickBooks, Sage) are available on the Business plan (£34.99/mo).",
+        [
+          { text: "Not Now", style: "cancel" },
+          { text: "Upgrade", onPress: () => {} },
+        ]
+      );
+      return false;
+    }
+    return true;
+  }
+
+  async function exportXero() {
+    if (!requireBusiness()) return;
+    try {
+      const cs = await getExportClaims();
+      // Only include approved claims for Xero import
+      const approved = cs.filter(c => c.status === "approved");
+      if (approved.length === 0) {
+        Alert.alert("No approved claims", "Xero export only includes approved claims.");
+        return;
+      }
+      const rows = rowData(approved).map(rowToXero);
+      const uri = (FileSystem.documentDirectory ?? "") + "xero_import.csv";
+      await FileSystem.writeAsStringAsync(uri, XERO_HEADER + rows.join("\n"), {
+        encoding: FileSystem.EncodingType.UTF8
+      });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: "text/csv", dialogTitle: "Export for Xero" });
+      } else {
+        Alert.alert("Saved", uri);
+      }
+    } catch (e: any) { Alert.alert("Export Error", e?.message ?? "Failed to export."); }
+  }
+
+  async function exportQuickBooks() {
+    if (!requireBusiness()) return;
+    try {
+      const cs = await getExportClaims();
+      const approved = cs.filter(c => c.status === "approved");
+      if (approved.length === 0) {
+        Alert.alert("No approved claims", "QuickBooks export only includes approved claims.");
+        return;
+      }
+      const rows = rowData(approved).map(rowToQBO);
+      const uri = (FileSystem.documentDirectory ?? "") + "quickbooks_import.csv";
+      await FileSystem.writeAsStringAsync(uri, QBO_HEADER + rows.join("\n"), {
+        encoding: FileSystem.EncodingType.UTF8
+      });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: "text/csv", dialogTitle: "Export for QuickBooks" });
+      } else { Alert.alert("Saved", uri); }
+    } catch (e: any) { Alert.alert("Export Error", e?.message ?? "Failed to export."); }
+  }
+
+  async function exportSage() {
+    if (!requireBusiness()) return;
+    try {
+      const cs = await getExportClaims();
+      const approved = cs.filter(c => c.status === "approved");
+      if (approved.length === 0) {
+        Alert.alert("No approved claims", "Sage export only includes approved claims.");
+        return;
+      }
+      const rows = rowData(approved).map(rowToSage);
+      const uri = (FileSystem.documentDirectory ?? "") + "sage_import.csv";
+      await FileSystem.writeAsStringAsync(uri, SAGE_HEADER + rows.join("\n"), {
+        encoding: FileSystem.EncodingType.UTF8
+      });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: "text/csv", dialogTitle: "Export for Sage" });
+      } else { Alert.alert("Saved", uri); }
     } catch (e: any) { Alert.alert("Export Error", e?.message ?? "Failed to export."); }
   }
 
@@ -622,6 +744,18 @@ export default function AnalyticsScreen() {
         </TouchableOpacity>
         <TouchableOpacity style={styles.exportBtn} onPress={exportPDF}>
           <ThemedText style={styles.exportBtnText}>PDF</ThemedText>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.exportBtn, { borderColor: '#00B5A3' }]} onPress={exportXero}>
+          {!isBusiness && <Ionicons name="lock-closed" size={10} color="#00B5A3" style={{ marginRight: 3 }} />}
+          <ThemedText style={[styles.exportBtnText, { color: '#00B5A3' }]}>Xero</ThemedText>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.exportBtn, { borderColor: '#2CA01C' }]} onPress={exportQuickBooks}>
+          {!isBusiness && <Ionicons name="lock-closed" size={10} color="#2CA01C" style={{ marginRight: 3 }} />}
+          <ThemedText style={[styles.exportBtnText, { color: '#2CA01C' }]}>QBO</ThemedText>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.exportBtn, { borderColor: '#00DC82' }]} onPress={exportSage}>
+          {!isBusiness && <Ionicons name="lock-closed" size={10} color="#00DC82" style={{ marginRight: 3 }} />}
+          <ThemedText style={[styles.exportBtnText, { color: '#00DC82' }]}>Sage</ThemedText>
         </TouchableOpacity>
       </View>
 
