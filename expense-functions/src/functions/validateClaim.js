@@ -132,18 +132,21 @@ app.http("validateClaim", {
       const monthlyLimit = planConfig.claimsPerMonth ?? null;
 
       if (monthlyLimit !== null) {
-        const now          = new Date();
-        const startOfMonth = admin.firestore.Timestamp.fromDate(
-          new Date(now.getFullYear(), now.getMonth(), 1)
-        );
+        // Query by userId only (no composite index needed), then filter by date client-side
+        const now           = new Date();
+        const startOfMonth  = new Date(now.getFullYear(), now.getMonth(), 1);
 
-        const monthClaimsSnap = await db
+        const userClaimsSnap = await db
           .collection("claims")
-          .where("userId",    "==", userId)
-          .where("createdAt", ">=", startOfMonth)
+          .where("userId", "==", userId)
           .get();
 
-        if (monthClaimsSnap.size >= monthlyLimit) {
+        const monthCount = userClaimsSnap.docs.filter(d => {
+          const createdAt = d.data().createdAt?.toDate?.() ?? null;
+          return createdAt && createdAt >= startOfMonth;
+        }).length;
+
+        if (monthCount >= monthlyLimit) {
           const planLabel = orgPlan === "trial" ? "trial" : "free plan";
           return secureResponse(
             { valid: false, reason: `Monthly limit reached. You can submit up to ${monthlyLimit} claims per month on the ${planLabel}. Upgrade to Pro for unlimited submissions.` },

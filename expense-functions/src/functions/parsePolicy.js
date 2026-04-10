@@ -327,8 +327,7 @@ Return JSON only.
       return secureResponse({
         success: true,
         policyId: policyRef.id,
-        policy: parsed,
-        remaining: MAX_AI - (aiUsage + 1)
+        policy: parsed
       }, 200);
 
 ////////////////////////////////////////////////////

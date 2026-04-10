@@ -213,3 +213,6 @@ Closing these gaps transforms Claimio from a useful tool into an **essential bus
 | Trial | £0 (7 days) | 20 | 50 |
 | Pro | £14.99/mo | 20 | 50 |
 | Business | £34.99/mo | 100 | 150 |
+
+
+Need an email cooldown for reset password etc

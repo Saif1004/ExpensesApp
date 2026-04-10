@@ -118,8 +118,6 @@ export default function AnalyticsScreen() {
   const { user, role, isPro, isBusiness, orgId, orgCategories } = useAuth();
   const { tokens: t } = useTheme();
 
-  if (!isPro) return <PaywallScreen />;
-
   const [loading, setLoading]               = useState(true);
   const [aiLoading, setAiLoading]           = useState(false);
   const [aiInsight, setAiInsight]           = useState("");
@@ -645,6 +643,9 @@ export default function AnalyticsScreen() {
 
     return { chartConfig: cfg, styles: st };
   }, [t]);
+
+  // All hooks are above this line — safe to return early now
+  if (!isPro) return <PaywallScreen />;
 
   if (loading) {
     return (
