@@ -16,7 +16,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { ThemedText } from "../../components/themed-text";
 import { db } from "../firebase/firebaseConfig";
 import { useAuth } from "../context/AuthProvider";
-import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "../../hooks/useTheme";
 
 const DEFAULT_CATEGORIES = ["Meals", "Travel", "Technology", "Office"];
