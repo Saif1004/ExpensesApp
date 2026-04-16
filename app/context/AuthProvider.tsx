@@ -1,6 +1,7 @@
+import Constants from "expo-constants";
+import * as Notifications from "expo-notifications";
 import { useRouter, useSegments } from "expo-router";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
-import Constants from "expo-constants";
 import {
   collection,
   doc,
@@ -20,10 +21,9 @@ import React, {
   useState
 } from "react";
 import { AppState, Platform } from "react-native";
-import * as Notifications from "expo-notifications";
-import { PLAN_LIMITS, OrgPlan } from "../../constants/planLimits";
-import { auth, db } from "../firebase/firebaseConfig";
+import { OrgPlan, PLAN_LIMITS } from "../../constants/planLimits";
 import { unsubscribeAll } from "../../utils/listenerStore";
+import { auth, db } from "../firebase/firebaseConfig";
 import { getIsSigningUp } from "../utils/signUpFlag";
 
 //////////////////////////////////////////////////////
@@ -73,6 +73,7 @@ export const AuthContext = createContext<AuthContextType>({
   orgId: null,
   orgPlan: "free",
   isPro: false,
+  isBusiness: false,
   aiCreditsRemaining: 0,
   employeeLimit: 5,
   trialEndsAt: null,
@@ -268,7 +269,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           name: "Default",
           importance: Notifications.AndroidImportance.MAX,
           vibrationPattern: [0, 250, 250, 250],
-          lightColor: "#6366F1",
+          lightColor: "#0066FF",
         });
       }
 

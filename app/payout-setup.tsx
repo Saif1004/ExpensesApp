@@ -1,8 +1,9 @@
 import React, { useMemo, useState, useEffect } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, Alert,
-  ActivityIndicator, SafeAreaView, ScrollView, RefreshControl,
+  ActivityIndicator, ScrollView, RefreshControl,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import * as WebBrowser from "expo-web-browser";
 import { auth, db } from "./firebase/firebaseConfig";
 import { doc, onSnapshot } from "firebase/firestore";

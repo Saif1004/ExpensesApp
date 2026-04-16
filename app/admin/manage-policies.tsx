@@ -285,39 +285,41 @@ const styles = useMemo(() => StyleSheet.create({
     marginBottom:20
   },
 
-  back:{color: t.accent,fontSize:16,width:60},
+  back:{color: t.textSecondary,fontSize:16,width:60},
 
   title:{
     fontSize:24,
     color: t.text,
-    fontWeight:"600",
+    fontWeight:"800",
+    letterSpacing: -0.5,
     textAlign:"center",
     flex:1
   },
 
   input:{
     backgroundColor: t.surface,
-    padding:12,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
     color: t.text,
-    borderRadius:8
+    borderRadius:999
   },
 
   addBtn:{
     backgroundColor: t.accent,
-    padding:12,
+    padding:14,
     marginTop:10,
-    borderRadius:8
+    borderRadius:999
   },
 
-  btnText:{color: t.accentText, textAlign:"center"},
+  btnText:{color: "#FFFFFF", textAlign:"center", fontWeight: "700"},
 
   policyCard:{
     flexDirection:"row",
     justifyContent:"space-between",
-    padding:14,
+    padding:16,
     backgroundColor: t.surface,
     marginTop:10,
-    borderRadius:10
+    borderRadius:16
   },
 
   policyText:{color: t.text, flex:1, paddingRight:10},

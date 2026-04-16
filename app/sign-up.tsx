@@ -1,4 +1,3 @@
-import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import {
   GoogleSignin,
@@ -39,7 +38,9 @@ import GoogleLogo from "../components/GoogleLogo";
 
 const generateInviteCode = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  const buf = new Uint32Array(6);
+  crypto.getRandomValues(buf);
+  return Array.from(buf, v => chars[v % chars.length]).join('');
 };
 
 const usernameExists = async (username: string) => {
@@ -427,7 +428,7 @@ export default function SignUp() {
 
   const styles = useMemo(() => StyleSheet.create({
 
-    flex: { flex: 1 },
+    flex: { flex: 1, backgroundColor: t.bg },
 
     // ── Choose screen ──
 
@@ -643,8 +644,6 @@ export default function SignUp() {
       fontSize: 16,
       fontWeight: "700",
     },
-
-    btnDisabled: { opacity: 0.6 },
   }), [t]);
 
   //////////////////////////////////////////////////////
@@ -653,7 +652,7 @@ export default function SignUp() {
 
   if (mode === "choose") {
     return (
-      <LinearGradient colors={[t.bg, t.surface]} style={styles.flex}>
+      <View style={styles.flex}>
         <ScrollView
           contentContainerStyle={styles.chooseContainer}
           showsVerticalScrollIndicator={false}
@@ -735,7 +734,7 @@ export default function SignUp() {
             </Text>
           </TouchableOpacity>
         </ScrollView>
-      </LinearGradient>
+      </View>
     );
   }
 
@@ -745,7 +744,7 @@ export default function SignUp() {
 
   if (mode === "create") {
     return (
-      <LinearGradient colors={[t.bg, t.surface]} style={styles.flex}>
+      <View style={styles.flex}>
         <KeyboardAvoidingView
           style={styles.flex}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -845,7 +844,7 @@ export default function SignUp() {
             </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
-      </LinearGradient>
+      </View>
     );
   }
 
@@ -854,7 +853,7 @@ export default function SignUp() {
   //////////////////////////////////////////////////////
 
   return (
-    <LinearGradient colors={[t.bg, t.surface]} style={styles.flex}>
+    <View style={[styles.flex, { backgroundColor: t.bg }]}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -956,6 +955,6 @@ export default function SignUp() {
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
-    </LinearGradient>
+    </View>
   );
 }

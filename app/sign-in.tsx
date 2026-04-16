@@ -1,4 +1,3 @@
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
@@ -41,7 +40,8 @@ const LOCKOUT_MS   = 15 * 60 * 1000; // 15 minutes
 
 export default function SignIn() {
   const router = useRouter();
-  const { tokens: t } = useTheme();
+  const { tokens: t, mode } = useTheme();
+  const isDark = mode === "dark";
 
   const [identifier, setIdentifier]     = useState("");
   const [password, setPassword]         = useState("");
@@ -309,86 +309,77 @@ export default function SignIn() {
   //////////////////////////////////////////////////////
 
   const styles = useMemo(() => StyleSheet.create({
-    gradient: { flex: 1 },
+    gradient: { flex: 1, backgroundColor: t.bg },
     kav: { flex: 1 },
     scroll: {
       flexGrow: 1,
       justifyContent: "center",
       paddingHorizontal: 24,
-      paddingVertical: 48,
+      paddingVertical: 52,
     },
 
     brandRow: {
       flexDirection: "row",
       alignItems: "center",
-      marginBottom: 28,
+      marginBottom: 40,
       gap: 10,
     },
     logoBox: {
-      width: 48,
-      height: 48,
-      borderRadius: 14,
-      backgroundColor: t.accentSurface,
-      borderWidth: 1,
-      borderColor: t.accent + "44",
+      width: 44,
+      height: 44,
+      borderRadius: 12,
+      backgroundColor: t.accent,
       justifyContent: "center",
       alignItems: "center",
     },
     brandName: {
       color: t.text,
-      fontSize: 26,
+      fontSize: 22,
       fontWeight: "800",
-      letterSpacing: 0.5,
+      letterSpacing: -0.5,
     },
 
     heading: {
       color: t.text,
-      fontSize: 28,
-      fontWeight: "700",
+      fontSize: 34,
+      fontWeight: "800",
+      letterSpacing: -1,
       marginBottom: 6,
     },
     subheading: {
       color: t.textSecondary,
-      fontSize: 15,
-      marginBottom: 28,
-    },
-
-    card: {
-      backgroundColor: t.surface,
-      borderRadius: 20,
-      padding: 20,
-      borderWidth: 1,
-      borderColor: t.border,
-      marginBottom: 24,
+      fontSize: 16,
+      lineHeight: 24,
+      marginBottom: 36,
     },
 
     label: {
       color: t.textSecondary,
-      fontSize: 12,
-      fontWeight: "600",
-      marginBottom: 6,
+      fontSize: 11,
+      fontWeight: "700",
+      marginBottom: 8,
       textTransform: "uppercase",
-      letterSpacing: 0.6,
+      letterSpacing: 0.8,
     },
 
     inputWrapper: {
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: t.surfaceAlt,
-      borderRadius: 12,
+      backgroundColor: t.surface,
+      borderRadius: 14,
       borderWidth: 1,
       borderColor: t.border,
-      marginBottom: 16,
-      paddingHorizontal: 12,
+      marginBottom: 14,
+      paddingHorizontal: 14,
     },
     inputIcon: {
-      marginRight: 8,
+      marginRight: 10,
     },
     input: {
       flex: 1,
       color: t.text,
-      fontSize: 15,
-      paddingVertical: 13,
+      fontSize: 16,
+      paddingVertical: 14,
     },
     eyeBtn: {
       padding: 4,
@@ -396,11 +387,11 @@ export default function SignIn() {
 
     forgotBtn: {
       alignSelf: "flex-end",
-      marginBottom: 20,
-      marginTop: -8,
+      marginBottom: 24,
+      marginTop: -4,
     },
     forgotText: {
-      color: t.accent,
+      color: t.textSecondary,
       fontSize: 13,
       fontWeight: "500",
     },
@@ -409,12 +400,10 @@ export default function SignIn() {
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: t.errorSurface,
-      borderRadius: 10,
-      padding: 10,
+      borderRadius: 12,
+      padding: 12,
       marginBottom: 14,
       gap: 8,
-      borderWidth: 1,
-      borderColor: t.errorSurface,
     },
     lockoutText: {
       color: t.error,
@@ -424,22 +413,24 @@ export default function SignIn() {
 
     signInBtn: {
       backgroundColor: t.accent,
-      borderRadius: 12,
-      paddingVertical: 15,
+      borderRadius: 999,
+      paddingVertical: 16,
       alignItems: "center",
+      marginBottom: 32,
     },
-    btnDisabled: { opacity: 0.6 },
+    btnDisabled: { opacity: 0.5 },
     signInBtnText: {
-      color: t.accentText,
+      color: "#FFFFFF",
       fontSize: 16,
       fontWeight: "700",
+      letterSpacing: -0.2,
     },
 
     // ── Divider ──
     dividerRow: {
       flexDirection: "row",
       alignItems: "center",
-      marginBottom: 16,
+      marginBottom: 20,
     },
     dividerLine: {
       flex: 1,
@@ -449,14 +440,14 @@ export default function SignIn() {
     dividerText: {
       color: t.textTertiary,
       fontSize: 12,
-      marginHorizontal: 12,
+      marginHorizontal: 14,
     },
 
     // ── Social buttons ──
     socialRow: {
       flexDirection: "row",
-      gap: 12,
-      marginBottom: 24,
+      gap: 10,
+      marginBottom: 32,
     },
     socialBtn: {
       flex: 1,
@@ -464,15 +455,15 @@ export default function SignIn() {
       alignItems: "center",
       justifyContent: "center",
       gap: 8,
-      paddingVertical: 13,
-      borderRadius: 12,
+      paddingVertical: 14,
+      borderRadius: 999,
       borderWidth: 1,
       borderColor: t.border,
       backgroundColor: t.surface,
     },
     appleBtn: {
-      backgroundColor: "#000",
-      borderColor: "#000",
+      backgroundColor: isDark ? "#FFFFFF" : "#000000",
+      borderColor: isDark ? "#FFFFFF" : "#000000",
     },
     socialBtnText: {
       color: t.text,
@@ -480,7 +471,7 @@ export default function SignIn() {
       fontWeight: "600",
     },
     appleBtnText: {
-      color: "#fff",
+      color: isDark ? "#000000" : "#FFFFFF",
     },
     googleG: {
       fontSize: 16,
@@ -498,10 +489,10 @@ export default function SignIn() {
       fontSize: 14,
     },
     signUpLink: {
-      color: t.accent,
-      fontWeight: "600",
+      color: t.text,
+      fontWeight: "700",
     },
-  }), [t]);
+  }), [t, isDark]);
 
   //////////////////////////////////////////////////////
   // UI
@@ -510,7 +501,7 @@ export default function SignIn() {
   const isLocked = !!(lockedUntil && Date.now() < lockedUntil);
 
   return (
-    <LinearGradient colors={[t.bg, t.surface]} style={styles.gradient}>
+    <View style={styles.gradient}>
       <KeyboardAvoidingView
         style={styles.kav}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -523,86 +514,81 @@ export default function SignIn() {
           {/* Logo / branding */}
           <View style={styles.brandRow}>
             <View style={styles.logoBox}>
-              <Ionicons name="receipt-outline" size={28} color={t.accent} />
+              <Ionicons name="receipt-outline" size={22} color="#FFFFFF" />
             </View>
             <Text style={styles.brandName}>Claimio</Text>
           </View>
 
           <Text style={styles.heading}>Welcome back</Text>
-          <Text style={styles.subheading}>Sign in to your account</Text>
+          <Text style={styles.subheading}>Sign in to continue</Text>
 
-          {/* Card */}
-          <View style={styles.card}>
-
-            {/* Identifier */}
-            <Text style={styles.label}>Email or Username</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="person-outline" size={18} color={t.textTertiary} style={styles.inputIcon} />
-              <TextInput
-                value={identifier}
-                onChangeText={setIdentifier}
-                placeholder="email or username"
-                placeholderTextColor={t.textTertiary}
-                autoCapitalize="none"
-                autoCorrect={false}
-                keyboardType="email-address"
-                style={styles.input}
-                editable={!isLocked}
-              />
-            </View>
-
-            {/* Password */}
-            <Text style={styles.label}>Password</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="lock-closed-outline" size={18} color={t.textTertiary} style={styles.inputIcon} />
-              <TextInput
-                value={password}
-                onChangeText={setPassword}
-                placeholder="••••••••"
-                placeholderTextColor={t.textTertiary}
-                secureTextEntry={!showPassword}
-                style={[styles.input, { flex: 1 }]}
-                editable={!isLocked}
-              />
-              <TouchableOpacity onPress={() => setShowPassword(v => !v)} style={styles.eyeBtn}>
-                <Ionicons
-                  name={showPassword ? "eye-off-outline" : "eye-outline"}
-                  size={18}
-                  color={t.textTertiary}
-                />
-              </TouchableOpacity>
-            </View>
-
-            {/* Forgot password */}
-            <TouchableOpacity onPress={forgotPassword} style={styles.forgotBtn} disabled={loading}>
-              <Text style={styles.forgotText}>Forgot password?</Text>
-            </TouchableOpacity>
-
-            {/* Lockout warning */}
-            {isLocked && (
-              <View style={styles.lockoutBanner}>
-                <Ionicons name="lock-closed" size={14} color={t.error} />
-                <Text style={styles.lockoutText}>
-                  Too many failed attempts. Try again in{" "}
-                  {Math.ceil(((lockedUntil ?? 0) - Date.now()) / 60_000)} min.
-                </Text>
-              </View>
-            )}
-
-            {/* Sign in button */}
-            <TouchableOpacity
-              style={[styles.signInBtn, (loading || isLocked) && styles.btnDisabled]}
-              onPress={handleSignIn}
-              disabled={loading || isLocked}
-              activeOpacity={0.85}
-            >
-              {loading
-                ? <ActivityIndicator color={t.accentText} />
-                : <Text style={styles.signInBtnText}>Sign In</Text>
-              }
-            </TouchableOpacity>
-
+          {/* Identifier */}
+          <Text style={styles.label}>Email or Username</Text>
+          <View style={styles.inputWrapper}>
+            <Ionicons name="person-outline" size={18} color={t.textTertiary} style={styles.inputIcon} />
+            <TextInput
+              value={identifier}
+              onChangeText={setIdentifier}
+              placeholder="email or username"
+              placeholderTextColor={t.textTertiary}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              style={styles.input}
+              editable={!isLocked}
+            />
           </View>
+
+          {/* Password */}
+          <Text style={styles.label}>Password</Text>
+          <View style={styles.inputWrapper}>
+            <Ionicons name="lock-closed-outline" size={18} color={t.textTertiary} style={styles.inputIcon} />
+            <TextInput
+              value={password}
+              onChangeText={setPassword}
+              placeholder="••••••••"
+              placeholderTextColor={t.textTertiary}
+              secureTextEntry={!showPassword}
+              style={[styles.input, { flex: 1 }]}
+              editable={!isLocked}
+            />
+            <TouchableOpacity onPress={() => setShowPassword(v => !v)} style={styles.eyeBtn}>
+              <Ionicons
+                name={showPassword ? "eye-off-outline" : "eye-outline"}
+                size={18}
+                color={t.textTertiary}
+              />
+            </TouchableOpacity>
+          </View>
+
+          {/* Forgot password */}
+          <TouchableOpacity onPress={forgotPassword} style={styles.forgotBtn} disabled={loading}>
+            <Text style={styles.forgotText}>Forgot password?</Text>
+          </TouchableOpacity>
+
+          {/* Lockout warning */}
+          {isLocked && (
+            <View style={styles.lockoutBanner}>
+              <Ionicons name="lock-closed" size={14} color={t.error} />
+              <Text style={styles.lockoutText}>
+                Too many failed attempts. Try again in{" "}
+                {Math.ceil(((lockedUntil ?? 0) - Date.now()) / 60_000)} min.
+              </Text>
+            </View>
+          )}
+
+          {/* Sign in button */}
+          <TouchableOpacity
+            style={[styles.signInBtn, (loading || isLocked) && styles.btnDisabled]}
+            onPress={handleSignIn}
+            disabled={loading || isLocked}
+            activeOpacity={0.85}
+          >
+            {loading
+              ? <ActivityIndicator color="#FFFFFF" />
+              : <Text style={styles.signInBtnText}>Sign In</Text>
+            }
+          </TouchableOpacity>
 
           {/* Divider */}
           <View style={styles.dividerRow}>
@@ -632,7 +618,7 @@ export default function SignIn() {
                 disabled={loading}
                 activeOpacity={0.8}
               >
-                <Ionicons name="logo-apple" size={18} color="#fff" />
+                <Ionicons name="logo-apple" size={18} color={isDark ? "#000000" : "#FFFFFF"} />
                 <Text style={[styles.socialBtnText, styles.appleBtnText]}>Apple</Text>
               </TouchableOpacity>
             )}
@@ -648,6 +634,6 @@ export default function SignIn() {
 
         </ScrollView>
       </KeyboardAvoidingView>
-    </LinearGradient>
+    </View>
   );
 }

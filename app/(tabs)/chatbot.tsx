@@ -35,7 +35,8 @@ const QUICK_QUESTIONS = [
 export default function ChatbotScreen() {
 
   const { user, isPro } = useAuth();
-  const { tokens: t } = useTheme();
+  const { tokens: t, mode } = useTheme();
+  const isDark = mode === "dark";
 
   if(!isPro) return <PaywallScreen />;
   const flatListRef = useRef<FlatList>(null);
@@ -191,8 +192,9 @@ export default function ChatbotScreen() {
 
     title: {
       fontSize: 28,
-      fontWeight: "bold",
+      fontWeight: "800",
       color: t.text,
+      letterSpacing: -1,
       marginBottom: 16
     },
 
@@ -207,44 +209,52 @@ export default function ChatbotScreen() {
       flexDirection: "row",
       flexWrap: "wrap",
       gap: 8,
-      marginBottom: 12
+      marginBottom: 14
     },
 
     quickBtn: {
       backgroundColor: t.surface,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: 12
+      paddingHorizontal: 14,
+      paddingVertical: 9,
+      borderRadius: 999,
     },
 
     quickText: {
-      color: t.accent,
-      fontSize: 12
+      color: t.textSecondary,
+      fontSize: 12,
+      fontWeight: "500"
     },
 
     messageBubble: {
-      padding: 12,
-      borderRadius: 14,
-      marginBottom: 10,
-      maxWidth: "80%"
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      borderRadius: 18,
+      marginBottom: 8,
+      maxWidth: "82%"
     },
 
     userBubble: {
       alignSelf: "flex-end",
-      backgroundColor: t.accent
+      backgroundColor: t.accent,
+      borderBottomRightRadius: 6,
     },
 
     botBubble: {
       alignSelf: "flex-start",
-      backgroundColor: t.surface
+      backgroundColor: t.surface,
+      borderBottomLeftRadius: 6,
     },
 
     userMessageText: {
-      color: t.accentText
+      color: "#FFFFFF",
+      fontSize: 14,
+      lineHeight: 20
     },
 
     botMessageText: {
-      color: t.text
+      color: t.text,
+      fontSize: 14,
+      lineHeight: 20
     },
 
     disclaimer: {
@@ -269,31 +279,34 @@ export default function ChatbotScreen() {
     inputRow: {
       flexDirection: "row",
       gap: 10,
+      alignItems: "flex-end"
     },
 
     input: {
       flex: 1,
       backgroundColor: t.surface,
       color: t.text,
-      borderRadius: 12,
-      paddingHorizontal: 12,
+      borderRadius: 22,
+      paddingHorizontal: 16,
       paddingVertical: 12,
-      maxHeight: 120
+      maxHeight: 120,
+      fontSize: 14
     },
 
     sendButton: {
       backgroundColor: t.accent,
-      paddingHorizontal: 16,
+      paddingHorizontal: 18,
       paddingVertical: 12,
-      borderRadius: 12
+      borderRadius: 999,
     },
 
     sendText: {
-      color: t.accentText,
-      fontWeight: "600"
+      color: "#FFFFFF",
+      fontWeight: "700",
+      fontSize: 14
     }
 
-  }), [t]);
+  }), [t, isDark]);
 
   /////////////////////////////////////////////////////////
   // MESSAGE BUBBLE

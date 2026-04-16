@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -189,166 +188,182 @@ export default function HomeScreen() {
   const styles = useMemo(() => StyleSheet.create({
 
     root: { flex: 1, backgroundColor: t.bg },
-    container: { paddingTop: 0 },   // insets.top already on root; extra pad added in headerRow
+    container: { paddingTop: 0 },
 
     /* ── Header ── */
     headerRow: {
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
-      paddingHorizontal: 24,
-      paddingTop: 16,     // spacing below the safe area (SafeAreaView owns the inset itself)
-      marginBottom: 28,
+      paddingHorizontal: 20,
+      paddingTop: 12,
+      marginBottom: 20,
     },
     greetingLabel: {
-      color: t.textSecondary, fontSize: 13, fontWeight: "500", marginBottom: 2,
+      color: t.textSecondary, fontSize: 13, fontWeight: "500", marginBottom: 1,
       includeFontPadding: false,
     },
     greeting: {
-      color: t.text, fontSize: 30, fontWeight: "800", letterSpacing: -0.5,
-      lineHeight: 44,            // extra room so Android heavy-font ascenders are never clipped
-      includeFontPadding: false, // Android: strip internal glyph padding
+      color: t.text, fontSize: 28, fontWeight: "800", letterSpacing: -1,
+      lineHeight: 36,
+      includeFontPadding: false,
     },
     avatarBtn: {
-      width: 44, height: 44, borderRadius: 22,
+      width: 40, height: 40, borderRadius: 20,
       backgroundColor: t.surface,
       justifyContent: "center", alignItems: "center",
+      borderWidth: 1, borderColor: t.border,
     },
 
     /* ── Trial banner ── */
     trialBanner: {
       flexDirection: "row", alignItems: "center",
       backgroundColor: t.warningSurface,
-      borderRadius: t.radius.md, paddingHorizontal: 16, paddingVertical: 12,
-      marginHorizontal: 24, marginBottom: 24,
+      borderRadius: 999, paddingHorizontal: 16, paddingVertical: 11,
+      marginHorizontal: 20, marginBottom: 16,
       gap: 8,
     },
     trialText: { flex: 1, color: t.warning, fontSize: 13, fontWeight: "600" },
 
-    /* ── Hero spending card ── */
+    /* ── Hero spending card — Revolut/BMW clean surface ── */
     heroCard: {
-      marginHorizontal: 24,
-      marginBottom: 16,
-      // No overflow:hidden here — it clips large text on Android
+      marginHorizontal: 20,
+      marginBottom: 14,
+      borderRadius: 24,
+      backgroundColor: t.surface,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: isDark ? 0 : 0.07,
+      shadowRadius: 16,
+      elevation: isDark ? 0 : 3,
     },
     heroGradient: {
-      padding: 22,
-      borderRadius: t.radius.xl,   // radius lives on the gradient, not the wrapper
+      padding: 24,
+      borderRadius: 24,
     },
-    /* Row 1: label + right controls */
     heroTopRow: {
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
-      marginBottom: 10,
+      marginBottom: 20,
     },
     heroLabel: {
-      color: isDark ? "rgba(255,255,255,0.5)" : t.textSecondary,
-      fontSize: 11, fontWeight: "700",
-      letterSpacing: 1.2, textTransform: "uppercase",
+      color: t.textSecondary,
+      fontSize: 11, fontWeight: "600",
+      letterSpacing: 0.2,
     },
     heroBadge: {
       flexDirection: "row", alignItems: "center",
-      backgroundColor: isDark ? "rgba(255,255,255,0.1)" : t.accentSurface,
-      borderRadius: 10, paddingHorizontal: 10, paddingVertical: 5, gap: 4,
+      backgroundColor: t.surfaceAlt,
+      borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, gap: 4,
     },
     heroBadgeText: {
-      color: isDark ? "rgba(255,255,255,0.7)" : t.accent,
+      color: t.textSecondary,
       fontSize: 11, fontWeight: "600",
     },
     editBudgetBtn: {
-      width: 30, height: 30, borderRadius: t.radius.sm,
-      backgroundColor: isDark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)",
+      width: 30, height: 30, borderRadius: 15,
+      backgroundColor: t.surfaceAlt,
       justifyContent: "center", alignItems: "center",
       marginLeft: 6,
     },
-    /* Row 2: the big number — its own independent row */
     heroAmount: {
-      fontSize: 42, fontWeight: "800", letterSpacing: -1.5,
-      color: isDark ? "#FFFFFF" : t.text,
+      fontSize: 48, fontWeight: "800", letterSpacing: -2,
+      color: t.text,
       fontVariant: ["tabular-nums"],
-      lineHeight: 54,                // explicit line-height stops Android clipping
-      includeFontPadding: false,     // Android: remove internal font padding
-      marginBottom: 16,
+      lineHeight: 58,
+      includeFontPadding: false,
+      marginBottom: 20,
     },
-    /* Row 3: progress */
     progressTrack: {
-      height: 4, backgroundColor: isDark ? "rgba(255,255,255,0.15)" : t.border,
-      borderRadius: 2, overflow: "hidden", marginBottom: 8,
+      height: 3, backgroundColor: t.border,
+      borderRadius: 2, overflow: "hidden", marginBottom: 10,
     },
     progressFill:   { height: "100%", borderRadius: 2 },
     progressLabels: { flexDirection: "row", justifyContent: "space-between" },
     progressNote: {
-      color: isDark ? "rgba(255,255,255,0.45)" : t.textSecondary, fontSize: 12,
+      color: t.textSecondary, fontSize: 12,
     },
 
     /* ── Stats ── */
-    statsRow: { flexDirection: "row", gap: 12, marginHorizontal: 24, marginBottom: 28 },
+    statsRow: { flexDirection: "row", gap: 10, marginHorizontal: 20, marginBottom: 24 },
     statCard: {
-      flex: 1, backgroundColor: t.surface, borderRadius: t.radius.lg,
-      padding: 16, alignItems: "flex-start",
+      flex: 1, backgroundColor: t.surface,
+      borderRadius: 18,
+      padding: 18,
+      borderWidth: isDark ? 0 : 1,
+      borderColor: t.border,
     },
     statIconWrap: {
-      width: 38, height: 38, borderRadius: 12,
-      justifyContent: "center", alignItems: "center", marginBottom: 12,
-      alignSelf: "flex-start",
+      width: 36, height: 36, borderRadius: 10,
+      justifyContent: "center", alignItems: "center", marginBottom: 14,
     },
-    statValue: { fontSize: 28, fontWeight: "800", marginBottom: 2 },
-    statLabel: { color: t.textSecondary, fontSize: 12 },
+    statValue: {
+      fontSize: 30, fontWeight: "800", letterSpacing: -1,
+      lineHeight: 36, includeFontPadding: false, marginBottom: 4,
+    },
+    statLabel: { color: t.textSecondary, fontSize: 12, fontWeight: "500" },
 
-    /* ── Quick actions (horizontal scroll) ── */
-    actionsSection: { marginBottom: 32 },
+    /* ── Quick actions — horizontal pill chips ── */
+    actionsSection: { marginBottom: 28 },
     sectionHeader: {
       flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-      paddingHorizontal: 24, marginBottom: 16,
+      paddingHorizontal: 20, marginBottom: 14,
     },
-    sectionTitle: { color: t.text, fontSize: 16, fontWeight: "700" },
-    actionsScroll: { paddingLeft: 8, paddingRight: 8 },
-    actionItem: { alignItems: "center", marginRight: 20 },
-    actionCircle: {
-      width: 60, height: 60, borderRadius: 30,
+    sectionTitle: { color: t.text, fontSize: 15, fontWeight: "700", letterSpacing: -0.3 },
+    actionsScroll: { paddingLeft: 20, paddingRight: 8, gap: 8 },
+    // ActionChip styles (used in component below)
+    chipWrap: {
+      flexDirection: "row", alignItems: "center", gap: 7,
       backgroundColor: t.surface,
-      justifyContent: "center", alignItems: "center",
-      marginBottom: 8,
+      borderRadius: 999,
+      paddingVertical: 12, paddingHorizontal: 16,
+      marginRight: 8,
+      borderWidth: isDark ? 0 : 1,
+      borderColor: t.border,
     },
-    actionLabel: { color: t.textSecondary, fontSize: 11, fontWeight: "600", textAlign: "center" },
+    chipLabel: { color: t.text, fontSize: 13, fontWeight: "600" },
 
     /* ── Recent activity ── */
-    recentSection: { paddingHorizontal: 24 },
-    recentHeader:  { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
+    recentSection: { paddingHorizontal: 20 },
+    recentHeader:  { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
     viewAllLink:   { color: t.accent, fontSize: 14, fontWeight: "600" },
 
     recentCard: {
       flexDirection: "row", alignItems: "center",
-      backgroundColor: t.surface, borderRadius: t.radius.lg,
-      padding: 16, marginBottom: 10, gap: 14,
+      backgroundColor: t.surface,
+      borderRadius: 16,
+      padding: 14, marginBottom: 8, gap: 12,
+      borderWidth: isDark ? 0 : 1,
+      borderColor: t.border,
     },
     recentIconWrap: {
-      width: 44, height: 44, borderRadius: 14,
+      width: 40, height: 40, borderRadius: 12,
       justifyContent: "center", alignItems: "center",
+      backgroundColor: t.surfaceAlt,
     },
-    recentMerchant: { color: t.text, fontWeight: "700", fontSize: 15, marginBottom: 3 },
+    recentMerchant: { color: t.text, fontWeight: "700", fontSize: 15, marginBottom: 2 },
     recentMeta:     { color: t.textSecondary, fontSize: 13 },
     recentAmount:   { color: t.text, fontWeight: "700", fontSize: 15, marginBottom: 4, textAlign: "right" },
-    statusPill:     { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, alignSelf: "flex-end" },
-    statusPillText: { fontSize: 10, fontWeight: "800" },
+    statusPill:     { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, alignSelf: "flex-end" },
+    statusPillText: { fontSize: 10, fontWeight: "700" },
 
     /* ── Empty state ── */
     emptyState:    { alignItems: "center", paddingVertical: 48 },
     emptyIconWrap: {
-      width: 80, height: 80, borderRadius: 24, backgroundColor: t.surface,
-      justifyContent: "center", alignItems: "center", marginBottom: 20,
+      width: 72, height: 72, borderRadius: 20, backgroundColor: t.surface,
+      justifyContent: "center", alignItems: "center", marginBottom: 18,
     },
-    emptyTitle:    { color: t.textSecondary, fontSize: 17, fontWeight: "700", marginBottom: 6 },
-    emptySubtitle: { color: t.textTertiary, fontSize: 14, textAlign: "center", marginBottom: 24, maxWidth: 220, lineHeight: 20 },
-    emptyBtn:      { backgroundColor: t.accent, borderRadius: t.radius.md, paddingVertical: 14, paddingHorizontal: 28 },
-    emptyBtnText:  { color: t.accentText, fontWeight: "700", fontSize: 15 },
+    emptyTitle:    { color: t.text, fontSize: 17, fontWeight: "700", marginBottom: 6 },
+    emptySubtitle: { color: t.textSecondary, fontSize: 14, textAlign: "center", marginBottom: 24, maxWidth: 220, lineHeight: 20 },
+    emptyBtn:      { backgroundColor: t.accent, borderRadius: 999, paddingVertical: 14, paddingHorizontal: 28 },
+    emptyBtnText:  { color: "#FFFFFF", fontWeight: "700", fontSize: 15 },
 
     /* ── Budget modal ── */
     modalOverlay:  { flex: 1, justifyContent: "flex-end" },
-    modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.7)" },
+    modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.6)" },
     modalSheet: {
-      backgroundColor: t.surface, borderTopLeftRadius: t.radius.xxl, borderTopRightRadius: t.radius.xxl,
+      backgroundColor: t.surface, borderTopLeftRadius: 28, borderTopRightRadius: 28,
       paddingHorizontal: 24, paddingBottom: 40, paddingTop: 12,
     },
     sheetHandle: {
@@ -356,37 +371,33 @@ export default function HomeScreen() {
       borderRadius: 2, alignSelf: "center", marginBottom: 24,
     },
     modalHeader:   { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
-    modalTitle:    { color: t.text, fontSize: 20, fontWeight: "800" },
+    modalTitle:    { color: t.text, fontSize: 20, fontWeight: "800", letterSpacing: -0.5 },
     modalSubtitle: { color: t.textSecondary, fontSize: 14, marginBottom: 24 },
     presetGrid:    { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 24 },
     presetChip: {
-      paddingHorizontal: 18, paddingVertical: 12,
-      backgroundColor: t.surfaceAlt, borderRadius: t.radius.md,
+      paddingHorizontal: 20, paddingVertical: 12,
+      backgroundColor: t.surfaceAlt, borderRadius: 999,
     },
     presetChipActive:     { backgroundColor: t.accent },
     presetChipText:       { color: t.textSecondary, fontSize: 14, fontWeight: "600" },
-    presetChipTextActive: { color: t.accentText },
+    presetChipTextActive: { color: "#FFFFFF" },
     customLabel: {
-      color: t.textSecondary, fontSize: 12, fontWeight: "700",
-      marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.6,
+      color: t.textSecondary, fontSize: 11, fontWeight: "700",
+      marginBottom: 10, textTransform: "uppercase", letterSpacing: 0.8,
     },
     customInputRow: {
       flexDirection: "row", alignItems: "center",
-      backgroundColor: t.surfaceAlt, borderRadius: t.radius.md, borderWidth: 1, borderColor: t.border,
+      backgroundColor: t.surfaceAlt, borderRadius: 14, borderWidth: 1, borderColor: t.border,
       paddingHorizontal: 16, paddingVertical: 14, marginBottom: 24,
     },
     customInputRowActive: { borderColor: t.accent },
     currencySymbol: { color: t.accent, fontSize: 20, fontWeight: "700", marginRight: 8 },
     customInput:    { flex: 1, color: t.text, fontSize: 20, fontWeight: "700" },
-    saveBtn:        { backgroundColor: t.accent, borderRadius: t.radius.md, paddingVertical: 16, alignItems: "center" },
-    saveBtnText:    { color: t.accentText, fontSize: 16, fontWeight: "700" },
+    saveBtn:        { backgroundColor: t.accent, borderRadius: 999, paddingVertical: 16, alignItems: "center" },
+    saveBtnText:    { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
 
   }), [t, isDark]);
 
-  // Hero card gradient colours
-  const gradientColors: [string, string, string] = isDark
-    ? ["#1A1040", "#0E0B22", "#080808"]
-    : ["#EEF2FF", "#F0F4FF", "#FFFFFF"];
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -428,21 +439,21 @@ export default function HomeScreen() {
 
         {/* ── HERO SPENDING CARD ── */}
         <View style={styles.heroCard}>
-          <LinearGradient colors={gradientColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroGradient}>
+          <View style={styles.heroGradient}>
 
             {/* Row 1 — label + controls */}
             <View style={styles.heroTopRow}>
               <ThemedText style={styles.heroLabel}>Total Spending</ThemedText>
               <View style={{ flexDirection: "row", alignItems: "center" }}>
                 <View style={styles.heroBadge}>
-                  <Ionicons name="trending-up-outline" size={13} color={isDark ? "rgba(255,255,255,0.7)" : t.accent} />
+                  <Ionicons name="trending-up-outline" size={13} color={t.accent} />
                   <ThemedText style={styles.heroBadgeText}>All time</ThemedText>
                 </View>
                 <TouchableOpacity style={styles.editBudgetBtn} onPress={openBudgetModal} activeOpacity={0.75}>
                   <Ionicons
                     name={adminBudgetLimit ? "lock-closed-outline" : "pencil-outline"}
                     size={13}
-                    color={adminBudgetLimit ? t.warning : (isDark ? "rgba(255,255,255,0.6)" : t.textSecondary)}
+                    color={adminBudgetLimit ? t.warning : t.textSecondary}
                   />
                 </TouchableOpacity>
               </View>
@@ -467,7 +478,7 @@ export default function HomeScreen() {
               </ThemedText>
             </View>
 
-          </LinearGradient>
+          </View>
         </View>
 
         {/* ── STAT CARDS ── */}
@@ -476,18 +487,18 @@ export default function HomeScreen() {
           <StatCard label="Approved" value={approved} icon="checkmark-circle-outline" color={t.success} bg={t.successSurface} />
         </View>
 
-        {/* ── QUICK ACTIONS (horizontal scroll, circular — bunq-style) ── */}
+        {/* ── QUICK ACTIONS — horizontal pill chips ── */}
         <View style={styles.actionsSection}>
           <View style={styles.sectionHeader}>
             <ThemedText style={styles.sectionTitle}>Quick Actions</ThemedText>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.actionsScroll}>
-            <ActionCircle icon="add-circle-outline"       label="New Claim"  color={t.accent}   bg={t.accentSurface}   onPress={() => router.push("/add-expense")} />
-            <ActionCircle icon="document-text-outline"    label="My Claims"  color="#7C3AED"    bg={t.accentSurface}   onPress={() => router.push("/claims")} />
-            <ActionCircle icon="bar-chart-outline"        label="Analytics"  color="#0891B2"    bg={t.accentSurface}   onPress={() => router.push("/Analytics")} />
-            <ActionCircle icon="chatbubble-ellipses-outline" label="AI Chat" color="#10B981"    bg={t.successSurface}  onPress={() => router.push("/chatbot")} />
+            <ActionChip icon="add-outline"                label="New Claim"  color={t.accent}  onPress={() => router.push("/add-expense")} styles={styles} />
+            <ActionChip icon="document-text-outline"      label="My Claims"  color={t.text}    onPress={() => router.push("/claims")} styles={styles} />
+            <ActionChip icon="bar-chart-outline"          label="Analytics"  color={t.text}    onPress={() => router.push("/Analytics")} styles={styles} />
+            <ActionChip icon="chatbubble-ellipses-outline" label="AI Chat"   color={t.success} onPress={() => router.push("/chatbot")} styles={styles} />
             {role === "admin" && (
-              <ActionCircle icon="people-outline" label="Admin" color={t.warning} bg={t.warningSurface} onPress={() => router.push("/admin")} />
+              <ActionChip icon="people-outline" label="Admin" color={t.warning} onPress={() => router.push("/admin")} styles={styles} />
             )}
           </ScrollView>
         </View>
@@ -608,62 +619,39 @@ function StatCard({
   color: string;
   bg: string;
 }) {
-  const { tokens: t } = useTheme();
+  const { tokens: t, mode } = useTheme();
+  const isDark = mode === "dark";
 
   return (
     <View style={{
       flex: 1, backgroundColor: t.surface,
-      borderRadius: t.radius.lg, padding: 16,
-      alignItems: "flex-start",
+      borderRadius: 18, padding: 18,
+      borderWidth: isDark ? 0 : 1,
+      borderColor: t.border,
     }}>
-      {/* Icon */}
-      <View style={{
-        width: 38, height: 38, borderRadius: 12,
-        justifyContent: "center", alignItems: "center",
-        backgroundColor: bg, marginBottom: 10, marginLeft: -11,
-      }}>
-        <Ionicons name={icon} size={18} color={color} />
-      </View>
-      {/* Number — includeFontPadding:false stops Android clipping the top of heavy digits */}
+      <Ionicons name={icon} size={18} color={color} style={{ marginBottom: 14 }} />
       <ThemedText style={{
-        fontSize: 28, fontWeight: "800", color,
-        lineHeight: 38,
-        includeFontPadding: false,
-        marginBottom: 2,
+        fontSize: 30, fontWeight: "800", color,
+        lineHeight: 36, includeFontPadding: false,
+        letterSpacing: -1, marginBottom: 4,
       }}>
         {value}
       </ThemedText>
-      <ThemedText style={{ color: t.textSecondary, fontSize: 13 }}>
+      <ThemedText style={{ color: t.textSecondary, fontSize: 12, fontWeight: "500" }}>
         {label}
       </ThemedText>
     </View>
   );
 }
 
-function ActionCircle({ icon, label, color, bg, onPress }: {
+function ActionChip({ icon, label, color, onPress, styles }: {
   icon: React.ComponentProps<typeof Ionicons>["name"];
-  label: string; color: string; bg: string; onPress: () => void;
+  label: string; color: string; onPress: () => void; styles: any;
 }) {
-  const { tokens: t } = useTheme();
   return (
-    <TouchableOpacity
-      style={{ alignItems: "center", marginRight: 20, width: 68 }}
-      onPress={onPress}
-      activeOpacity={0.75}
-    >
-      <View style={{
-        width: 62, height: 62, borderRadius: 31,
-        backgroundColor: t.surface,
-        justifyContent: "center", alignItems: "center", marginBottom: 8,
-      }}>
-        <Ionicons name={icon} size={26} color={color} />
-      </View>
-      <ThemedText style={{
-        color: t.textSecondary, fontSize: 11, fontWeight: "600",
-        textAlign: "center", width: 68, lineHeight: 14,
-      }} numberOfLines={1}>
-        {label}
-      </ThemedText>
+    <TouchableOpacity style={styles.chipWrap} onPress={onPress} activeOpacity={0.7}>
+      <Ionicons name={icon} size={17} color={color} />
+      <ThemedText style={styles.chipLabel}>{label}</ThemedText>
     </TouchableOpacity>
   );
 }

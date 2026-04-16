@@ -69,7 +69,8 @@ type HistoryFilter = "all" | "approved" | "rejected";
 export default function AdminScreen() {
   const { role, orgId, user, refreshMembership } = useAuth();
   const insets = useSafeAreaInsets();
-  const { tokens: t } = useTheme();
+  const { tokens: t, mode } = useTheme();
+  const isDark = mode === "dark";
 
   const [tab, setTab]                         = useState<"pending" | "history">("pending");
   const [claims, setClaims]                   = useState<Claim[]>([]);
@@ -376,9 +377,10 @@ export default function AdminScreen() {
       marginBottom: 16
     },
     title: {
-      fontSize: 26,
+      fontSize: 28,
       fontWeight: "800",
       color: t.text,
+      letterSpacing: -1,
       marginBottom: 2
     },
     subtitle: {
@@ -388,12 +390,10 @@ export default function AdminScreen() {
     countBadge: {
       flexDirection: "row",
       alignItems: "center",
-      backgroundColor: t.surface,
-      borderRadius: 20,
+      backgroundColor: t.surfaceAlt,
+      borderRadius: 999,
       paddingHorizontal: 12,
       paddingVertical: 6,
-      borderWidth: 1,
-      borderColor: t.border
     },
     countBadgeText: {
       color: t.textSecondary,
@@ -405,20 +405,17 @@ export default function AdminScreen() {
     tabBar: {
       flexDirection: "row",
       gap: 10,
-      marginBottom: 12
+      marginBottom: 14
     },
     tabPill: {
       flex: 1,
-      paddingVertical: 9,
-      borderRadius: 10,
+      paddingVertical: 10,
+      borderRadius: 999,
       backgroundColor: t.surface,
       alignItems: "center",
-      borderWidth: 1,
-      borderColor: t.border
     },
     tabPillActive: {
-      backgroundColor: t.accentSurface,
-      borderColor: t.accent
+      backgroundColor: t.accent,
     },
     tabPillText: {
       color: t.textSecondary,
@@ -426,7 +423,7 @@ export default function AdminScreen() {
       fontWeight: "600"
     },
     tabPillTextActive: {
-      color: t.accent,
+      color: "#FFFFFF",
       fontWeight: "700"
     },
 
@@ -435,12 +432,14 @@ export default function AdminScreen() {
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: t.surface,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: t.border,
-      paddingHorizontal: 12,
-      marginBottom: 10,
-      height: 44
+      borderRadius: 999,
+      paddingHorizontal: 16,
+      marginBottom: 12,
+      height: 46,
+      ...(isDark ? {} : {
+        shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.06, shadowRadius: 6, elevation: 2
+      })
     },
     searchInput: {
       flex: 1,
@@ -456,15 +455,12 @@ export default function AdminScreen() {
     },
     chip: {
       paddingHorizontal: 14,
-      paddingVertical: 6,
-      borderRadius: 20,
+      paddingVertical: 7,
+      borderRadius: 999,
       backgroundColor: t.surface,
-      borderWidth: 1,
-      borderColor: t.border
     },
     chipActive: {
-      backgroundColor: t.accentSurface,
-      borderColor: t.accent
+      backgroundColor: t.accent,
     },
     chipText: {
       color: t.textSecondary,
@@ -472,27 +468,25 @@ export default function AdminScreen() {
       fontWeight: "600"
     },
     chipTextActive: {
-      color: t.accent
+      color: "#FFFFFF",
+      fontWeight: "700"
     },
 
     /* History status filter */
     historyFilterRow: {
       flexDirection: "row",
       gap: 8,
-      marginBottom: 12
+      marginBottom: 14
     },
     historyFilterBtn: {
       flex: 1,
-      paddingVertical: 7,
-      borderRadius: 10,
+      paddingVertical: 8,
+      borderRadius: 999,
       backgroundColor: t.surface,
       alignItems: "center",
-      borderWidth: 1,
-      borderColor: t.border
     },
     historyFilterBtnActive: {
-      backgroundColor: t.accentSurface,
-      borderColor: t.accent
+      backgroundColor: t.accent,
     },
     historyFilterText: {
       color: t.textSecondary,
@@ -500,7 +494,7 @@ export default function AdminScreen() {
       fontWeight: "600"
     },
     historyFilterTextActive: {
-      color: t.accent,
+      color: "#FFFFFF",
       fontWeight: "700"
     },
     exportRow: {
@@ -513,14 +507,12 @@ export default function AdminScreen() {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
-      paddingVertical: 7,
-      borderRadius: 10,
+      paddingVertical: 8,
+      borderRadius: 999,
       backgroundColor: t.surface,
-      borderWidth: 1,
-      borderColor: t.accent,
     },
     exportBtnText: {
-      color: t.accent,
+      color: t.textSecondary,
       fontSize: 12,
       fontWeight: "600",
     },
@@ -540,50 +532,52 @@ export default function AdminScreen() {
     /* Card */
     card: {
       backgroundColor: t.surface,
-      borderRadius: 16,
-      marginBottom: 16,
+      borderRadius: 20,
+      marginBottom: 14,
       overflow: "hidden",
-      borderWidth: 1,
-      borderColor: t.border
+      ...(isDark ? {} : {
+        shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08, shadowRadius: 12, elevation: 3
+      })
     },
     cardHeader: {
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "flex-start",
-      padding: 16
+      padding: 18
     },
     amount: {
       fontSize: 22,
-      fontWeight: "bold",
-      color: t.text
+      fontWeight: "800",
+      color: t.text,
+      letterSpacing: -0.5
     },
     merchant: {
       marginTop: 2,
       fontSize: 14,
-      color: t.textSecondary
+      color: t.textSecondary,
+      fontWeight: "500"
     },
     categoryBadge: {
-      backgroundColor: t.bg,
-      borderRadius: 8,
+      backgroundColor: t.surfaceAlt,
+      borderRadius: 999,
       paddingHorizontal: 10,
       paddingVertical: 4,
-      borderWidth: 1,
-      borderColor: t.accent
     },
     categoryText: {
-      color: t.accent,
+      color: t.textSecondary,
       fontSize: 12,
       fontWeight: "600"
     },
     divider: {
-      height: 1,
+      height: StyleSheet.hairlineWidth,
       backgroundColor: t.border,
-      marginHorizontal: 16
+      marginHorizontal: 18
     },
     infoRow: {
       flexDirection: "row",
       justifyContent: "space-between",
-      paddingHorizontal: 16,
+      paddingHorizontal: 18,
       paddingTop: 10
     },
     infoLabel: {
@@ -603,7 +597,7 @@ export default function AdminScreen() {
 
     /* History status badges */
     historyStatusBadge: {
-      borderRadius: 8,
+      borderRadius: 999,
       paddingHorizontal: 10,
       paddingVertical: 4
     },
@@ -615,10 +609,10 @@ export default function AdminScreen() {
 
     /* Payment badges */
     paymentBadge: {
-      marginHorizontal: 16,
+      marginHorizontal: 18,
       marginTop: 10,
       alignSelf: "flex-start",
-      borderRadius: 8,
+      borderRadius: 999,
       paddingHorizontal: 10,
       paddingVertical: 4
     },
@@ -669,21 +663,21 @@ export default function AdminScreen() {
     /* Action buttons */
     buttonRow: {
       flexDirection: "row",
-      margin: 16,
+      margin: 18,
       gap: 10
     },
     approveBtn: {
       flex: 2,
       backgroundColor: t.success,
-      paddingVertical: 12,
-      borderRadius: 12,
+      paddingVertical: 13,
+      borderRadius: 999,
       alignItems: "center"
     },
     rejectBtn: {
       flex: 1,
       backgroundColor: t.error,
-      paddingVertical: 12,
-      borderRadius: 12,
+      paddingVertical: 13,
+      borderRadius: 999,
       alignItems: "center"
     },
     btnText: {
@@ -703,21 +697,20 @@ export default function AdminScreen() {
     /* Confirmation modal */
     confirmModalContent: {
       backgroundColor: t.surface,
-      borderRadius: 20,
+      borderRadius: 24,
       overflow: "hidden",
-      borderWidth: 1,
-      borderColor: t.border
     },
     confirmTitleBar: {
-      paddingVertical: 16,
+      paddingVertical: 18,
       paddingHorizontal: 20,
       alignItems: "center"
     },
     confirmTitleBarApprove: { backgroundColor: t.successSurface },
     confirmTitleBarReject: { backgroundColor: t.errorSurface },
     confirmTitle: {
-      fontSize: 17,
-      fontWeight: "700",
+      fontSize: 18,
+      fontWeight: "800",
+      letterSpacing: -0.5,
       color: t.text
     },
     confirmDetails: {
@@ -729,8 +722,9 @@ export default function AdminScreen() {
       marginBottom: 6
     },
     confirmAmount: {
-      fontSize: 32,
-      fontWeight: "bold",
+      fontSize: 36,
+      fontWeight: "800",
+      letterSpacing: -1,
       color: t.text
     },
     confirmDetailRow: {
@@ -751,17 +745,15 @@ export default function AdminScreen() {
       maxWidth: "65%"
     },
     confirmDivider: {
-      height: 1,
+      height: StyleSheet.hairlineWidth,
       backgroundColor: t.border,
       marginHorizontal: 20
     },
     messageInput: {
       margin: 20,
       backgroundColor: t.surfaceAlt,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: t.border,
-      padding: 12,
+      borderRadius: 16,
+      padding: 14,
       color: t.text,
       fontSize: 14,
       textAlignVertical: "top",
@@ -775,9 +767,9 @@ export default function AdminScreen() {
     },
     cancelBtn: {
       flex: 1,
-      backgroundColor: t.border,
-      paddingVertical: 13,
-      borderRadius: 12,
+      backgroundColor: t.surfaceAlt,
+      paddingVertical: 14,
+      borderRadius: 999,
       alignItems: "center"
     },
     cancelBtnText: {
@@ -787,8 +779,8 @@ export default function AdminScreen() {
     },
     confirmBtn: {
       flex: 2,
-      paddingVertical: 13,
-      borderRadius: 12,
+      paddingVertical: 14,
+      borderRadius: 999,
       alignItems: "center"
     },
     confirmBtnApprove: { backgroundColor: t.success },
@@ -802,24 +794,24 @@ export default function AdminScreen() {
     /* Receipt image modal */
     imageModalContent: {
       backgroundColor: t.surface,
-      borderRadius: 16,
+      borderRadius: 24,
       padding: 16
     },
     modalImage: {
       width: "100%",
       height: 400,
-      borderRadius: 12
+      borderRadius: 16
     },
     closeBtn: {
-      marginTop: 16,
+      marginTop: 14,
       backgroundColor: t.accent,
-      padding: 13,
-      borderRadius: 12,
+      padding: 14,
+      borderRadius: 999,
       alignItems: "center"
     },
     closeBtnText: {
-      color: t.accentText,
-      fontWeight: "600",
+      color: "#FFFFFF",
+      fontWeight: "700",
       fontSize: 14
     },
 
@@ -827,14 +819,12 @@ export default function AdminScreen() {
     selfClaimNotice: {
       flexDirection: "row",
       alignItems: "center",
-      margin: 16,
+      margin: 18,
       marginTop: 12,
       paddingHorizontal: 14,
       paddingVertical: 10,
-      backgroundColor: t.surface,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: t.border
+      backgroundColor: t.surfaceAlt,
+      borderRadius: 12,
     },
     selfClaimText: {
       color: t.textTertiary,
@@ -853,7 +843,7 @@ export default function AdminScreen() {
       color: t.error,
       fontSize: 18
     }
-  }), [t]);
+  }), [t, isDark]);
 
   if (role !== "admin") {
     return (

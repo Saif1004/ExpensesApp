@@ -7,7 +7,6 @@
  * No email/password fields needed here.
  */
 
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { signOut } from "firebase/auth";
@@ -44,7 +43,9 @@ import { useTheme } from "../hooks/useTheme";
 
 const generateInviteCode = () => {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+  const buf = new Uint32Array(6);
+  crypto.getRandomValues(buf);
+  return Array.from(buf, v => chars[v % chars.length]).join("");
 };
 
 const usernameExists = async (username: string) => {
@@ -273,7 +274,7 @@ export default function SocialOnboarding() {
   //////////////////////////////////////////////////////
 
   const styles = useMemo(() => StyleSheet.create({
-    flex: { flex: 1 },
+    flex: { flex: 1, backgroundColor: t.bg },
 
     container: {
       flexGrow: 1,
@@ -424,7 +425,7 @@ export default function SocialOnboarding() {
 
   if (mode === "choose") {
     return (
-      <LinearGradient colors={[t.bg, t.surface]} style={styles.flex}>
+      <View style={styles.flex}>
         <ScrollView
           contentContainerStyle={styles.container}
           showsVerticalScrollIndicator={false}
@@ -474,7 +475,7 @@ export default function SocialOnboarding() {
             <Text style={styles.cancelText}>Cancel and sign out</Text>
           </TouchableOpacity>
         </ScrollView>
-      </LinearGradient>
+      </View>
     );
   }
 
@@ -484,7 +485,7 @@ export default function SocialOnboarding() {
 
   if (mode === "create") {
     return (
-      <LinearGradient colors={[t.bg, t.surface]} style={styles.flex}>
+      <View style={styles.flex}>
         <KeyboardAvoidingView
           style={styles.flex}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -541,7 +542,7 @@ export default function SocialOnboarding() {
             </TouchableOpacity>
           </ScrollView>
         </KeyboardAvoidingView>
-      </LinearGradient>
+      </View>
     );
   }
 
@@ -550,7 +551,7 @@ export default function SocialOnboarding() {
   //////////////////////////////////////////////////////
 
   return (
-    <LinearGradient colors={[t.bg, t.surface]} style={styles.flex}>
+    <View style={[styles.flex, { backgroundColor: t.bg }]}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -609,6 +610,6 @@ export default function SocialOnboarding() {
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
-    </LinearGradient>
+    </View>
   );
 }

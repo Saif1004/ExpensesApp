@@ -8,7 +8,8 @@ import {
   where
 } from "firebase/firestore";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
   ActivityIndicator,
@@ -33,18 +34,18 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import PaywallScreen from "../../components/paywall-screen";
 import { ThemedText } from "../../components/themed-text";
+import { useTheme } from "../../hooks/useTheme";
+import { addListener } from "../../utils/listenerStore";
 import { useAuth } from "../context/AuthProvider";
 import { db } from "../firebase/firebaseConfig";
-import { addListener } from "../../utils/listenerStore";
-import { useTheme } from "../../hooks/useTheme";
 
 const screenWidth = Dimensions.get("window").width;
 const AI_URL = process.env.EXPO_PUBLIC_ANALYTICS_AI_URL!;
 
-// 10 distinct colours for dynamic categories
+// 10 distinct colours for dynamic categories — no purples
 const CATEGORY_COLOURS = [
-  "#6366F1", "#22C55E", "#F59E0B", "#F97316",
-  "#EF4444", "#06B6D4", "#8B5CF6", "#EC4899",
+  "#0066FF", "#22C55E", "#F59E0B", "#F97316",
+  "#EF4444", "#06B6D4", "#0EA5E9", "#EC4899",
   "#14B8A6", "#84CC16"
 ];
 
@@ -116,7 +117,7 @@ function filterByPeriod(claims: Claim[], period: Period): Claim[] {
 
 export default function AnalyticsScreen() {
   const { user, role, isPro, isBusiness, orgId, orgCategories } = useAuth();
-  const { tokens: t } = useTheme();
+  const { tokens: t, mode } = useTheme();
 
   const [loading, setLoading]               = useState(true);
   const [aiLoading, setAiLoading]           = useState(false);
@@ -531,7 +532,7 @@ export default function AnalyticsScreen() {
   h1 { font-size: 22px; margin-bottom: 4px; color: #0D1B2A; }
   .meta { color: #6B7A8D; margin: 0 0 24px; font-size: 11px; }
   table { width: 100%; border-collapse: collapse; }
-  th { background: #6366F1; color: #fff; padding: 7px 8px; text-align: left; font-size: 10px; }
+  th { background: #0066FF; color: #fff; padding: 7px 8px; text-align: left; font-size: 10px; }
   td { padding: 6px 8px; border-bottom: 1px solid #E8ECF0; font-size: 10px; }
   tr:nth-child(even) td { background: #F8F9FC; }
   .status-approved { color: #16a34a; font-weight: 600; }
@@ -569,6 +570,7 @@ export default function AnalyticsScreen() {
   }
 
   // ── STYLES ────────────────────────────────────────────
+  const isDark = mode === "dark";
   const { chartConfig, styles } = useMemo(() => {
     const cfg = {
       backgroundGradientFrom: t.surface,
@@ -581,46 +583,50 @@ export default function AnalyticsScreen() {
       propsForBackgroundLines: { stroke: t.border, strokeDasharray: "" }
     };
 
+    const shadow = isDark ? {} : {
+      shadowColor: "#000" as string, shadowOffset: { width: 0, height: 2 } as any,
+      shadowOpacity: 0.07 as number, shadowRadius: 10 as number, elevation: 3 as number
+    };
+
     const st = StyleSheet.create({
       container:      { flex: 1, backgroundColor: t.bg },
-      inner:          { padding: 20, paddingBottom: 60 },
-      title:          { marginTop: 24, fontSize: 26, fontWeight: "800", color: t.text },
-      subtitle:       { color: t.textSecondary, fontSize: 13, marginTop: 2, marginBottom: 16 },
-      scopeRow:       { flexDirection: "row", backgroundColor: t.surface, borderRadius: 12,
-                        borderWidth: 1, borderColor: t.border, padding: 3, marginBottom: 20 },
-      scopeBtn:       { flex: 1, paddingVertical: 9, alignItems: "center", borderRadius: 10 },
+      inner:          { flexGrow: 1, paddingHorizontal: 20, paddingBottom: 60 },
+      title:          { fontSize: 28, fontWeight: "800", color: t.text, letterSpacing: -0.8, marginBottom: 2 },
+      subtitle:       { color: t.textSecondary, fontSize: 13, marginBottom: 12 },
+      scopeRow:       { flexDirection: "row", backgroundColor: t.surface, borderRadius: 999,
+                        padding: 4, marginBottom: 20, ...shadow },
+      scopeBtn:       { flex: 1, paddingVertical: 9, alignItems: "center", borderRadius: 999 },
       scopeBtnActive: { backgroundColor: t.accent },
       scopeText:      { fontSize: 13, fontWeight: "600", color: t.textSecondary },
-      scopeTextActive:{ color: "#fff" },
+      scopeTextActive:{ color: "#FFFFFF" },
       periodRow:      { flexDirection: "row", gap: 8, marginBottom: 20, flexWrap: "wrap" },
-      pill:           { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
-                        borderWidth: 1, borderColor: t.border, backgroundColor: t.surface },
-      pillActive:     { backgroundColor: t.accent, borderColor: t.accent },
+      pill:           { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999,
+                        backgroundColor: t.surface },
+      pillActive:     { backgroundColor: t.accent },
       pillText:       { color: t.textSecondary, fontSize: 12, fontWeight: "600" },
-      pillTextActive: { color: "#fff" },
+      pillTextActive: { color: "#FFFFFF", fontWeight: "700" },
       grid:           { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 8 },
-      card:           { width: "47%", backgroundColor: t.surface, padding: 16, borderRadius: 14,
-                        borderWidth: 1, borderColor: t.border },
-      cardLabel:      { color: t.textSecondary, fontSize: 11, marginBottom: 4 },
-      cardValue:      { fontSize: 20, fontWeight: "800", color: t.text },
-      cardValueSm:    { fontSize: 16, fontWeight: "700", color: t.text },
-      sectionTitle:   { fontSize: 15, fontWeight: "700", color: t.text, marginTop: 24, marginBottom: 10 },
-      aiCard:         { backgroundColor: t.accentSurface, padding: 16, borderRadius: 14,
-                        borderWidth: 1, borderColor: t.accent + "33", marginBottom: 4 },
-      aiTitle:        { color: t.accent, fontWeight: "700", marginBottom: 6, fontSize: 13 },
-      aiText:         { color: t.text, lineHeight: 20, fontSize: 13 },
-      aiBtn:          { backgroundColor: t.accent, padding: 11, borderRadius: 10, marginTop: 10, alignItems: "center" },
-      exportRow:      { flexDirection: "row", gap: 10, marginBottom: 4 },
-      exportBtn:      { flex: 1, borderWidth: 1, borderColor: t.accent, borderRadius: 10,
-                        paddingVertical: 11, alignItems: "center" },
-      exportBtnText:  { color: t.accent, fontWeight: "700", fontSize: 12 },
-      chart:          { borderRadius: 14 },
+      card:           { width: "47%", backgroundColor: t.surface, padding: 16, borderRadius: 18, ...shadow },
+      cardLabel:      { color: t.textSecondary, fontSize: 11, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 },
+      cardValue:      { fontSize: 22, fontWeight: "800", color: t.text, letterSpacing: -0.5 },
+      cardValueSm:    { fontSize: 18, fontWeight: "700", color: t.text, letterSpacing: -0.3 },
+      sectionTitle:   { fontSize: 16, fontWeight: "700", color: t.text, marginTop: 28, marginBottom: 12, letterSpacing: -0.3 },
+      aiCard:         { backgroundColor: t.surface, padding: 18, borderRadius: 18,
+                        marginBottom: 4, ...shadow },
+      aiTitle:        { color: t.text, fontWeight: "700", marginBottom: 6, fontSize: 14 },
+      aiText:         { color: t.textSecondary, lineHeight: 20, fontSize: 13 },
+      aiBtn:          { backgroundColor: t.accent, padding: 13, borderRadius: 999, marginTop: 12, alignItems: "center" },
+      exportRow:      { flexDirection: "row", gap: 8, marginBottom: 4 },
+      exportBtn:      { flex: 1, backgroundColor: t.surface, borderRadius: 999,
+                        paddingVertical: 10, alignItems: "center", ...shadow },
+      exportBtnText:  { color: t.textSecondary, fontWeight: "700", fontSize: 11 },
+      chart:          { borderRadius: 16 },
       merchantRow:    { flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-                        paddingVertical: 10, borderBottomWidth: 1, borderColor: t.border },
+                        paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: t.border },
       merchantName:   { color: t.text, fontSize: 13, fontWeight: "500", flex: 1 },
-      merchantAmt:    { color: t.accent, fontSize: 13, fontWeight: "700" },
+      merchantAmt:    { color: t.text, fontSize: 13, fontWeight: "800" },
       catRow:         { flexDirection: "row", alignItems: "center", paddingVertical: 9,
-                        borderBottomWidth: 1, borderColor: t.border },
+                        borderBottomWidth: StyleSheet.hairlineWidth, borderColor: t.border },
       catDot:         { width: 10, height: 10, borderRadius: 5, marginRight: 10 },
       catName:        { color: t.text, fontSize: 13, flex: 1 },
       catCount:       { color: t.textSecondary, fontSize: 12, marginRight: 12 },
@@ -629,20 +635,19 @@ export default function AnalyticsScreen() {
       emptyNote:      { color: t.textSecondary, fontSize: 13, textAlign: "center", marginTop: 6, marginBottom: 4 },
 
       // Forecast styles
-      forecastCard:   { backgroundColor: t.surface, borderRadius: 14, padding: 16,
-                        borderWidth: 1, borderColor: t.border, marginBottom: 12 },
-      forecastHighlight: { borderColor: t.accent + "55", backgroundColor: t.accentSurface },
+      forecastCard:   { backgroundColor: t.surface, borderRadius: 18, padding: 16, marginBottom: 12, ...shadow },
+      forecastHighlight: { backgroundColor: t.accentSurface },
       forecastCardTitle: { color: t.text, fontWeight: "700", fontSize: 14, marginBottom: 2 },
       forecastCardSub:   { color: t.textSecondary, fontSize: 12 },
       forecastMeta:   { color: t.textSecondary, fontSize: 11, marginTop: 8, textAlign: "right" },
       forecastNote:   { color: t.textSecondary, fontSize: 10, marginTop: 2 },
-      progressTrack:  { height: 8, backgroundColor: t.border, borderRadius: 4, marginTop: 10, overflow: "hidden" },
-      progressFill:   { height: 8, backgroundColor: t.accent, borderRadius: 4 },
-      trendIconWrap:  { width: 40, height: 40, borderRadius: 12, justifyContent: "center", alignItems: "center" },
+      progressTrack:  { height: 6, backgroundColor: t.border, borderRadius: 999, marginTop: 10, overflow: "hidden" },
+      progressFill:   { height: 6, backgroundColor: t.accent, borderRadius: 999 },
+      trendIconWrap:  { width: 40, height: 40, borderRadius: 999, justifyContent: "center", alignItems: "center" },
     });
 
     return { chartConfig: cfg, styles: st };
-  }, [t]);
+  }, [t, isDark]);
 
   // All hooks are above this line — safe to return early now
   if (!isPro) return <PaywallScreen />;
@@ -656,8 +661,8 @@ export default function AnalyticsScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.inner}>
-
+    <SafeAreaView style={styles.container} edges={["top"]}>
+      <ScrollView contentContainerStyle={[styles.inner, { marginTop: 10 }]}>
       <ThemedText style={styles.title}>Analytics</ThemedText>
       <ThemedText style={styles.subtitle}>
         {stats.total} claim{stats.total !== 1 ? "s" : ""} · £{stats.totalSpend.toFixed(2)} total spend
@@ -962,5 +967,6 @@ export default function AnalyticsScreen() {
       )}
 
     </ScrollView>
+    </SafeAreaView>
   );
 }

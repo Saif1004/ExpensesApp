@@ -206,6 +206,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const { role, orgPlan, trialDaysLeft, orgId, refreshMembership } = useAuth();
   const { tokens: t, mode, toggleTheme } = useTheme();
+  const isDark = mode === "dark";
   const [refreshingRole, setRefreshingRole] = useState(false);
   const spinAnim = useRef(new Animated.Value(0)).current;
 
@@ -394,9 +395,9 @@ export default function ProfileScreen() {
     setGeneratingCode(true);
     try {
       const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-      const newCode = Array.from({ length: 6 }, () =>
-        chars[Math.floor(Math.random() * chars.length)]
-      ).join("");
+      const buf = new Uint32Array(6);
+      crypto.getRandomValues(buf);
+      const newCode = Array.from(buf, v => chars[v % chars.length]).join("");
       await updateDoc(doc(db, "organisations", orgId), { inviteCode: newCode });
       setInviteCode(newCode);
     } catch {
@@ -431,7 +432,7 @@ export default function ProfileScreen() {
 
     container: {
       paddingHorizontal: 20,
-      paddingTop: 0,      // insets.top already on root; avatar section supplies its own top space
+      paddingTop: 0,
     },
 
     loading: {
@@ -444,7 +445,7 @@ export default function ProfileScreen() {
     /* ── Avatar ── */
     avatarSection: {
       alignItems: "center",
-      paddingTop: 32,      // generous headroom below status bar
+      paddingTop: 32,
       paddingBottom: 24,
       marginBottom: 8,
     },
@@ -460,35 +461,35 @@ export default function ProfileScreen() {
     },
 
     avatar: {
-      width: 112,
-      height: 112,
-      borderRadius: 56,
-      backgroundColor: t.accentSurface,
+      width: 88,
+      height: 88,
+      borderRadius: 44,
+      backgroundColor: t.accent,
       justifyContent: "center",
       alignItems: "center",
-      marginBottom: 20,
+      marginBottom: 16,
     },
 
     avatarText: {
-      color: t.accent,
-      fontSize: 34,              // reduced — letter no longer crowds the circle edges
-      fontWeight: "700",
-      lineHeight: 44,            // explicit lineHeight stops Android clipping the glyph top
-      includeFontPadding: false, // Android: strip internal font box padding
+      color: "#FFFFFF",
+      fontSize: 32,
+      fontWeight: "800",
+      lineHeight: 42,
+      includeFontPadding: false,
     },
 
     name: {
       color: t.text,
-      fontSize: 24,
+      fontSize: 26,
       fontWeight: "800",
-      letterSpacing: -0.3,
-      lineHeight: 32,
+      letterSpacing: -1,
+      lineHeight: 34,
       includeFontPadding: false,
     },
 
     email: {
       color: t.textSecondary,
-      marginTop: 4,
+      marginTop: 3,
       fontSize: 14,
       includeFontPadding: false,
     },
@@ -496,43 +497,38 @@ export default function ProfileScreen() {
     badgeRow: {
       flexDirection: "row",
       gap: 8,
-      marginTop: 12
+      marginTop: 14,
+      alignItems: "center"
     },
 
     roleBadge: {
-      borderRadius: 20,
+      borderRadius: 999,
       paddingHorizontal: 12,
-      paddingVertical: 4
+      paddingVertical: 5
     },
 
     roleBadgeAdmin: {
       backgroundColor: t.warningSurface,
-      borderWidth: 1,
-      borderColor: t.warning
     },
 
     roleBadgeEmployee: {
       backgroundColor: t.accentSurface,
-      borderWidth: 1,
-      borderColor: t.accent
     },
 
     roleBadgeText: {
       fontSize: 11,
       fontWeight: "800",
-      letterSpacing: 1
+      letterSpacing: 0.8
     },
 
     roleBadgeTextAdmin:    { color: t.warning },
     roleBadgeTextEmployee: { color: t.accent },
 
     planBadge: {
-      borderRadius: 20,
+      borderRadius: 999,
       paddingHorizontal: 12,
-      paddingVertical: 4,
-      backgroundColor: t.surface,
-      borderWidth: 1,
-      borderColor: t.border
+      paddingVertical: 5,
+      backgroundColor: t.surfaceAlt,
     },
 
     planBadgeText: {
@@ -559,10 +555,8 @@ export default function ProfileScreen() {
     refreshBtn: {
       width: 30,
       height: 30,
-      borderRadius: 15,
-      backgroundColor: t.surface,
-      borderWidth: 1,
-      borderColor: t.border,
+      borderRadius: 999,
+      backgroundColor: t.surfaceAlt,
       justifyContent: "center",
       alignItems: "center"
     },
@@ -572,16 +566,20 @@ export default function ProfileScreen() {
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: t.surface,
-      borderRadius: t.radius.lg,
+      borderRadius: 20,
       padding: 18,
       marginBottom: 24,
       gap: 14,
+      ...(isDark ? {} : {
+        shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.07, shadowRadius: 10, elevation: 3
+      })
     },
 
     planCardIcon: {
       width: 36,
       height: 36,
-      borderRadius: 10,
+      borderRadius: 999,
       backgroundColor: t.successSurface,
       justifyContent: "center",
       alignItems: "center"
@@ -602,19 +600,21 @@ export default function ProfileScreen() {
     /* ── Menu card ── */
     card: {
       backgroundColor: t.surface,
-      borderRadius: t.radius.lg,
+      borderRadius: 20,
       marginBottom: 24,
       overflow: "hidden",
+      ...(isDark ? {} : {
+        shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.07, shadowRadius: 10, elevation: 3
+      })
     },
 
     /* ── Invite code card ── */
     inviteCard: {
       backgroundColor: t.accentSurface,
-      borderWidth: 1,
-      borderColor: t.accent + "33",
-      borderRadius: 14,
-      padding: 16,
-      marginBottom: 14
+      borderRadius: 20,
+      padding: 18,
+      marginBottom: 14,
     },
 
     inviteCardLabel: {
@@ -650,11 +650,9 @@ export default function ProfileScreen() {
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: t.accentSurface,
-      borderWidth: 1,
-      borderColor: t.accent + "55",
-      borderRadius: 10,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
+      borderRadius: 999,
+      paddingHorizontal: 16,
+      paddingVertical: 9,
     },
     shareBtnText: {
       color: t.accent,
@@ -666,11 +664,9 @@ export default function ProfileScreen() {
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: t.warningSurface,
-      borderWidth: 1,
-      borderColor: t.warning + "44",
-      borderRadius: 10,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
+      borderRadius: 999,
+      paddingHorizontal: 16,
+      paddingVertical: 9,
     },
     regenBtnText: {
       color: t.warning,
@@ -690,10 +686,8 @@ export default function ProfileScreen() {
     modalBox: {
       width: "100%",
       backgroundColor: t.surface,
-      borderRadius: 20,
+      borderRadius: 24,
       padding: 24,
-      borderWidth: 1,
-      borderColor: t.border
     },
 
     modalIconRow: {
@@ -708,14 +702,13 @@ export default function ProfileScreen() {
       backgroundColor: t.errorSurface,
       justifyContent: "center",
       alignItems: "center",
-      borderWidth: 1,
-      borderColor: t.error
     },
 
     modalTitle: {
       color: t.text,
-      fontSize: 20,
-      fontWeight: "700",
+      fontSize: 22,
+      fontWeight: "800",
+      letterSpacing: -0.5,
       marginBottom: 10,
       textAlign: "center"
     },
@@ -737,10 +730,8 @@ export default function ProfileScreen() {
 
     passwordInput: {
       backgroundColor: t.surfaceAlt,
-      borderWidth: 1,
-      borderColor: t.border,
-      borderRadius: 10,
-      paddingHorizontal: 14,
+      borderRadius: 999,
+      paddingHorizontal: 18,
       paddingVertical: Platform.OS === "ios" ? 14 : 10,
       color: t.text,
       fontSize: 15,
@@ -761,22 +752,22 @@ export default function ProfileScreen() {
 
     cancelBtn: {
       flex: 1,
-      paddingVertical: 13,
-      borderRadius: 10,
-      backgroundColor: t.border,
+      paddingVertical: 14,
+      borderRadius: 999,
+      backgroundColor: t.surfaceAlt,
       alignItems: "center"
     },
 
     cancelText: {
       color: t.text,
-      fontWeight: "600",
+      fontWeight: "700",
       fontSize: 15
     },
 
     confirmDeleteBtn: {
       flex: 1,
-      paddingVertical: 13,
-      borderRadius: 10,
+      paddingVertical: 14,
+      borderRadius: 999,
       backgroundColor: t.error,
       alignItems: "center"
     },
@@ -791,7 +782,7 @@ export default function ProfileScreen() {
       opacity: 0.6
     }
 
-  }), [t]);
+  }), [t, isDark]);
 
   //////////////////////////////////////////////////////
   // LOADING STATE

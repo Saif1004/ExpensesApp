@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StripeProvider } from "@stripe/stripe-react-native";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
@@ -10,6 +11,13 @@ GoogleSignin.configure({
   webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID!,
   iosClientId:  process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
 });
+
+// Sentry crash reporting
+Sentry.init({
+  dsn: "https://7ed0bbc868847a712d655357b3f2d554@o4511227413331968.ingest.de.sentry.io/4511227415429200",
+  tracesSampleRate: 1.0,
+  _experiments: { profilesSampleRate: 1.0 },
+});
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Linking, LogBox, Modal, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
@@ -18,6 +26,7 @@ import { Linking, LogBox, Modal, Platform, ScrollView, StyleSheet, TouchableOpac
 // during development. On some devices/simulators the native module throws —
 // this is harmless and does not affect production builds.
 LogBox.ignoreLogs(["Unable to activate keep awake"]);
+
 
 import { ThemedText } from "../components/themed-text";
 import { registerForPushNotifications } from "../utils/pushNotifications";
@@ -306,6 +315,7 @@ function PushNotificationRegistrar() {
 
 function AppShell() {
   const { tokens, isLoaded } = useThemeContext();
+
   if (!isLoaded) return null;
   return (
     <>
@@ -320,7 +330,7 @@ function AppShell() {
   );
 }
 
-export default function RootLayout() {
+export default Sentry.wrap(function RootLayout() {
   return (
     <StripeProvider publishableKey={STRIPE_PK} merchantIdentifier="merchant.com.saif1004.claimio">
       <ThemeProvider>
@@ -328,4 +338,4 @@ export default function RootLayout() {
       </ThemeProvider>
     </StripeProvider>
   );
-}
+});

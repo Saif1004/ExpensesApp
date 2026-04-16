@@ -34,7 +34,8 @@ type Claim = {
 export default function ClaimDetailScreen() {
 
   const { id } = useLocalSearchParams();
-  const { tokens: t } = useTheme();
+  const { tokens: t, mode } = useTheme();
+  const isDark = mode === "dark";
 
   const [claim,setClaim] = useState<Claim | null>(null);
   const [loading,setLoading] = useState(true);
@@ -80,49 +81,60 @@ export default function ClaimDetailScreen() {
     },
 
     title:{
-      color: t.text
+      color: t.text,
+      fontSize: 24,
+      fontWeight: "800",
+      letterSpacing: -0.8
     },
 
     card:{
       backgroundColor: t.surface,
-      padding:16,
-      borderRadius:14,
-      marginBottom:14,
-      borderWidth:1,
-      borderColor: t.border
+      padding:18,
+      borderRadius:20,
+      marginBottom:12,
+      ...(isDark ? {} : {
+        shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.07, shadowRadius: 10, elevation: 3
+      })
     },
 
     receiptCard:{
       backgroundColor: t.surface,
-      padding:16,
-      borderRadius:14,
+      padding:18,
+      borderRadius:20,
       marginTop:10,
-      borderWidth:1,
-      borderColor: t.border
+      ...(isDark ? {} : {
+        shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.07, shadowRadius: 10, elevation: 3
+      })
     },
 
     label:{
-      color: t.textSecondary,
-      fontSize:12,
+      color: t.textTertiary,
+      fontSize:11,
+      fontWeight:"700",
+      letterSpacing:0.8,
+      textTransform:"uppercase",
       marginBottom:6
     },
 
     value:{
       color: t.text,
-      fontSize:16
+      fontSize:16,
+      fontWeight:"600"
     },
 
     statusBadge:{
       alignSelf:"flex-start",
       paddingHorizontal:12,
       paddingVertical:6,
-      borderRadius:8
+      borderRadius:999
     },
 
     statusText:{
-      color: t.accentText,
+      color: "#FFFFFF",
       fontSize:12,
-      fontWeight:"600"
+      fontWeight:"700"
     },
 
     approved:{backgroundColor: t.success},
@@ -130,7 +142,6 @@ export default function ClaimDetailScreen() {
     rejected:{backgroundColor: t.error},
 
     paymentCardPaid:{
-      borderColor: t.success + "66",
       backgroundColor: t.successSurface
     },
 
@@ -141,7 +152,6 @@ export default function ClaimDetailScreen() {
     },
 
     paymentCardFailed:{
-      borderColor: t.errorSurface,
       backgroundColor: t.errorSurface
     },
 
@@ -152,10 +162,9 @@ export default function ClaimDetailScreen() {
     },
 
     cancelClaimBtn:{
-      borderWidth:2,
-      borderColor: t.error,
-      borderRadius:12,
-      paddingVertical:14,
+      backgroundColor: t.errorSurface,
+      borderRadius:999,
+      paddingVertical:15,
       alignItems:"center",
       marginTop:8,
       marginBottom:24
@@ -170,7 +179,7 @@ export default function ClaimDetailScreen() {
     receiptImage:{
       width:"100%",
       height:220,
-      borderRadius:12,
+      borderRadius:14,
       marginTop:10
     },
 
@@ -200,7 +209,7 @@ export default function ClaimDetailScreen() {
       backgroundColor: t.bg
     }
 
-  }), [t]);
+  }), [t, isDark]);
 
   const getStatusStyle=(status:string)=>{
 
@@ -246,7 +255,7 @@ export default function ClaimDetailScreen() {
             <IconSymbol
               name="chevron.left"
               size={26}
-              color={t.accent}
+              color={t.text}
             />
           </TouchableOpacity>
 

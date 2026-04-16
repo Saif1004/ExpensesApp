@@ -1,4 +1,3 @@
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useMemo } from "react";
@@ -205,7 +204,7 @@ export default function Landing() {
   }), [t]);
 
   return (
-    <LinearGradient colors={[t.bg, t.surface]} style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: t.bg }}>
       <SafeAreaView style={[styles.safe, { paddingBottom: 0 }]}>
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -276,6 +275,6 @@ export default function Landing() {
 
         </ScrollView>
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }

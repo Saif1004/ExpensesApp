@@ -9,6 +9,7 @@ import {
 } from "firebase/firestore";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   ActivityIndicator,
@@ -62,7 +63,9 @@ function formatDate(ts: Timestamp): string {
 export default function ClaimsScreen() {
 
   const { user } = useAuth();
-  const { tokens: t } = useTheme();
+  const { tokens: t, mode } = useTheme();
+  const isDark = mode === "dark";
+  const insets = useSafeAreaInsets();
 
   const [allClaims, setAllClaims] = useState<Claim[]>([]);
   const [claims, setClaims] = useState<Claim[]>([]);
@@ -195,14 +198,15 @@ export default function ClaimsScreen() {
       flex: 1,
       backgroundColor: t.bg,
       paddingHorizontal: 20,
-      paddingTop: 20
+      paddingTop: insets.top + 12
     },
 
     title: {
-      fontSize: 30,
-      fontWeight: "bold",
+      fontSize: 28,
+      fontWeight: "800",
       color: t.text,
-      marginBottom: 14
+      letterSpacing: -1,
+      marginBottom: 16
     },
 
     /* Search */
@@ -210,12 +214,14 @@ export default function ClaimsScreen() {
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: t.surface,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: t.border,
-      paddingHorizontal: 12,
+      borderRadius: 999,
+      paddingHorizontal: 16,
       marginBottom: 14,
-      height: 44
+      height: 46,
+      ...(isDark ? {} : {
+        shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.06, shadowRadius: 6, elevation: 2
+      })
     },
 
     searchIcon: {
@@ -232,7 +238,7 @@ export default function ClaimsScreen() {
     filterRow: {
       flexDirection: "row",
       gap: 8,
-      marginBottom: 16
+      marginBottom: 18
     },
 
     filterBtn: {
@@ -240,18 +246,15 @@ export default function ClaimsScreen() {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "center",
-      paddingVertical: 8,
+      paddingVertical: 9,
       paddingHorizontal: 10,
-      borderRadius: 10,
+      borderRadius: 999,
       backgroundColor: t.surface,
       gap: 6,
-      borderWidth: 1,
-      borderColor: t.surface
     },
 
     filterActive: {
-      backgroundColor: t.accentSurface,
-      borderColor: t.accent
+      backgroundColor: t.accent,
     },
 
     filterText: {
@@ -261,13 +264,13 @@ export default function ClaimsScreen() {
     },
 
     filterTextActive: {
-      color: t.accent,
+      color: "#FFFFFF",
       fontSize: 12,
       fontWeight: "700"
     },
 
     countPill: {
-      borderRadius: 10,
+      borderRadius: 999,
       paddingHorizontal: 6,
       paddingVertical: 1,
       minWidth: 20,
@@ -275,11 +278,11 @@ export default function ClaimsScreen() {
     },
 
     countPillActive: {
-      backgroundColor: t.accent
+      backgroundColor: "rgba(255,255,255,0.25)"
     },
 
     countPillInactive: {
-      backgroundColor: t.border
+      backgroundColor: t.surfaceAlt
     },
 
     countText: {
@@ -289,7 +292,7 @@ export default function ClaimsScreen() {
     },
 
     countTextActive: {
-      color: "#fff"
+      color: "#FFFFFF"
     },
 
     /* Empty state */
@@ -308,32 +311,34 @@ export default function ClaimsScreen() {
     /* Claim card */
     claimCard: {
       backgroundColor: t.surface,
-      borderRadius: 16,
-      marginBottom: 14,
-      borderWidth: 1,
-      borderColor: t.border,
-      overflow: "hidden"
+      borderRadius: 20,
+      marginBottom: 12,
+      overflow: "hidden",
+      ...(isDark ? {} : {
+        shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.08, shadowRadius: 12, elevation: 3
+      })
     },
 
     cardHeader: {
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
-      paddingHorizontal: 16,
-      paddingTop: 16,
+      paddingHorizontal: 18,
+      paddingTop: 18,
       paddingBottom: 6
     },
 
     amount: {
-      fontSize: 20,
+      fontSize: 22,
       fontWeight: "800",
       color: t.text,
-      letterSpacing: 0.3
+      letterSpacing: -0.5
     },
 
     dateText: {
       fontSize: 12,
-      color: t.textSecondary,
+      color: t.textTertiary,
       fontWeight: "500"
     },
 
@@ -341,13 +346,14 @@ export default function ClaimsScreen() {
       flexDirection: "row",
       alignItems: "center",
       gap: 5,
-      paddingHorizontal: 16,
+      paddingHorizontal: 18,
       paddingBottom: 12
     },
 
     merchant: {
       color: t.textSecondary,
-      fontSize: 13
+      fontSize: 13,
+      fontWeight: "500"
     },
 
     dot: {
@@ -358,7 +364,7 @@ export default function ClaimsScreen() {
     },
 
     category: {
-      color: t.textSecondary,
+      color: t.textTertiary,
       fontSize: 13
     },
 
@@ -366,21 +372,21 @@ export default function ClaimsScreen() {
       flexDirection: "row",
       alignItems: "center",
       gap: 8,
-      paddingHorizontal: 16,
-      paddingBottom: 10
+      paddingHorizontal: 18,
+      paddingBottom: 14
     },
 
     statusBadge: {
       alignSelf: "flex-start",
       paddingHorizontal: 10,
       paddingVertical: 4,
-      borderRadius: 6
+      borderRadius: 999
     },
 
     statusText: {
       fontSize: 11,
       fontWeight: "700",
-      letterSpacing: 0.5
+      letterSpacing: 0.3
     },
 
     badgeApproved:      { backgroundColor: t.successSurface },
@@ -393,11 +399,9 @@ export default function ClaimsScreen() {
     /* Paid badge */
     paidBadge: {
       backgroundColor: t.successSurface,
-      borderRadius: 6,
+      borderRadius: 999,
       paddingHorizontal: 10,
       paddingVertical: 4,
-      borderWidth: 1,
-      borderColor: t.success + "66"
     },
 
     paidText: {
@@ -409,11 +413,9 @@ export default function ClaimsScreen() {
     /* Failed payment badge */
     failedBadge: {
       backgroundColor: t.errorSurface,
-      borderRadius: 6,
+      borderRadius: 999,
       paddingHorizontal: 10,
       paddingVertical: 4,
-      borderWidth: 1,
-      borderColor: t.error
     },
 
     failedText: {
@@ -426,14 +428,14 @@ export default function ClaimsScreen() {
     approvedBy: {
       color: t.success,
       fontSize: 12,
-      paddingHorizontal: 16,
+      paddingHorizontal: 18,
       paddingBottom: 8
     },
 
     rejectedBy: {
       color: t.error,
       fontSize: 12,
-      paddingHorizontal: 16,
+      paddingHorizontal: 18,
       paddingBottom: 8
     },
 
@@ -442,13 +444,11 @@ export default function ClaimsScreen() {
       flexDirection: "row",
       alignItems: "flex-start",
       gap: 7,
-      backgroundColor: t.bg,
-      marginHorizontal: 16,
-      marginBottom: 12,
-      borderRadius: 10,
+      backgroundColor: t.surfaceAlt,
+      marginHorizontal: 18,
+      marginBottom: 14,
+      borderRadius: 12,
       padding: 10,
-      borderWidth: 1,
-      borderColor: t.border
     },
 
     messageText: {
@@ -475,7 +475,7 @@ export default function ClaimsScreen() {
       backgroundColor: "rgba(0,0,0,0.55)",
       paddingHorizontal: 8,
       paddingVertical: 4,
-      borderRadius: 8
+      borderRadius: 999
     },
 
     receiptOverlayText: {
@@ -505,16 +505,16 @@ export default function ClaimsScreen() {
     },
 
     closeBtn: {
-      marginTop: 16,
+      marginTop: 20,
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: t.accent,
-      paddingHorizontal: 20,
-      paddingVertical: 12,
-      borderRadius: 12
+      paddingHorizontal: 28,
+      paddingVertical: 14,
+      borderRadius: 999
     }
 
-  }), [t]);
+  }), [t, isDark, insets]);
 
   /////////////////////////////////////////////////////////
   // UI
@@ -718,7 +718,7 @@ export default function ClaimsScreen() {
             onPress={() => setViewReceipt(null)}
           >
             <Ionicons name="close" size={16} color="#fff" style={{ marginRight: 6 }} />
-            <ThemedText style={{ color: "#fff", fontWeight: "600" }}>
+            <ThemedText style={{ color: "#fff", fontWeight: "700" }}>
               Close
             </ThemedText>
           </TouchableOpacity>

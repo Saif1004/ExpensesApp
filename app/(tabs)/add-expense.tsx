@@ -34,7 +34,8 @@ const DEFAULT_CATEGORIES = ["Meals", "Travel", "Technology", "Office"];
 export default function AddExpenseScreen() {
   const { user, orgCategories } = useAuth();
   const insets = useSafeAreaInsets();
-  const { tokens: t } = useTheme();
+  const { tokens: t, mode } = useTheme();
+  const isDark = mode === "dark";
 
   // Categories come from AuthProvider — updated instantly when hard refresh is pressed
   const dynamicCategories = orgCategories.length > 0 ? orgCategories : DEFAULT_CATEGORIES;
@@ -294,24 +295,23 @@ export default function AddExpenseScreen() {
     header: {
       flexDirection: "row",
       alignItems: "center",
-      gap: 12,
-      marginBottom: 24
+      gap: 14,
+      marginBottom: 28
     },
     headerIconWrap: {
-      width: 46,
-      height: 46,
-      borderRadius: 14,
+      width: 48,
+      height: 48,
+      borderRadius: 999,
       backgroundColor: t.accentSurface,
-      borderWidth: 1,
-      borderColor: t.accentSurface,
       justifyContent: "center",
       alignItems: "center"
     },
     title: {
-      fontSize: 24,
+      fontSize: 28,
       color: t.text,
       fontWeight: "800",
-      lineHeight: 28
+      letterSpacing: -1,
+      lineHeight: 34
     },
     subtitle: {
       color: t.textTertiary,
@@ -329,17 +329,20 @@ export default function AddExpenseScreen() {
       color: t.textTertiary,
       fontSize: 11,
       fontWeight: "700",
-      letterSpacing: 1.2
+      letterSpacing: 1.2,
+      textTransform: "uppercase"
     },
 
     /* Cards */
     card: {
       backgroundColor: t.surface,
-      padding: 16,
-      borderRadius: 16,
-      marginBottom: 20,
-      borderWidth: 1,
-      borderColor: t.border
+      padding: 18,
+      borderRadius: 20,
+      marginBottom: 22,
+      ...(isDark ? {} : {
+        shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.07, shadowRadius: 10, elevation: 3
+      })
     },
 
     /* Switch row */
@@ -356,7 +359,7 @@ export default function AddExpenseScreen() {
     switchLabel: {
       color: t.text,
       fontSize: 15,
-      fontWeight: "500"
+      fontWeight: "600"
     },
 
     /* Upload box */
@@ -368,21 +371,19 @@ export default function AddExpenseScreen() {
       paddingVertical: 32,
       paddingHorizontal: 20,
       alignItems: "center",
-      backgroundColor: t.bg
+      backgroundColor: t.surfaceAlt
     },
     uploadIconWrap: {
       width: 64,
       height: 64,
-      borderRadius: 18,
+      borderRadius: 999,
       backgroundColor: t.accentSurface,
       justifyContent: "center",
       alignItems: "center",
       marginBottom: 14,
-      borderWidth: 1,
-      borderColor: t.accentSurface
     },
     uploadTitle: {
-      color: t.accent,
+      color: t.text,
       fontSize: 16,
       fontWeight: "700",
       marginBottom: 4
@@ -398,20 +399,20 @@ export default function AddExpenseScreen() {
       gap: 12
     },
     ocrText: {
-      color: t.accent,
+      color: t.textSecondary,
       fontSize: 14,
       fontWeight: "600"
     },
 
     /* Receipt preview */
     previewWrapper: {
-      borderRadius: 12,
+      borderRadius: 14,
       overflow: "hidden"
     },
     receiptPreview: {
       width: "100%",
       height: 180,
-      borderRadius: 12
+      borderRadius: 14
     },
     previewBanner: {
       flexDirection: "row",
@@ -421,7 +422,7 @@ export default function AddExpenseScreen() {
       paddingVertical: 8
     },
     previewHint: {
-      color: t.text,
+      color: "#fff",
       fontSize: 12,
       fontWeight: "500"
     },
@@ -431,10 +432,8 @@ export default function AddExpenseScreen() {
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: t.surfaceAlt,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: t.border,
-      paddingHorizontal: 12,
+      borderRadius: 999,
+      paddingHorizontal: 16,
       marginBottom: 10
     },
     inputIcon: {
@@ -444,12 +443,12 @@ export default function AddExpenseScreen() {
       flex: 1,
       color: t.text,
       fontSize: 15,
-      paddingVertical: 13
+      paddingVertical: 14
     },
 
     /* Dropdown */
     dropdownTrigger: {
-      paddingVertical: 13
+      paddingVertical: 14
     },
     dropdownValue: {
       flex: 1,
@@ -458,17 +457,15 @@ export default function AddExpenseScreen() {
     },
     dropdown: {
       backgroundColor: t.surfaceAlt,
-      borderRadius: 12,
+      borderRadius: 16,
       marginBottom: 10,
-      borderWidth: 1,
-      borderColor: t.border,
       overflow: "hidden"
     },
     dropdownItem: {
       flexDirection: "row",
       justifyContent: "space-between",
       alignItems: "center",
-      paddingHorizontal: 14,
+      paddingHorizontal: 16,
       paddingVertical: 13,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: t.border
@@ -482,57 +479,56 @@ export default function AddExpenseScreen() {
     },
     dropdownItemTextActive: {
       color: t.accent,
-      fontWeight: "600"
+      fontWeight: "700"
     },
 
     /* Submit */
     submitButton: {
       backgroundColor: t.accent,
-      paddingVertical: 15,
-      borderRadius: 14,
+      paddingVertical: 16,
+      borderRadius: 999,
       alignItems: "center",
-      marginTop: 4
+      marginTop: 6
     },
     submitDisabled: {
-      opacity: 0.6
+      opacity: 0.5
     },
     submitInner: {
       flexDirection: "row",
       alignItems: "center"
     },
     submitText: {
-      color: t.accentText,
+      color: "#FFFFFF",
       fontWeight: "700",
-      fontSize: 16
+      fontSize: 16,
+      letterSpacing: -0.2
     },
 
     /* Modals */
     modalOverlay: {
       flex: 1,
-      backgroundColor: "rgba(0,0,0,0.8)",
+      backgroundColor: "rgba(0,0,0,0.85)",
       justifyContent: "center",
       padding: 20
     },
     modalContent: {
       backgroundColor: t.surface,
-      borderRadius: 16,
+      borderRadius: 24,
       padding: 16,
-      borderWidth: 1,
-      borderColor: t.border
     },
     modalImage: {
       width: "100%",
       height: 350,
-      borderRadius: 12
+      borderRadius: 16
     },
     closeBtn: {
-      marginTop: 16,
+      marginTop: 14,
       backgroundColor: t.accent,
-      paddingVertical: 13,
-      borderRadius: 12,
+      paddingVertical: 14,
+      borderRadius: 999,
       alignItems: "center"
     }
-  }), [t]);
+  }), [t, isDark]);
 
   return (
     <KeyboardAvoidingView
@@ -710,7 +706,7 @@ export default function AddExpenseScreen() {
                   <ActivityIndicator color={t.accentText} />
                 ) : (
                   <View style={styles.submitInner}>
-                    <Ionicons name="send-outline" size={16} color={t.accentText} style={{ marginRight: 8 }} />
+                    <Ionicons name="send-outline" size={16} color="#fff" style={{ marginRight: 8 }} />
                     <ThemedText style={styles.submitText}>Submit Claim</ThemedText>
                   </View>
                 )}
@@ -736,7 +732,7 @@ export default function AddExpenseScreen() {
               style={styles.closeBtn}
               onPress={() => setShowReceiptModal(false)}
             >
-              <ThemedText style={{ color: t.accentText, fontWeight: "600" }}>
+              <ThemedText style={{ color: "#fff", fontWeight: "700" }}>
                 Close
               </ThemedText>
             </TouchableOpacity>

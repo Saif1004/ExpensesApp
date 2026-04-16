@@ -318,8 +318,9 @@ export default function AdminUsers() {
 
     title: {
       color: t.text,
-      fontSize: 26,
-      fontWeight: "bold",
+      fontSize: 30,
+      fontWeight: "800",
+      letterSpacing: -1,
       marginBottom: 6
     },
 
@@ -337,12 +338,10 @@ export default function AdminUsers() {
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: t.surface,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: t.border,
-      paddingHorizontal: 12,
+      borderRadius: 999,
+      paddingHorizontal: 16,
       marginBottom: 16,
-      height: 44
+      height: 46
     },
     searchInput: { flex: 1, color: t.text, fontSize: 14 },
 
@@ -351,21 +350,19 @@ export default function AdminUsers() {
     tab: {
       flex: 1,
       paddingVertical: 10,
-      borderRadius: 12,
+      borderRadius: 999,
       backgroundColor: t.surface,
       alignItems: "center",
       flexDirection: "row",
       justifyContent: "center",
       gap: 6,
-      borderWidth: 1,
-      borderColor: t.border
     },
-    tabActive:     { backgroundColor: t.accent, borderColor: t.accent },
+    tabActive:     { backgroundColor: t.accent },
     tabText:       { color: t.textSecondary, fontWeight: "600", fontSize: 13 },
-    tabTextActive: { color: "#fff" },
+    tabTextActive: { color: "#FFFFFF", fontWeight: "700" },
     badge: {
       backgroundColor: t.error,
-      borderRadius: 10,
+      borderRadius: 999,
       paddingHorizontal: 6,
       paddingVertical: 2
     },
@@ -374,11 +371,9 @@ export default function AdminUsers() {
     /* Cards */
     card: {
       backgroundColor: t.surface,
-      borderRadius: 14,
+      borderRadius: 20,
       marginBottom: 12,
       overflow: "hidden",
-      borderWidth: 1,
-      borderColor: t.border
     },
     cardTop: {
       flexDirection: "row",
@@ -391,12 +386,12 @@ export default function AdminUsers() {
     avatar: {
       width: 44, height: 44,
       borderRadius: 22,
-      backgroundColor: t.accent,
+      backgroundColor: t.surfaceAlt,
       alignItems: "center",
       justifyContent: "center",
       flexShrink: 0
     },
-    avatarText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+    avatarText: { color: t.text, fontWeight: "700", fontSize: 16 },
 
     userInfo: { flex: 1 },
     name:  { color: t.text, fontSize: 15, fontWeight: "600" },
@@ -404,18 +399,16 @@ export default function AdminUsers() {
 
     /* Role badge */
     roleBadge: {
-      backgroundColor: t.bg,
-      borderRadius: 8,
+      backgroundColor: t.accentSurface,
+      borderRadius: 999,
       paddingHorizontal: 9,
       paddingVertical: 4,
-      borderWidth: 1,
-      borderColor: t.accent
     },
-    roleBadgeAdmin: { borderColor: t.warning },
+    roleBadgeAdmin: { backgroundColor: t.warningSurface },
     roleBadgeText: {
       color: t.accent,
       fontSize: 11,
-      fontWeight: "600",
+      fontWeight: "700",
       textTransform: "capitalize"
     },
     roleBadgeTextAdmin: { color: t.warning },
@@ -432,28 +425,22 @@ export default function AdminUsers() {
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: t.warningSurface,
-      borderRadius: 8,
+      borderRadius: 999,
       paddingHorizontal: 10,
       paddingVertical: 5,
-      borderWidth: 1,
-      borderColor: t.warning + "88"
     },
     budgetBadgeText: { color: t.warning, fontSize: 11, fontWeight: "600" },
     budgetEditBtn: {
       width: 28, height: 28,
-      borderRadius: 7,
-      backgroundColor: t.surface,
-      borderWidth: 1,
-      borderColor: t.border,
+      borderRadius: 999,
+      backgroundColor: t.surfaceAlt,
       justifyContent: "center",
       alignItems: "center"
     },
     budgetRemoveBtn: {
       width: 28, height: 28,
-      borderRadius: 7,
+      borderRadius: 999,
       backgroundColor: t.errorSurface,
-      borderWidth: 1,
-      borderColor: t.errorSurface,
       justifyContent: "center",
       alignItems: "center"
     },
@@ -461,11 +448,9 @@ export default function AdminUsers() {
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: t.accentSurface,
-      borderRadius: 8,
-      paddingHorizontal: 10,
-      paddingVertical: 6,
-      borderWidth: 1,
-      borderColor: t.accent + "55"
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
     },
     setBudgetText: { color: t.accent, fontSize: 12, fontWeight: "600" },
 
@@ -478,19 +463,17 @@ export default function AdminUsers() {
     },
     approveBtn: {
       flex: 1,
-      backgroundColor: t.accent,
+      backgroundColor: t.success,
       paddingVertical: 11,
-      borderRadius: 10,
+      borderRadius: 999,
       alignItems: "center"
     },
     rejectBtn: {
       flex: 1,
-      backgroundColor: "transparent",
+      backgroundColor: t.errorSurface,
       paddingVertical: 11,
-      borderRadius: 10,
+      borderRadius: 999,
       alignItems: "center",
-      borderWidth: 1,
-      borderColor: t.error
     },
     approveBtnText: { color: "#fff",     fontWeight: "700", fontSize: 14 },
     rejectBtnText:  { color: t.error,    fontWeight: "700", fontSize: 14 },
@@ -505,13 +488,11 @@ export default function AdminUsers() {
     modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.6)" },
     modalSheet: {
       backgroundColor: t.surface,
-      borderTopLeftRadius: 24,
-      borderTopRightRadius: 24,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
       paddingHorizontal: 24,
       paddingBottom: 40,
       paddingTop: 12,
-      borderTopWidth: 1,
-      borderColor: t.border
     },
     sheetHandle: {
       width: 40, height: 4,
@@ -537,14 +518,12 @@ export default function AdminUsers() {
     presetChip: {
       paddingHorizontal: 18,
       paddingVertical: 10,
-      backgroundColor: t.bg,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: t.border
+      backgroundColor: t.surfaceAlt,
+      borderRadius: 999,
     },
-    presetChipActive:     { backgroundColor: t.accentSurface, borderColor: t.accent },
+    presetChipActive:     { backgroundColor: t.accent },
     presetChipText:       { color: t.textSecondary, fontSize: 14, fontWeight: "600" },
-    presetChipTextActive: { color: "#fff" },
+    presetChipTextActive: { color: "#FFFFFF", fontWeight: "700" },
     customLabel: {
       color: t.textSecondary,
       fontSize: 12,
@@ -557,10 +536,8 @@ export default function AdminUsers() {
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: t.surfaceAlt,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: t.border,
-      paddingHorizontal: 14,
+      borderRadius: 999,
+      paddingHorizontal: 16,
       paddingVertical: 12,
       marginBottom: 16
     },
@@ -569,21 +546,19 @@ export default function AdminUsers() {
     customInput:    { flex: 1, color: t.text, fontSize: 18, fontWeight: "600" },
     removeOverrideBtn: {
       flex: 1,
-      backgroundColor: t.surface,
-      borderRadius: 14,
+      backgroundColor: t.surfaceAlt,
+      borderRadius: 999,
       paddingVertical: 15,
       alignItems: "center",
-      borderWidth: 1,
-      borderColor: t.border
     },
-    removeOverrideBtnText: { color: t.textSecondary, fontSize: 15, fontWeight: "600" },
+    removeOverrideBtnText: { color: t.textSecondary, fontSize: 15, fontWeight: "700" },
     saveBtn: {
       backgroundColor: t.accent,
-      borderRadius: 14,
+      borderRadius: 999,
       paddingVertical: 15,
       alignItems: "center"
     },
-    saveBtnText: { color: t.accentText, fontSize: 16, fontWeight: "700" }
+    saveBtnText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" }
 
   }), [t]);
 

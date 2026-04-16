@@ -1,8 +1,9 @@
 import React, { useMemo, useState, useEffect } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, Alert,
-  ActivityIndicator, SafeAreaView, ScrollView,
+  ActivityIndicator, ScrollView,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useStripe, CardField } from "@stripe/stripe-react-native";
 import { auth, db } from "./firebase/firebaseConfig";
 import { doc, onSnapshot } from "firebase/firestore";

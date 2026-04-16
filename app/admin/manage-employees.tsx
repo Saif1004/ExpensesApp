@@ -318,14 +318,15 @@ export default function ManageEmployees() {
     },
     backBtn: { paddingVertical: 4 },
     backBtnText: {
-      color: t.accent,
+      color: t.textSecondary,
       fontSize: 15,
       fontWeight: "600"
     },
     title: {
       color: t.text,
-      fontSize: 26,
-      fontWeight: "bold"
+      fontSize: 28,
+      fontWeight: "800",
+      letterSpacing: -1
     },
 
     /* Search */
@@ -333,12 +334,10 @@ export default function ManageEmployees() {
       flexDirection: "row",
       alignItems: "center",
       backgroundColor: t.surface,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: t.border,
-      paddingHorizontal: 12,
+      borderRadius: 999,
+      paddingHorizontal: 16,
       marginBottom: 20,
-      height: 44
+      height: 46
     },
     searchInput: {
       flex: 1,
@@ -370,19 +369,14 @@ export default function ManageEmployees() {
     /* Card */
     card: {
       backgroundColor: t.surface,
-      borderRadius: 14,
-      padding: 14,
+      borderRadius: 18,
+      padding: 16,
       marginBottom: 10,
-      borderWidth: 1,
-      borderColor: t.border
     },
     cardPending: {
-      borderColor: t.warning + "88",
       backgroundColor: t.warningSurface
     },
-    cardAdmin: {
-      borderColor: t.accentSurface
-    },
+    cardAdmin: {},
 
     /* Card top row */
     cardTop: {
@@ -421,26 +415,26 @@ export default function ManageEmployees() {
       fontSize: 12
     },
     youBadge: {
-      backgroundColor: t.accentSurface,
-      borderRadius: 6,
-      paddingHorizontal: 6,
+      backgroundColor: t.surfaceAlt,
+      borderRadius: 999,
+      paddingHorizontal: 8,
       paddingVertical: 2
     },
     youBadgeText: {
-      color: t.accent,
+      color: t.textSecondary,
       fontSize: 10,
       fontWeight: "700"
     },
 
     /* Role badge */
     roleBadge: {
-      borderRadius: 8,
+      borderRadius: 999,
       paddingHorizontal: 10,
       paddingVertical: 4,
       alignSelf: "flex-start"
     },
-    roleBadgeAdmin: { backgroundColor: t.accentSurface, borderWidth: 1, borderColor: t.accent },
-    roleBadgeEmployee: { backgroundColor: t.surface, borderWidth: 1, borderColor: t.border },
+    roleBadgeAdmin: { backgroundColor: t.accentSurface },
+    roleBadgeEmployee: { backgroundColor: t.surfaceAlt },
     roleBadgeText: { fontSize: 11, fontWeight: "700" },
     roleBadgeTextAdmin: { color: t.accent },
     roleBadgeTextEmployee: { color: t.textSecondary },
@@ -448,11 +442,9 @@ export default function ManageEmployees() {
     /* Pending badge */
     pendingBadge: {
       backgroundColor: t.warningSurface,
-      borderRadius: 8,
+      borderRadius: 999,
       paddingHorizontal: 10,
       paddingVertical: 4,
-      borderWidth: 1,
-      borderColor: t.warning + "88"
     },
     pendingBadgeText: {
       color: t.warning,
@@ -468,7 +460,7 @@ export default function ManageEmployees() {
     },
     btnText: {
       color: "#fff",
-      fontWeight: "600",
+      fontWeight: "700",
       fontSize: 13
     },
     approveBtn: {
@@ -477,8 +469,8 @@ export default function ManageEmployees() {
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: t.success,
-      paddingVertical: 9,
-      borderRadius: 10
+      paddingVertical: 10,
+      borderRadius: 999
     },
     rejectBtn: {
       flex: 1,
@@ -486,8 +478,8 @@ export default function ManageEmployees() {
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: t.errorSurface,
-      paddingVertical: 9,
-      borderRadius: 10
+      paddingVertical: 10,
+      borderRadius: 999
     },
     promoteBtn: {
       flex: 1,
@@ -495,10 +487,8 @@ export default function ManageEmployees() {
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: t.accentSurface,
-      paddingVertical: 9,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: t.accent + "66"
+      paddingVertical: 10,
+      borderRadius: 999,
     },
     promoteBtnText: {
       color: t.accent,
@@ -511,14 +501,12 @@ export default function ManageEmployees() {
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: t.warningSurface,
-      paddingVertical: 9,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: t.warning + "88"
+      paddingVertical: 10,
+      borderRadius: 999,
     },
     demoteBtnText: {
       color: t.warning,
-      fontWeight: "600",
+      fontWeight: "700",
       fontSize: 13
     },
     removeBtn: {
@@ -527,8 +515,8 @@ export default function ManageEmployees() {
       alignItems: "center",
       justifyContent: "center",
       backgroundColor: t.error,
-      paddingVertical: 9,
-      borderRadius: 10
+      paddingVertical: 10,
+      borderRadius: 999
     },
 
     /* Empty state */
@@ -548,11 +536,9 @@ export default function ManageEmployees() {
       flexDirection: "row",
       alignItems: "flex-start",
       backgroundColor: t.warningSurface,
-      borderRadius: 12,
+      borderRadius: 16,
       padding: 14,
       marginTop: 8,
-      borderWidth: 1,
-      borderColor: t.warning + "88"
     },
     warningText: {
       flex: 1,
