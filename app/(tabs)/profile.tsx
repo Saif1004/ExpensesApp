@@ -395,13 +395,15 @@ export default function ProfileScreen() {
     setGeneratingCode(true);
     try {
       const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-      const buf = new Uint32Array(6);
-      crypto.getRandomValues(buf);
-      const newCode = Array.from(buf, v => chars[v % chars.length]).join("");
+      let newCode = "";
+      for (let i = 0; i < 6; i++) {
+        newCode += chars[Math.floor(Math.random() * chars.length)];
+      }
       await updateDoc(doc(db, "organisations", orgId), { inviteCode: newCode });
       setInviteCode(newCode);
-    } catch {
-      Alert.alert("Error", "Could not generate a code. Try again.");
+    } catch (err: any) {
+      console.error("Generate code error:", err);
+      Alert.alert("Error", err?.message ?? "Could not generate a code. Try again.");
     } finally {
       setGeneratingCode(false);
     }

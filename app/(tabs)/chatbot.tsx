@@ -4,11 +4,13 @@ import {
   Alert,
   Animated,
   FlatList,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
   TextInput,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -38,7 +40,6 @@ export default function ChatbotScreen() {
   const { tokens: t, mode } = useTheme();
   const isDark = mode === "dark";
 
-  if(!isPro) return <PaywallScreen />;
   const flatListRef = useRef<FlatList>(null);
   const tabBarHeight = useBottomTabBarHeight();
 
@@ -308,6 +309,9 @@ export default function ChatbotScreen() {
 
   }), [t, isDark]);
 
+  // Guard: show paywall if not pro (after all hooks)
+  if (!isPro) return <PaywallScreen />;
+
   /////////////////////////////////////////////////////////
   // MESSAGE BUBBLE
   /////////////////////////////////////////////////////////
@@ -351,98 +355,101 @@ export default function ChatbotScreen() {
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
-        keyboardVerticalOffset={Platform.OS === "ios" ? tabBarHeight : 0}
+        keyboardVerticalOffset={Platform.OS === "ios" ? tabBarHeight + 10 : 0}
       >
 
-        <View style={styles.container}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+          <View style={styles.container}>
 
-          <ThemedText type="title" style={styles.title}>
-            Virtual Assistant
-          </ThemedText>
-
-          {remainingAI !== null && creditLimit !== null && (
-            <ThemedText style={[
-              styles.credits,
-              remainingAI <= 5 && { color: t.warning },
-              remainingAI === 0 && { color: t.error }
-            ]}>
-              AI Credits: {remainingAI} / {creditLimit}
+            <ThemedText type="title" style={styles.title}>
+              Virtual Assistant
             </ThemedText>
-          )}
 
-          <View style={styles.quickRow}>
-            {QUICK_QUESTIONS.map(q => (
-              <TouchableOpacity
-                key={q}
-                style={styles.quickBtn}
-                onPress={() => sendMessage(q)}
-                disabled={sending}
-              >
-                <ThemedText style={styles.quickText}>
-                  {q}
-                </ThemedText>
-              </TouchableOpacity>
-            ))}
-          </View>
+            {remainingAI !== null && creditLimit !== null && (
+              <ThemedText style={[
+                styles.credits,
+                remainingAI <= 5 && { color: t.warning },
+                remainingAI === 0 && { color: t.error }
+              ]}>
+                AI Credits: {remainingAI} / {creditLimit}
+              </ThemedText>
+            )}
 
-          {/* CHAT */}
-          <FlatList
-            ref={flatListRef}
-            data={messages}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => <MessageBubble item={item} />}
-            style={{ flex: 1 }}
-            contentContainerStyle={{ paddingBottom: 12 }}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            onContentSizeChange={() => {
-              flatListRef.current?.scrollToEnd({ animated: true });
-            }}
-            ListFooterComponent={
-              botTyping ? (
-                <View style={[styles.messageBubble, styles.botBubble]}>
-                  <ThemedText style={styles.botMessageText}>
-                    ...
+            <View style={styles.quickRow}>
+              {QUICK_QUESTIONS.map(q => (
+                <TouchableOpacity
+                  key={q}
+                  style={styles.quickBtn}
+                  onPress={() => sendMessage(q)}
+                  disabled={sending}
+                >
+                  <ThemedText style={styles.quickText}>
+                    {q}
                   </ThemedText>
-                </View>
-              ) : null
-            }
-          />
+                </TouchableOpacity>
+              ))}
+            </View>
 
-          {/* INPUT + DISCLAIMER */}
-          <View style={styles.inputWrapper}>
+            {/* CHAT */}
+            <FlatList
+              ref={flatListRef}
+              data={messages}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => <MessageBubble item={item} />}
+              style={{ flex: 1 }}
+              contentContainerStyle={{ paddingBottom: 12 }}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+              showsVerticalScrollIndicator={false}
+              onContentSizeChange={() => {
+                flatListRef.current?.scrollToEnd({ animated: true });
+              }}
+              ListFooterComponent={
+                botTyping ? (
+                  <View style={[styles.messageBubble, styles.botBubble]}>
+                    <ThemedText style={styles.botMessageText}>
+                      ...
+                    </ThemedText>
+                  </View>
+                ) : null
+              }
+            />
 
-            <ThemedText style={styles.disclaimer}>
-              AI responses are for guidance only and do not constitute professional tax, accounting, or legal advice. Rules vary by country — always verify with a qualified adviser.
-            </ThemedText>
+            {/* INPUT + DISCLAIMER */}
+            <View style={styles.inputWrapper}>
 
-            <View style={styles.inputRow}>
-              <TextInput
-                value={input}
-                onChangeText={setInput}
-                placeholder="Ask something..."
-                placeholderTextColor={t.textTertiary}
-                style={styles.input}
-                multiline
-              />
+              <ThemedText style={styles.disclaimer}>
+                AI responses are for guidance only and do not constitute professional tax, accounting, or legal advice. Rules vary by country — always verify with a qualified adviser.
+              </ThemedText>
 
-              <TouchableOpacity
-                style={[
-                  styles.sendButton,
-                  sending && { opacity: 0.5 }
-                ]}
-                onPress={() => sendMessage()}
-                disabled={sending}
-              >
-                <ThemedText style={styles.sendText}>
-                  Send
-                </ThemedText>
-              </TouchableOpacity>
+              <View style={styles.inputRow}>
+                <TextInput
+                  value={input}
+                  onChangeText={setInput}
+                  placeholder="Ask something..."
+                  placeholderTextColor={t.textTertiary}
+                  style={styles.input}
+                  multiline
+                />
+
+                <TouchableOpacity
+                  style={[
+                    styles.sendButton,
+                    sending && { opacity: 0.5 }
+                  ]}
+                  onPress={() => sendMessage()}
+                  disabled={sending}
+                >
+                  <ThemedText style={styles.sendText}>
+                    Send
+                  </ThemedText>
+                </TouchableOpacity>
+              </View>
+
             </View>
 
           </View>
-
-        </View>
+        </TouchableWithoutFeedback>
 
       </KeyboardAvoidingView>
 

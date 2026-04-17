@@ -43,9 +43,11 @@ import { useTheme } from "../hooks/useTheme";
 
 const generateInviteCode = () => {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const buf = new Uint32Array(6);
-  crypto.getRandomValues(buf);
-  return Array.from(buf, v => chars[v % chars.length]).join("");
+  let code = "";
+  for (let i = 0; i < 6; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
 };
 
 const usernameExists = async (username: string) => {
@@ -84,12 +86,6 @@ export default function SocialOnboarding() {
   const [organisation, setOrg]      = useState("");
   const [inviteCode, setInviteCode] = useState("");
   const [loading, setLoading]       = useState(false);
-
-  // Guard: if no user is authenticated, redirect to sign-in
-  if (!user) {
-    router.replace("/sign-in");
-    return null;
-  }
 
   const goTo = (m: Mode) => {
     setOrg("");
@@ -150,6 +146,7 @@ export default function SocialOnboarding() {
         name:               trimmedOrg,
         nameLower:          normalizedOrg,
         ownerId:            uid,
+        orgAdmins:          [uid],
         plan:               "free",
         inviteCode:         inviteCodeValue,
         aiCreditsRemaining: 0,
@@ -170,8 +167,9 @@ export default function SocialOnboarding() {
       await refreshMembership();
       router.replace("/(tabs)/home");
 
-    } catch {
-      Alert.alert("Setup failed", "Something went wrong. Please try again.");
+    } catch (err: any) {
+      console.error("Create org error:", err);
+      Alert.alert("Setup failed", err?.message ?? "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -262,8 +260,9 @@ export default function SocialOnboarding() {
         [{ text: "OK", onPress: () => signOut(auth) }]
       );
 
-    } catch {
-      Alert.alert("Setup failed", "Something went wrong. Please try again.");
+    } catch (err: any) {
+      console.error("Join org error:", err);
+      Alert.alert("Setup failed", err?.message ?? "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -418,6 +417,13 @@ export default function SocialOnboarding() {
       fontSize: 14,
     },
   }), [t]);
+
+  // Guard: if no user is authenticated, redirect to sign-in
+  // (placed after all hooks to satisfy React's rules of hooks)
+  if (!user) {
+    router.replace("/sign-in");
+    return null;
+  }
 
   //////////////////////////////////////////////////////
   // CHOOSE SCREEN

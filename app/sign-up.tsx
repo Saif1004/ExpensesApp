@@ -38,9 +38,11 @@ import GoogleLogo from "../components/GoogleLogo";
 
 const generateInviteCode = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const buf = new Uint32Array(6);
-  crypto.getRandomValues(buf);
-  return Array.from(buf, v => chars[v % chars.length]).join('');
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
 };
 
 const usernameExists = async (username: string) => {
@@ -263,6 +265,7 @@ export default function SignUp() {
         name:               trimmedOrg,
         nameLower:          normalizedOrg,
         ownerId:            uid,
+        orgAdmins:          [uid],
         plan:               "free",
         inviteCode:         inviteCodeValue,
         aiCreditsRemaining: 0,
