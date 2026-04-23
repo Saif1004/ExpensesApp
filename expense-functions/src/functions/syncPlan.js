@@ -1,20 +1,4 @@
-/**
- * syncPlan.js
- *
- * Verifies a RevenueCat subscription server-side and writes the
- * resulting plan to Firestore using Admin SDK.
- *
- * Client cannot write `plan` / `aiCreditsRemaining` / `aiCreditsResetAt`
- * directly (blocked by Firestore security rules) — this function is the
- * ONLY way to update billing fields from a purchase or restore flow.
- *
- * Flow:
- *  1. Verify Firebase bearer token
- *  2. Confirm caller is the org owner
- *  3. Query RevenueCat REST API with the user's UID as the subscriber ID
- *  4. Determine the active plan from entitlements
- *  5. Update Firestore organisation doc via Admin SDK
- */
+// verifies the revenuecat subscription server-side and updates the org's plan in firestore
 
 const { app } = require("@azure/functions");
 const admin   = require("firebase-admin");
@@ -22,9 +6,7 @@ const { secureResponse } = require("./security");
 const { authAndLimit, WINDOW_15_MIN } = require("./rateLimit");
 const PLAN_LIMITS = require("./planLimits");
 
-////////////////////////////////////////////////////
-// FIREBASE INIT
-////////////////////////////////////////////////////
+// firebase init (skip if already done)
 
 if (!admin.apps.length) {
   admin.initializeApp({
@@ -38,17 +20,12 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-////////////////////////////////////////////////////
-// REVENUECAT ENTITLEMENT IDs
-// Must match constants/planLimits.ts on the frontend
-////////////////////////////////////////////////////
+// these must match the entitlement IDs set up in the revenuecat dashboard
 
 const RC_PRO_ENTITLEMENT      = "pro";
 const RC_BUSINESS_ENTITLEMENT = "business";
 
-////////////////////////////////////////////////////
-// HANDLER
-////////////////////////////////////////////////////
+// http handler
 
 app.http("syncPlan", {
   methods:   ["POST"],
@@ -57,17 +34,13 @@ app.http("syncPlan", {
   handler: async (request, context) => {
     try {
 
-      ////////////////////////////////////////////////////
-      // AUTH
-      ////////////////////////////////////////////////////
+      // verify token and apply rate limit
 
       const auth = await authAndLimit(request, "rateLimitSyncPlan", 5, WINDOW_15_MIN);
       if (auth.error) return auth.error;
       const uid = auth.uid;
 
-      ////////////////////////////////////////////////////
-      // DERIVE orgId FROM MEMBERSHIP — never trust client
-      ////////////////////////////////////////////////////
+      // look up the org from the user's membership, don't trust anything from the client
 
       const membershipSnap = await db.collection("memberships")
         .where("userId", "==", uid)
@@ -81,9 +54,7 @@ app.http("syncPlan", {
 
       const orgId = membershipSnap.docs[0].data().orgId;
 
-      ////////////////////////////////////////////////////
-      // VERIFY OWNERSHIP
-      ////////////////////////////////////////////////////
+      // only the org owner can sync billing
 
       const orgRef = db.collection("organisations").doc(orgId);
       const orgDoc = await orgRef.get();
@@ -96,11 +67,7 @@ app.http("syncPlan", {
         return secureResponse({ error: "Forbidden: not the org owner" }, 403);
       }
 
-      ////////////////////////////////////////////////////
-      // QUERY REVENUECAT REST API
-      // Uses the Firebase UID as the RevenueCat app user ID
-      // (set via Purchases.logIn(uid) in the mobile app)
-      ////////////////////////////////////////////////////
+      // hit the revenuecat REST API using the firebase uid as the subscriber id
 
       const rcSecretKey = process.env.REVENUECAT_SECRET_KEY;
 
@@ -128,19 +95,14 @@ app.http("syncPlan", {
       const entitlements = rcData.subscriber?.entitlements ?? {};
       const now          = new Date().toISOString();
 
-      ////////////////////////////////////////////////////
-      // DETERMINE PLAN FROM ACTIVE ENTITLEMENTS
-      ////////////////////////////////////////////////////
+      // work out which plan the user is on based on active entitlements
 
       const hasBusiness = (entitlements[RC_BUSINESS_ENTITLEMENT]?.expires_date ?? "") > now;
       const hasPro      = (entitlements[RC_PRO_ENTITLEMENT]?.expires_date      ?? "") > now;
 
       const newPlan = hasBusiness ? "business" : hasPro ? "pro" : "free";
 
-      ////////////////////////////////////////////////////
-      // BUILD UPDATE
-      // Don't downgrade an active trial — let it expire naturally
-      ////////////////////////////////////////////////////
+      // build the firestore update, but don't touch an active trial
 
       const currentPlan = orgDoc.data().plan ?? "free";
       const isActiveTrial =
@@ -148,7 +110,7 @@ app.http("syncPlan", {
         orgDoc.data().trialEndsAt?.toDate?.() > new Date();
 
       if (newPlan === "free" && isActiveTrial) {
-        // No paid sub found, but trial is still active — do nothing
+        // no paid sub yet but the trial is still running, leave it alone
         context.log(`No paid sub for org ${orgId}; active trial preserved`);
         return secureResponse({ success: true, plan: "trial" }, 200);
       }

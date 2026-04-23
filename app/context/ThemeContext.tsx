@@ -26,7 +26,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [mode, setMode]       = useState<ThemeMode>('light');
   const [isLoaded, setLoaded] = useState(false);
 
-  // Load persisted preference on mount
+  // check asyncstorage on startup so the theme is right from the first render
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY)
       .then((stored) => {
@@ -62,5 +62,5 @@ export function useThemeContext() {
   return useContext(ThemeContext);
 }
 
-// Required by Expo Router — every file inside app/ must have a default export
+// expo router needs a default export from every file in app/
 export default ThemeProvider;

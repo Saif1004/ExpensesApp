@@ -6,13 +6,13 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// Configure Google Sign-In once at app startup so it's ready on any screen
+// set up google sign-in once at startup
 GoogleSignin.configure({
   webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID!,
   iosClientId:  process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
 });
 
-// Sentry crash reporting
+// kick off sentry before anything else loads
 Sentry.init({
   dsn: "https://7ed0bbc868847a712d655357b3f2d554@o4511227413331968.ingest.de.sentry.io/4511227415429200",
   tracesSampleRate: 1.0,
@@ -22,9 +22,7 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Linking, LogBox, Modal, Platform, ScrollView, StyleSheet, TouchableOpacity, View } from "react-native";
 
-// expo-keep-awake is used internally by Expo dev-tools to keep the screen on
-// during development. On some devices/simulators the native module throws —
-// this is harmless and does not affect production builds.
+// suppresses a harmless dev-mode warning from expo-keep-awake
 LogBox.ignoreLogs(["Unable to activate keep awake"]);
 
 
@@ -38,10 +36,7 @@ const STRIPE_PK  = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY!;
 const TERMS_URL   = "https://doc-hosting.flycricket.io/claimio-terms-of-use/1f9b2874-dd4b-4eea-b8e0-6ad1c9ab563b/terms";
 const PRIVACY_URL = "https://doc-hosting.flycricket.io/claimio-privacy-policy/b73958a1-ae06-494d-b3a9-2c9b7183d4b3/privacy";
 
-//////////////////////////////////////////////////////
-// T&C Gate — shown once on FIRST LOGIN per account
-// (stored in Firestore users/{uid}.termsAccepted)
-//////////////////////////////////////////////////////
+// terms gate — shown once on first login, acceptance stored in firestore
 
 function TermsGate({ children }: { children: React.ReactNode }) {
   const { tokens: t } = useThemeContext();
@@ -51,40 +46,36 @@ function TermsGate({ children }: { children: React.ReactNode }) {
   const checkedUidRef = useRef<string | null>(null);
 
   useEffect(() => {
-    // Don't show T&C for unverified email users — they're mid sign-up.
-    // If we show it now and they accept, setDoc creates users/{uid} before
-    // the sign-up batch write does, which turns the batch's CREATE into an
-    // UPDATE that requires verified() → permission denied. T&C will show
-    // on their first proper sign-in after email verification.
+    // unverified users are still mid sign-up — showing this now would break the batch write
     if (!authLoaded || !user || !user.emailVerified) {
       setVisible(false);
       return;
     }
-    // Only run once per uid per session
+    // don't re-run for the same user
     if (checkedUidRef.current === user.uid) return;
     checkedUidRef.current = user.uid;
 
     const cacheKey = `tc_accepted_${user.uid}`;
 
     (async () => {
-      // 1. Check local cache first — instant, no network
+      // fast path: check local storage first
       const cached = await AsyncStorage.getItem(cacheKey).catch(() => null);
-      if (cached === "true") return; // already accepted on this device
+      if (cached === "true") return; // already done on this device
 
-      // 2. Check Firestore (source of truth — catches sign-ins on new devices)
+      // fall back to firestore — catches new device sign-ins
       try {
         const snap = await getDoc(doc(db, "users", user.uid));
         if (snap.data()?.termsAccepted === true) {
-          // Accepted on another device — cache it locally so we don't check again
+          // accepted on another device, cache it so we skip the check next time
           await AsyncStorage.setItem(cacheKey, "true").catch(() => {});
           return;
         }
       } catch {
-        // Firestore unreachable — fail open, don't block the user
+        // can't reach firestore, let them through
         return;
       }
 
-      // 3. Not accepted anywhere yet — show the modal
+      // hasn't accepted anywhere yet, show the modal
       setVisible(true);
     })();
   }, [authLoaded, user?.uid]);
@@ -205,7 +196,7 @@ function TermsGate({ children }: { children: React.ReactNode }) {
   const handleAccept = async () => {
     if (user) {
       const cacheKey = `tc_accepted_${user.uid}`;
-      // Write to both — Firestore for cross-device, AsyncStorage for instant local cache
+      // save to both: firestore for cross-device, asyncstorage for instant lookup
       await Promise.allSettled([
         setDoc(doc(db, "users", user.uid), { termsAccepted: true }, { merge: true }),
         AsyncStorage.setItem(cacheKey, "true"),
@@ -224,7 +215,7 @@ function TermsGate({ children }: { children: React.ReactNode }) {
         transparent
         animationType="slide"
         statusBarTranslucent
-        onRequestClose={() => { /* block hardware back */ }}
+        onRequestClose={() => { /* blocks the hardware back button */ }}
       >
         <View style={styles.overlay}>
           <View style={styles.sheet}>
@@ -293,9 +284,7 @@ function TermsGate({ children }: { children: React.ReactNode }) {
   );
 }
 
-//////////////////////////////////////////////////////
-// Push notification registrar
-//////////////////////////////////////////////////////
+// registers push tokens when a verified user signs in
 
 function PushNotificationRegistrar() {
   const { user } = useAuth();
@@ -309,9 +298,7 @@ function PushNotificationRegistrar() {
   return null;
 }
 
-//////////////////////////////////////////////////////
-// App shell
-//////////////////////////////////////////////////////
+// wraps the app with providers
 
 function AppShell() {
   const { tokens, isLoaded } = useThemeContext();

@@ -42,9 +42,7 @@ export function BadgeProvider({children}:{children:React.ReactNode}){
   const [usersBadge,setUsersBadge] = useState(0);
   const [adminBadge,setAdminBadge] = useState(0);
 
-  //////////////////////////////////////////////////////
-  // CLAIMS BADGE
-  //////////////////////////////////////////////////////
+  // watches pending claims and keeps the tab badge in sync
 
   useEffect(()=>{
 
@@ -63,9 +61,7 @@ export function BadgeProvider({children}:{children:React.ReactNode}){
 
   },[user]);
 
-  //////////////////////////////////////////////////////
-  // USERS BADGE (pending employees)
-  //////////////////////////////////////////////////////
+  // watches pending memberships for the admin/users badge
 
   useEffect(()=>{
 
@@ -85,9 +81,7 @@ export function BadgeProvider({children}:{children:React.ReactNode}){
 
   },[user]);
 
-  //////////////////////////////////////////////////////
-  // CLEAR FUNCTIONS
-  //////////////////////////////////////////////////////
+  // helpers to clear each badge once the user views the tab
 
   const clearClaims = ()=>setClaimsBadge(0);
   const clearUsers = ()=>setUsersBadge(0);

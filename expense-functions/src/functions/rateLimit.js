@@ -3,20 +3,12 @@ const admin = require("firebase-admin");
 const WINDOW_1_MIN    = 60 * 1000;
 const WINDOW_15_MIN   = 15 * 60 * 1000;
 
-////////////////////////////////////////////////////
-// IP RATE LIMITING (in-memory sliding window)
-// Defends against unauthenticated flood attacks and
-// credential-stuffing before the token is verified.
-// Limits: 60 req/min per IP globally (across all endpoints).
-////////////////////////////////////////////////////
+// in-memory ip rate limiter — blocks floods before we even check the token
 
 const IP_MAX_PER_MIN = 60;
 const ipStore = new Map(); // ip -> { count, windowStart }
 
-/**
- * Extract the real client IP from Azure Functions request headers.
- * Azure sets x-forwarded-for or client-ip (with optional port).
- */
+// pulls the real client ip from azure's forwarded headers
 function getClientIp(request) {
   const xff = request.headers.get("x-forwarded-for");
   if (xff) return xff.split(",")[0].trim();
@@ -24,11 +16,7 @@ function getClientIp(request) {
   return clientIp.split(":")[0].trim() || "unknown";
 }
 
-/**
- * In-memory sliding-window rate limit per IP.
- * Returns { allowed: boolean }.
- * Periodically self-cleans stale entries (1% chance per call).
- */
+// sliding window rate limit per ip, self-cleans stale entries occasionally
 function checkIpRateLimit(request, maxRequests = IP_MAX_PER_MIN, windowMs = WINDOW_1_MIN) {
   const ip = getClientIp(request);
   if (!ip || ip === "unknown") return { allowed: true }; // can't block unknown IPs
@@ -43,7 +31,7 @@ function checkIpRateLimit(request, maxRequests = IP_MAX_PER_MIN, windowMs = WIND
     windowStart: expired ? now : entry.windowStart,
   });
 
-  // Probabilistic cleanup — remove entries older than 2× the window
+  // 1% chance cleanup — removes old ip entries to stop the map growing forever
   if (Math.random() < 0.01) {
     const cutoff = now - windowMs * 2;
     for (const [k, v] of ipStore.entries()) {
@@ -54,14 +42,7 @@ function checkIpRateLimit(request, maxRequests = IP_MAX_PER_MIN, windowMs = WIND
   return { allowed: newCount <= maxRequests };
 }
 
-////////////////////////////////////////////////////
-// TOKEN VERIFICATION
-////////////////////////////////////////////////////
-
-/**
- * Verify Firebase ID token and return decoded payload.
- * Returns null if missing or invalid.
- */
+// verifies the firebase id token and returns the decoded payload (null if bad)
 async function verifyToken(request) {
   const authHeader = request.headers.get("authorization") || "";
   const token = authHeader.replace("Bearer ", "").trim();
@@ -73,20 +54,7 @@ async function verifyToken(request) {
   }
 }
 
-////////////////////////////////////////////////////
-// PER-USER RATE LIMITING (Firestore sliding window)
-// Persists across function instances — prevents a
-// single account from abusing the API at scale.
-////////////////////////////////////////////////////
-
-/**
- * Check and update per-user sliding-window rate limit stored in Firestore.
- * @param {string} userId
- * @param {string} field       - Firestore field key e.g. "rateLimitOCR"
- * @param {number} maxRequests - Max allowed requests within the window
- * @param {number} windowMs    - Window size in ms (default: 1 minute)
- * @returns {{ allowed: boolean }}
- */
+// per-user sliding window stored in firestore — survives across cold starts
 async function checkRateLimit(userId, field, maxRequests, windowMs = WINDOW_1_MIN) {
   const db = admin.firestore();
   const userRef = db.collection("users").doc(userId);
@@ -99,7 +67,7 @@ async function checkRateLimit(userId, field, maxRequests, windowMs = WINDOW_1_MI
   const windowExpired = now - rw.windowStart > windowMs;
   const newCount = windowExpired ? 1 : rw.count + 1;
 
-  // Fire-and-forget — don't block the response on this write
+  // fire-and-forget so we don't slow down the response
   userRef.update({
     [field]: {
       count: newCount,
@@ -110,23 +78,10 @@ async function checkRateLimit(userId, field, maxRequests, windowMs = WINDOW_1_MI
   return { allowed: newCount <= maxRequests };
 }
 
-////////////////////////////////////////////////////
-// COMBINED AUTH + IP + USER RATE LIMIT
-////////////////////////////////////////////////////
-
-/**
- * Verify token + IP rate limit + per-user rate limit in one call.
- * IP check runs first (before token verification) to block floods early.
- * Returns { uid } on success, or { error: Response } on failure.
- *
- * @param {Request} request
- * @param {string}  field        - Firestore field key
- * @param {number}  maxRequests  - Max requests in the window (per user)
- * @param {number}  windowMs     - Window in ms (default 1 min)
- */
+// runs ip check → token verify → per-user limit in one go
 async function authAndLimit(request, field, maxRequests, windowMs = WINDOW_1_MIN) {
 
-  // 1. IP rate limit — checked before token verification to stop floods cheaply
+  // 1. ip check first — stops floods before we waste time on token verification
   const ipCheck = checkIpRateLimit(request);
   if (!ipCheck.allowed) {
     return {
@@ -137,7 +92,7 @@ async function authAndLimit(request, field, maxRequests, windowMs = WINDOW_1_MIN
     };
   }
 
-  // 2. Token verification
+  // 2. verify the token
   const decoded = await verifyToken(request);
   if (!decoded) {
     return {
@@ -148,7 +103,7 @@ async function authAndLimit(request, field, maxRequests, windowMs = WINDOW_1_MIN
     };
   }
 
-  // 3. Per-user rate limit (Firestore-backed, survives across instances)
+  // 3. per-user limit (firestore-backed so it survives restarts)
   const { allowed } = await checkRateLimit(decoded.uid, field, maxRequests, windowMs);
   if (!allowed) {
     const windowLabel = windowMs === WINDOW_15_MIN ? "15 minutes" : "minute";

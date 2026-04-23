@@ -7,9 +7,7 @@ const { checkAiKillSwitch } = require("./aiConfig");
 const PLAN_LIMITS = require("./planLimits");
 const { checkAndDeductCredit } = require("./aiCredits");
 
-////////////////////////////////////////////////////
-// FIREBASE INIT
-////////////////////////////////////////////////////
+// firebase init (skip if already done)
 
 if (!admin.apps.length) {
   admin.initializeApp({
@@ -23,9 +21,7 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-//////////////////////////////////////////////////////////
-// SAFE OPENAI CLIENT
-//////////////////////////////////////////////////////////
+// builds the openai client, throws if credentials aren't set
 
 function getOpenAIClient() {
 
@@ -42,9 +38,7 @@ function getOpenAIClient() {
   });
 }
 
-//////////////////////////////////////////////////////////
-// AI CATEGORY CLASSIFIER
-//////////////////////////////////////////////////////////
+// uses the AI to figure out which expense category a receipt belongs to
 
 async function classifyExpense(merchant, receiptText, items) {
 
@@ -128,9 +122,7 @@ Office
   return response.choices[0].message.content.trim();
 }
 
-//////////////////////////////////////////////////////////
-// RECEIPT OCR FUNCTION
-//////////////////////////////////////////////////////////
+// main receipt OCR handler
 
 app.http("receiptOCR", {
   methods: ["POST"],
@@ -140,23 +132,17 @@ app.http("receiptOCR", {
 
     try {
 
-      //////////////////////////////////////////////////////////
-      // AUTH + RATE LIMIT (5 OCR calls per minute per user)
-      //////////////////////////////////////////////////////////
+      // auth check + rate limit, 5 scans per minute
 
       const auth = await authAndLimit(request, "rateLimitOCR", 5);
       if (auth.error) return auth.error;
 
-      //////////////////////////////////////////////////////////
-      // AI KILL SWITCH
-      //////////////////////////////////////////////////////////
+      // check if AI has been disabled before hitting the OCR service
 
       const blocked = await checkAiKillSwitch("ocr");
       if (blocked) return blocked;
 
-      //////////////////////////////////////////////////////////
-      // PLAN CHECK + CREDIT DEDUCTION
-      //////////////////////////////////////////////////////////
+      // receipt scanning is a paid feature, verify the plan and deduct a credit
 
       const membershipSnap = await db
         .collection("memberships")
@@ -171,7 +157,7 @@ app.http("receiptOCR", {
         const orgDoc  = await orgRef.get();
         const orgData = orgDoc.data() || {};
 
-        // Resolve effective plan (expired trial → free)
+        // treat expired trials as free
         let plan = orgData.plan ?? "free";
         if (plan === "trial") {
           const trialEndsAt = orgData.trialEndsAt?.toDate?.() ?? null;
@@ -190,9 +176,7 @@ app.http("receiptOCR", {
         if (creditError) return creditError;
       }
 
-      //////////////////////////////////////////////////////////
-      // REQUEST BODY
-      //////////////////////////////////////////////////////////
+      // pull the base64 image out of the request
 
       const { image } = await request.json();
 
@@ -200,9 +184,7 @@ app.http("receiptOCR", {
         return secureResponse({ error: "No image provided" }, 400);
       }
 
-      //////////////////////////////////////////////////////////
-      // DOCUMENT INTELLIGENCE CONFIG
-      //////////////////////////////////////////////////////////
+      // set up the azure document intelligence endpoint
 
       const endpoint = process.env.AZURE_DOC_ENDPOINT;
       const key = process.env.AZURE_DOC_KEY;
@@ -214,9 +196,7 @@ app.http("receiptOCR", {
       const analyzeUrl =
         `${endpoint.replace(/\/$/, "")}/formrecognizer/documentModels/prebuilt-receipt:analyze?api-version=2023-07-31`;
 
-      //////////////////////////////////////////////////////////
-      // SEND IMAGE TO OCR
-      //////////////////////////////////////////////////////////
+      // submit the image to azure for analysis
 
       const analyzeResponse = await fetch(analyzeUrl, {
         method: "POST",
@@ -240,9 +220,7 @@ app.http("receiptOCR", {
       const operationLocation =
         analyzeResponse.headers.get("operation-location");
 
-      //////////////////////////////////////////////////////////
-      // POLL OCR RESULT
-      //////////////////////////////////////////////////////////
+      // poll until the OCR job finishes
 
       let result;
 
@@ -268,9 +246,7 @@ app.http("receiptOCR", {
         await new Promise(r => setTimeout(r, 1500));
       }
 
-      //////////////////////////////////////////////////////////
-      // EXTRACT FIELDS
-      //////////////////////////////////////////////////////////
+      // pull the key fields out of the OCR result
 
       const doc = result?.analyzeResult?.documents?.[0];
 
@@ -283,9 +259,7 @@ app.http("receiptOCR", {
       let date =
         doc?.fields?.TransactionDate?.valueDate ?? "";
 
-      //////////////////////////////////////////////////////////
-      // EXTRACT ITEMS
-      //////////////////////////////////////////////////////////
+      // grab the line items if the receipt has them
 
       let items = [];
 
@@ -298,9 +272,7 @@ app.http("receiptOCR", {
 
       }
 
-      //////////////////////////////////////////////////////////
-      // FALLBACK AMOUNT DETECTION
-      //////////////////////////////////////////////////////////
+      // if azure didn't find a total, scan the raw text for the largest price
 
       if (!amount) {
 
@@ -317,9 +289,7 @@ app.http("receiptOCR", {
 
       }
 
-      //////////////////////////////////////////////////////////
-      // AI CATEGORY CLASSIFICATION
-      //////////////////////////////////////////////////////////
+      // let the AI decide which category this receipt belongs to
 
       let category = "Meals";
 
@@ -353,9 +323,7 @@ app.http("receiptOCR", {
 
       }
 
-      //////////////////////////////////////////////////////////
-      // LOG RESULT
-      //////////////////////////////////////////////////////////
+      // log what we got for debugging
 
       context.log("OCR RESULT:", {
         merchant,
@@ -365,9 +333,7 @@ app.http("receiptOCR", {
         category
       });
 
-      //////////////////////////////////////////////////////////
-      // RESPONSE
-      //////////////////////////////////////////////////////////
+      // send the extracted receipt data back
 
       return secureResponse({ merchant, amount, date, category }, 200);
 

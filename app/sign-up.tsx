@@ -32,9 +32,7 @@ import { setIsSigningUp } from "./utils/signUpFlag";
 import { useTheme } from "../hooks/useTheme";
 import GoogleLogo from "../components/GoogleLogo";
 
-//////////////////////////////////////////////////////
-// Helpers
-//////////////////////////////////////////////////////
+// shared helper functions
 
 const generateInviteCode = () => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -46,7 +44,7 @@ const generateInviteCode = () => {
 };
 
 const usernameExists = async (username: string) => {
-  // Use getDoc on the exact document — where("__name__") matches the full path, not the ID
+  // look up by doc id — faster than a where query
   const snap = await getDoc(doc(db, "usernames", username));
   return snap.exists();
 };
@@ -58,28 +56,19 @@ const orgNameExists = async (nameLower: string) => {
   return !snap.empty;
 };
 
-//////////////////////////////////////////////////////
-// Password strength validator
-// Requirements: 8+ chars, 1 uppercase, 1 lowercase, 1 number
-//////////////////////////////////////////////////////
+// validates password strength: 8+ chars, uppercase, lowercase, number
 
 function validatePassword(password: string): string | null {
   if (password.length < 8)            return "Password must be at least 8 characters.";
   if (!/[A-Z]/.test(password))        return "Password must contain at least one uppercase letter.";
   if (!/[a-z]/.test(password))        return "Password must contain at least one lowercase letter.";
   if (!/[0-9]/.test(password))        return "Password must contain at least one number.";
-  return null; // valid
+  return null; // all good
 }
 
-//////////////////////////////////////////////////////
-// Types
-//////////////////////////////////////////////////////
+// which screen we're on
 
 type Mode = "choose" | "create" | "join";
-
-//////////////////////////////////////////////////////
-// Screen
-//////////////////////////////////////////////////////
 
 export default function SignUp() {
   const router = useRouter();
@@ -88,23 +77,21 @@ export default function SignUp() {
 
   const [mode, setMode] = useState<Mode>("choose");
 
-  // Shared fields
+  // fields shared across all modes
   const [username, setUsername]               = useState("");
   const [email, setEmail]                     = useState("");
   const [password, setPassword]               = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  // Create-only
+  // create org only
   const [organisation, setOrganisation] = useState("");
 
-  // Join-only
+  // join org only
   const [inviteCode, setInviteCode] = useState("");
 
   const [loading, setLoading] = useState(false);
 
-  //////////////////////////////////////////////////////
-  // RESET fields when switching modes
-  //////////////////////////////////////////////////////
+  // clears all fields when switching between create/join/choose
 
   const goTo = (m: Mode) => {
     setUsername("");
@@ -116,9 +103,7 @@ export default function SignUp() {
     setMode(m);
   };
 
-  //////////////////////////////////////////////////////
-  // CHECK MEMBERSHIP
-  //////////////////////////////////////////////////////
+  // checks membership status before routing
 
   const checkMembership = async (uid: string) => {
     try {
@@ -130,9 +115,7 @@ export default function SignUp() {
     }
   };
 
-  //////////////////////////////////////////////////////
-  // SOCIAL AUTH — shared routing
-  //////////////////////////////////////////////////////
+  // post-social-auth routing
 
   const handleSocialAuth = async (uid: string) => {
     const membership = await checkMembership(uid);
@@ -140,15 +123,14 @@ export default function SignUp() {
       await signOut(auth);
       Alert.alert("Awaiting Approval", "Your admin hasn't approved your account yet.");
     }
-    // All other routing (new user → social-onboarding, approved → home)
-    // is handled by AuthProvider once membership loads.
+    // authprovider handles the rest once membership loads
   };
 
   const handleGoogleSignIn = async () => {
     try {
       setLoading(true);
       await GoogleSignin.hasPlayServices();
-      await GoogleSignin.signOut(); // clear cached session so the account picker always shows
+      await GoogleSignin.signOut(); // force the picker to show each time
       const response = await GoogleSignin.signIn();
       const idToken  = (response as any).data?.idToken ?? (response as any).idToken;
       if (!idToken) throw new Error("No ID token");
@@ -193,9 +175,7 @@ export default function SignUp() {
     }
   };
 
-  //////////////////////////////////////////////////////
-  // CREATE (admin flow)
-  //////////////////////////////////////////////////////
+  // creates a new org and makes the user the admin
 
   const handleCreate = async () => {
     const trimmedUsername  = username.trim();
@@ -220,7 +200,7 @@ export default function SignUp() {
       return;
     }
 
-    // Username check is unauthenticated-safe (usernames are public read)
+    // usernames are public read so we can check before creating the auth account
     if (await usernameExists(normalizedUsername)) {
       Alert.alert("Username taken", "Please choose a different username.");
       return;
@@ -233,7 +213,7 @@ export default function SignUp() {
       cred = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
       const uid  = cred.user.uid;
 
-      // Org name check must happen AFTER auth — organisations require request.auth != null
+      // org name needs auth to read — do this after account creation
       if (await orgNameExists(normalizedOrg)) {
         await cred.user.delete();
         Alert.alert("Organisation name taken", "An organisation with that name already exists. Please choose a different name.");
@@ -242,7 +222,7 @@ export default function SignUp() {
 
       await updateProfile(cred.user, { displayName: trimmedUsername });
 
-      // ── Send verification email IMMEDIATELY after account creation ──
+      // send the verification email as soon as the account exists
       try { await sendEmailVerification(cred.user); } catch {}
 
       const orgRef          = doc(collection(db, "organisations"));
@@ -283,7 +263,7 @@ export default function SignUp() {
       });
       await batch.commit();
 
-      // ── Sign out — must verify email before accessing the app ──
+      // sign them out — they need to verify their email first
       await signOut(auth);
 
       Alert.alert(
@@ -297,7 +277,7 @@ export default function SignUp() {
       if (code === "auth/email-already-in-use") {
         Alert.alert("Email in use", "An account with this email already exists.");
       } else {
-        // Clean up the auth account so the user can try again cleanly
+        // delete the orphaned auth account so they can retry
         if (cred?.user) {
           try { await cred.user.delete(); } catch {}
         }
@@ -309,9 +289,7 @@ export default function SignUp() {
     }
   };
 
-  //////////////////////////////////////////////////////
-  // JOIN (employee flow)
-  //////////////////////////////////////////////////////
+  // joins an existing org using an invite code
 
   const handleJoin = async () => {
     const trimmedCode        = inviteCode.trim().toUpperCase();
@@ -345,18 +323,16 @@ export default function SignUp() {
     let cred: any = null;
 
     try {
-      // 1. Create auth user
+      // 1. create the auth account
       cred       = await createUserWithEmailAndPassword(auth, trimmedEmail, password);
       const uid        = cred.user.uid;
 
       await updateProfile(cred.user, { displayName: trimmedUsername });
 
-      // ── Send verification email IMMEDIATELY after account creation ──
+      // send verification email straight after the account exists
       try { await sendEmailVerification(cred.user); } catch {}
 
-      // 2. Look up org by invite code
-      // organisations are readable by any authenticated user (not just verified)
-      // so this works immediately after createUserWithEmailAndPassword
+      // 2. look up the org — orgs are readable by any authed user (even unverified)
       const orgQuery = query(
         collection(db, "organisations"),
         where("inviteCode", "==", trimmedCode)
@@ -372,7 +348,7 @@ export default function SignUp() {
 
       const orgId = orgSnap.docs[0].id;
 
-      // 3. Write user doc, username doc, membership
+      // 3. write all docs in one batch
       const batch       = writeBatch(db);
       const userRef     = doc(db, "users", uid);
       const usernameRef = doc(db, "usernames", normalizedUsername);
@@ -399,7 +375,7 @@ export default function SignUp() {
 
       await batch.commit();
 
-      // 4. Sign out — must verify email AND wait for admin approval
+      // 4. sign out — they need email verification + admin approval before accessing the app
       await signOut(auth);
 
       Alert.alert(
@@ -413,7 +389,7 @@ export default function SignUp() {
       if (code === "auth/email-already-in-use") {
         Alert.alert("Email in use", "An account with this email already exists.");
       } else {
-        // Clean up orphaned auth account so user can try again
+        // clean up so they can try again without being stuck
         if (cred?.user) {
           try { await cred.user.delete(); } catch {}
         }
@@ -425,15 +401,13 @@ export default function SignUp() {
     }
   };
 
-  //////////////////////////////////////////////////////
-  // STYLES
-  //////////////////////////////////////////////////////
+  // styles for all three screens
 
   const styles = useMemo(() => StyleSheet.create({
 
     flex: { flex: 1, backgroundColor: t.bg },
 
-    // ── Choose screen ──
+    // choose screen
 
     chooseContainer: {
       flexGrow: 1,
@@ -519,7 +493,7 @@ export default function SignUp() {
     signInText:     { color: t.textSecondary, fontSize: 14 },
     signInTextBold: { color: t.accent, fontWeight: "600" },
 
-    // ── Social ──
+    // social sign-in options
     dividerRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -573,7 +547,7 @@ export default function SignUp() {
     },
     btnDisabled: { opacity: 0.6 },
 
-    // ── Form screens ──
+    // create and join form screens
 
     formContainer: {
       flexGrow: 1,
@@ -649,9 +623,7 @@ export default function SignUp() {
     },
   }), [t]);
 
-  //////////////////////////////////////////////////////
-  // CHOOSE SCREEN
-  //////////////////////////////////////////////////////
+  // choose screen — shown first
 
   if (mode === "choose") {
     return (
@@ -660,7 +632,7 @@ export default function SignUp() {
           contentContainerStyle={styles.chooseContainer}
           showsVerticalScrollIndicator={false}
         >
-          {/* Logo / Title */}
+          {/* logo and app name */}
           <View style={styles.logoWrap}>
             <View style={styles.logoIcon}>
               <Ionicons name="receipt-outline" size={36} color={t.accent} />
@@ -669,7 +641,7 @@ export default function SignUp() {
             <Text style={styles.appSubtitle}>Expense management made simple</Text>
           </View>
 
-          {/* Create card */}
+          {/* create org card */}
           <TouchableOpacity
             style={[styles.chooseCard, styles.chooseCardBlue]}
             onPress={() => goTo("create")}
@@ -685,7 +657,7 @@ export default function SignUp() {
             <Ionicons name="chevron-forward" size={20} color={t.accent} />
           </TouchableOpacity>
 
-          {/* Join card */}
+          {/* join org card */}
           <TouchableOpacity
             style={[styles.chooseCard, styles.chooseCardBlue]}
             onPress={() => goTo("join")}
@@ -701,7 +673,7 @@ export default function SignUp() {
             <Ionicons name="chevron-forward" size={20} color={t.accent} />
           </TouchableOpacity>
 
-          {/* Social sign-in */}
+          {/* social sign-in option */}
           <View style={styles.dividerRow}>
             <View style={styles.dividerLine} />
             <Text style={styles.dividerText}>or continue with</Text>
@@ -730,7 +702,7 @@ export default function SignUp() {
             )}
           </View>
 
-          {/* Sign in link */}
+          {/* link back to sign in */}
           <TouchableOpacity onPress={() => router.push("/sign-in")} style={styles.signInLink}>
             <Text style={styles.signInText}>
               Already have an account? <Text style={styles.signInTextBold}>Sign In</Text>
@@ -741,9 +713,7 @@ export default function SignUp() {
     );
   }
 
-  //////////////////////////////////////////////////////
-  // CREATE SCREEN
-  //////////////////////////////////////////////////////
+  // create org screen
 
   if (mode === "create") {
     return (
@@ -758,18 +728,18 @@ export default function SignUp() {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            {/* Back */}
+            {/* back button */}
             <TouchableOpacity onPress={() => goTo("choose")} style={styles.backBtn}>
               <Ionicons name="arrow-back" size={22} color={t.textSecondary} />
             </TouchableOpacity>
 
-            {/* Header */}
+            {/* screen header */}
             <View style={styles.formHeader}>
               <Text style={styles.formTitle}>Create Organisation</Text>
               <Text style={styles.formSubtitle}>You'll be the admin</Text>
             </View>
 
-            {/* Fields */}
+            {/* form fields */}
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>Organisation Name</Text>
               <TextInput
@@ -851,9 +821,7 @@ export default function SignUp() {
     );
   }
 
-  //////////////////////////////////////////////////////
-  // JOIN SCREEN
-  //////////////////////////////////////////////////////
+  // join org screen
 
   return (
     <View style={[styles.flex, { backgroundColor: t.bg }]}>
@@ -867,18 +835,18 @@ export default function SignUp() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Back */}
+          {/* back button */}
           <TouchableOpacity onPress={() => goTo("choose")} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={22} color={t.textSecondary} />
           </TouchableOpacity>
 
-          {/* Header */}
+          {/* screen header */}
           <View style={styles.formHeader}>
             <Text style={styles.formTitle}>Join Organisation</Text>
             <Text style={styles.formSubtitle}>Ask your admin for the invite code</Text>
           </View>
 
-          {/* Invite Code */}
+          {/* invite code field */}
           <View style={styles.fieldGroup}>
             <Text style={styles.fieldLabel}>Invite Code</Text>
             <TextInput

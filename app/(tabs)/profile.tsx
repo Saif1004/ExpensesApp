@@ -38,9 +38,7 @@ import { useTheme } from "../../hooks/useTheme";
 
 const DELETE_URL = process.env.EXPO_PUBLIC_DELETE_ACCOUNT_URL!;
 
-//////////////////////////////////////////////////////
-// Types
-//////////////////////////////////////////////////////
+// types
 
 type PaymentInfo = {
   stripeCardBrand?: string;
@@ -49,18 +47,14 @@ type PaymentInfo = {
   stripePayoutLast4?: string;
 };
 
-//////////////////////////////////////////////////////
-// Helper: format card info
-//////////////////////////////////////////////////////
+// formats stripe card details for display
 
 function formatCard(brand?: string, last4?: string): string | null {
   if (!brand || !last4) return null;
   return `${brand.toUpperCase()} \u2022\u2022\u2022\u2022 ${last4}`;
 }
 
-//////////////////////////////////////////////////////
-// Sub-components
-//////////////////////////////////////////////////////
+// reusable sub-components for the profile screen
 
 function SectionHeader({ label }: { label: string }) {
   const { tokens: t } = useTheme();
@@ -166,7 +160,7 @@ function MenuRow({
       activeOpacity={0.65}
       disabled={!onPress}
     >
-      {/* Left icon */}
+      {/* left icon */}
       <View style={[styles.iconWrap, danger && styles.iconWrapDanger]}>
         <Ionicons
           name={icon}
@@ -175,7 +169,7 @@ function MenuRow({
         />
       </View>
 
-      {/* Label block */}
+      {/* label block */}
       <View style={styles.menuLabelBlock}>
         <ThemedText style={[styles.menuLabel, danger && styles.menuLabelDanger]}>
           {label}
@@ -185,7 +179,7 @@ function MenuRow({
         )}
       </View>
 
-      {/* Right side */}
+      {/* right element or chevron */}
       {rightElement
         ? rightElement
         : chevron && (
@@ -196,9 +190,7 @@ function MenuRow({
   );
 }
 
-//////////////////////////////////////////////////////
-// Main screen
-//////////////////////////////////////////////////////
+// main profile screen
 
 export default function ProfileScreen() {
 
@@ -217,7 +209,7 @@ export default function ProfileScreen() {
   const [paymentInfo, setPaymentInfo] = useState<PaymentInfo>({});
   const [inviteCode, setInviteCode] = useState<string | null>(null);
 
-  // Delete modal state
+  // delete account modal state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
   const [deleteError, setDeleteError] = useState("");
@@ -225,9 +217,7 @@ export default function ProfileScreen() {
 
   const user = auth.currentUser;
 
-  //////////////////////////////////////////////////////
-  // LOAD USER DATA
-  //////////////////////////////////////////////////////
+  // load user profile and org name from firestore on mount
 
   useEffect(() => {
     const loadUser = async () => {
@@ -245,7 +235,7 @@ export default function ProfileScreen() {
           });
         }
 
-        // Load organisation name
+        // also grab the org name to display under the username
         if (orgId) {
           const orgSnap = await getDoc(doc(db, "organisations", orgId));
           if (orgSnap.exists()) {
@@ -261,9 +251,7 @@ export default function ProfileScreen() {
     loadUser();
   }, []);
 
-  //////////////////////////////////////////////////////
-  // RESET PASSWORD
-  //////////////////////////////////////////////////////
+  // sends a password reset email to the user
 
   const resetPassword = async () => {
     if (!user?.email) {
@@ -278,9 +266,7 @@ export default function ProfileScreen() {
     }
   };
 
-  //////////////////////////////////////////////////////
-  // DELETE ACCOUNT
-  //////////////////////////////////////////////////////
+  // handles the account deletion flow
 
   const openDeleteModal = () => {
     setDeletePassword("");
@@ -335,9 +321,7 @@ export default function ProfileScreen() {
     }
   };
 
-  //////////////////////////////////////////////////////
-  // LOG OUT
-  //////////////////////////////////////////////////////
+  // clears all listeners and signs the user out
 
   const logout = async () => {
     try {
@@ -352,11 +336,7 @@ export default function ProfileScreen() {
     }
   };
 
-  //////////////////////////////////////////////////////
-  // SHARE INVITE CODE
-  //////////////////////////////////////////////////////
-
-  // Hard refresh role
+  // hard refresh to re-fetch the user's role and org membership
   const hardRefresh = async () => {
     setRefreshingRole(true);
     Animated.loop(
@@ -371,16 +351,14 @@ export default function ProfileScreen() {
     }
   };
 
-  //////////////////////////////////////////////////////
-  // RATE THE APP
-  //////////////////////////////////////////////////////
+  // prompts the native store review sheet or falls back to the store page
 
   const handleRateApp = async () => {
     const available = await StoreReview.isAvailableAsync();
     if (available) {
       await StoreReview.requestReview();
     } else {
-      // Fallback: open the store listing directly
+      // native prompt not available, open the store page directly
       const storeUrl = Platform.OS === "ios"
         ? "https://apps.apple.com/app/id6746710023"
         : "https://play.google.com/store/apps/details?id=com.saif1004.claimio";
@@ -421,9 +399,7 @@ export default function ProfileScreen() {
     }
   };
 
-  //////////////////////////////////////////////////////
-  // STYLES
-  //////////////////////////////////////////////////////
+  // styles
 
   const styles = useMemo(() => StyleSheet.create({
 
@@ -444,7 +420,7 @@ export default function ProfileScreen() {
       backgroundColor: t.bg
     },
 
-    /* ── Avatar ── */
+    // avatar section
     avatarSection: {
       alignItems: "center",
       paddingTop: 32,
@@ -563,7 +539,7 @@ export default function ProfileScreen() {
       alignItems: "center"
     },
 
-    /* ── Plan card ── */
+    // plan card
     planCard: {
       flexDirection: "row",
       alignItems: "center",
@@ -599,7 +575,7 @@ export default function ProfileScreen() {
       fontSize: 12
     },
 
-    /* ── Menu card ── */
+    // menu card container
     card: {
       backgroundColor: t.surface,
       borderRadius: 20,
@@ -611,7 +587,7 @@ export default function ProfileScreen() {
       })
     },
 
-    /* ── Invite code card ── */
+    // invite code card
     inviteCard: {
       backgroundColor: t.accentSurface,
       borderRadius: 20,
@@ -676,7 +652,7 @@ export default function ProfileScreen() {
       fontWeight: "600",
     },
 
-    /* ── Modal ── */
+    // modal styles
     modalOverlay: {
       flex: 1,
       backgroundColor: "rgba(0,0,0,0.75)",
@@ -786,9 +762,7 @@ export default function ProfileScreen() {
 
   }), [t, isDark]);
 
-  //////////////////////////////////////////////////////
-  // LOADING STATE
-  //////////////////////////////////////////////////////
+  // show a spinner while user data is loading
 
   if (loading) {
     return (
@@ -798,9 +772,7 @@ export default function ProfileScreen() {
     );
   }
 
-  //////////////////////////////////////////////////////
-  // Derived values
-  //////////////////////////////////////////////////////
+  // derive display labels from the current plan and user data
 
   const initials = username?.charAt(0)?.toUpperCase() || "U";
 
@@ -822,9 +794,7 @@ export default function ProfileScreen() {
   const cardInfoLabel  = formatCard(paymentInfo.stripeCardBrand,   paymentInfo.stripeCardLast4);
   const payoutInfoLabel = formatCard(paymentInfo.stripePayoutBrand, paymentInfo.stripePayoutLast4);
 
-  //////////////////////////////////////////////////////
-  // UI
-  //////////////////////////////////////////////////////
+  // render
 
   return (
     <SafeAreaView style={styles.root} edges={["top"]}>
@@ -836,7 +806,7 @@ export default function ProfileScreen() {
         keyboardShouldPersistTaps="handled"
       >
 
-        {/* ── AVATAR SECTION ── */}
+        {/* avatar section */}
         <View style={styles.avatarSection}>
           <View style={styles.avatar}>
             <ThemedText style={styles.avatarText}>{initials}</ThemedText>
@@ -853,7 +823,7 @@ export default function ProfileScreen() {
           )}
 
           <View style={styles.badgeRow}>
-            {/* Role badge */}
+            {/* role badge */}
             <View style={[
               styles.roleBadge,
               role === "admin" ? styles.roleBadgeAdmin : styles.roleBadgeEmployee
@@ -866,12 +836,12 @@ export default function ProfileScreen() {
               </ThemedText>
             </View>
 
-            {/* Plan badge */}
+            {/* plan badge */}
             <View style={styles.planBadge}>
               <ThemedText style={styles.planBadgeText}>{planLabel}</ThemedText>
             </View>
 
-            {/* Hard refresh button */}
+            {/* hard refresh button */}
             <TouchableOpacity
               style={styles.refreshBtn}
               onPress={hardRefresh}
@@ -889,7 +859,7 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* ── PLAN CARD ── */}
+        {/* plan card */}
         <TouchableOpacity
           style={styles.planCard}
           onPress={() => router.push(
@@ -909,12 +879,12 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={18} color={t.success} />
         </TouchableOpacity>
 
-        {/* ── ADMIN TOOLS ── */}
+        {/* admin-only tools */}
         {role === "admin" && (
           <>
             <SectionHeader label="ADMIN TOOLS" />
 
-            {/* Invite Code Card */}
+            {/* invite code card */}
             <View style={styles.inviteCard}>
               <ThemedText style={styles.inviteCardLabel}>TEAM INVITE CODE</ThemedText>
 
@@ -1004,7 +974,7 @@ export default function ProfileScreen() {
           </>
         )}
 
-        {/* ── EMPLOYEE PAYOUT ── */}
+        {/* employee payout section */}
         {role === "employee" && (
           <>
             <SectionHeader label="PAYOUTS" />
@@ -1021,7 +991,7 @@ export default function ProfileScreen() {
           </>
         )}
 
-        {/* ── ACCOUNT ── */}
+        {/* account settings */}
         <SectionHeader label="ACCOUNT" />
         <View style={styles.card}>
           <MenuRow
@@ -1078,7 +1048,7 @@ export default function ProfileScreen() {
           />
         </View>
 
-        {/* ── LEGAL ── */}
+        {/* legal links */}
         <SectionHeader label="LEGAL" />
         <View style={styles.card}>
           <MenuRow
@@ -1101,7 +1071,7 @@ export default function ProfileScreen() {
           />
         </View>
 
-        {/* ── DANGER ZONE ── */}
+        {/* danger zone */}
         <SectionHeader label="DANGER ZONE" />
         <View style={styles.card}>
           <MenuRow
@@ -1127,7 +1097,7 @@ export default function ProfileScreen() {
 
       </ScrollView>
 
-      {/* ── DELETE CONFIRMATION MODAL ── */}
+      {/* delete confirmation modal */}
       <Modal
         visible={showDeleteModal}
         transparent

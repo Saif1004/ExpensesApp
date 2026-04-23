@@ -1,17 +1,8 @@
-/**
- * security.js
- *
- * Centralised security module for all Azure Functions.
- * Covers: OAuth 2.0 bearer token validation, RBAC, input validation, HTTPS headers.
- */
+// centralised security helpers: bearer token validation, rbac, input validation, response headers
 
 const admin = require("firebase-admin");
 
-//////////////////////////////////////////////////////////////
-// HTTPS SECURITY HEADERS
-// Applied to every response — enforces HTTPS, prevents
-// MIME sniffing, clickjacking, and caches no sensitive data.
-//////////////////////////////////////////////////////////////
+// security headers applied to every response
 
 const SECURITY_HEADERS = {
   "Content-Type": "application/json",
@@ -22,17 +13,14 @@ const SECURITY_HEADERS = {
   "Cache-Control": "no-store, no-cache, must-revalidate",
   "Pragma": "no-cache",
   "Referrer-Policy": "no-referrer",
-  // CORS — only allow requests from the Claimio web domain.
-  // Mobile app requests don't send an Origin header so are unaffected.
+  // CORS locked to the web domain — mobile apps don't send Origin so they're unaffected
   "Access-Control-Allow-Origin": "https://claimio.org",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
   "Access-Control-Max-Age": "86400",
 };
 
-/**
- * Build a JSON Response with security headers baked in.
- */
+// builds a json response with all the security headers pre-applied
 function secureResponse(body, status = 200, extra = {}) {
   return new Response(JSON.stringify(body), {
     status,
@@ -40,18 +28,7 @@ function secureResponse(body, status = 200, extra = {}) {
   });
 }
 
-//////////////////////////////////////////////////////////////
-// OAUTH 2.0 — Bearer Token Validation
-// Firebase Auth issues RFC 6750-compliant Bearer tokens
-// (signed JWTs). verifyBearerToken validates the signature,
-// expiry and audience against Google's public keys.
-//////////////////////////////////////////////////////////////
-
-/**
- * Extract and verify the OAuth 2.0 Bearer token from the
- * Authorization header. Returns the decoded token payload
- * or null if missing / invalid.
- */
+// validates the firebase bearer token and returns the decoded payload (or null)
 async function verifyBearerToken(request) {
   const authHeader = request.headers.get("authorization") || "";
   if (!authHeader.startsWith("Bearer ")) return null;
@@ -66,10 +43,7 @@ async function verifyBearerToken(request) {
   }
 }
 
-/**
- * Require a valid Bearer token. Returns { uid } or throws a
- * 401 Response.
- */
+// throws a 401 if no valid token is present, otherwise returns { uid }
 async function requireAuth(request) {
   const decoded = await verifyBearerToken(request);
   if (!decoded) {
@@ -78,17 +52,7 @@ async function requireAuth(request) {
   return { uid: decoded.uid };
 }
 
-//////////////////////////////////////////////////////////////
-// RBAC — Role-Based Access Control
-// Roles are stored in the Firestore `memberships` collection.
-// Supported roles: "admin" | "employee"
-// Only "approved" memberships are considered active.
-//////////////////////////////////////////////////////////////
-
-/**
- * Returns the user's role in the given org, or null if they
- * have no approved membership.
- */
+// returns the user's role in the given org (null if no approved membership)
 async function getUserRole(uid, orgId) {
   const snap = await admin.firestore()
     .collection("memberships")
@@ -102,9 +66,7 @@ async function getUserRole(uid, orgId) {
   return snap.docs[0].data().role ?? null; // "admin" | "employee"
 }
 
-/**
- * Returns the org that this user belongs to (approved), or null.
- */
+// returns the org the user is approved in, or null
 async function getUserOrg(uid) {
   const snap = await admin.firestore()
     .collection("memberships")
@@ -117,10 +79,7 @@ async function getUserOrg(uid) {
   return snap.docs[0].data().orgId ?? null;
 }
 
-/**
- * Require the caller to be an approved member of the given org.
- * Returns { role } or a 403 Response.
- */
+// returns { role } or a 403 if the user isn't an approved org member
 async function requireMember(uid, orgId) {
   const role = await getUserRole(uid, orgId);
   if (!role) {
@@ -129,10 +88,7 @@ async function requireMember(uid, orgId) {
   return { role };
 }
 
-/**
- * Require the caller to be an admin of the given org.
- * Returns {} or a 403 Response.
- */
+// returns {} or a 403 if the user isn't an admin of the org
 async function requireAdmin(uid, orgId) {
   const role = await getUserRole(uid, orgId);
   if (role !== "admin") {
@@ -141,17 +97,11 @@ async function requireAdmin(uid, orgId) {
   return {};
 }
 
-//////////////////////////////////////////////////////////////
-// INPUT VALIDATION
-// All user-supplied data must be validated before use.
-//////////////////////////////////////////////////////////////
+// input validators — all user data goes through these before use
 
 const ALLOWED_CATEGORIES = ["Meals", "Travel", "Technology", "Office"];
 
-/**
- * Validates and sanitizes a required string field.
- * Returns the trimmed value or throws { field, error }.
- */
+// validates and trims a required string field
 function validateString(value, field, { maxLen = 500, minLen = 1 } = {}) {
   if (typeof value !== "string" || value.trim().length < minLen) {
     return { fieldError: `${field} is required` };
@@ -162,9 +112,7 @@ function validateString(value, field, { maxLen = 500, minLen = 1 } = {}) {
   return { value: value.trim() };
 }
 
-/**
- * Validates a monetary amount (positive number, max £100,000).
- */
+// validates a positive amount up to £100,000
 function validateAmount(value) {
   const num = Number(value);
   if (isNaN(num) || num <= 0) {
@@ -176,9 +124,7 @@ function validateAmount(value) {
   return { value: num };
 }
 
-/**
- * Validates a date string (must be parseable, not in the future).
- */
+// checks the date is valid and not in the future
 function validateDate(value, field = "date") {
   if (!value || typeof value !== "string") {
     return { fieldError: `${field} is required` };
@@ -193,9 +139,7 @@ function validateDate(value, field = "date") {
   return { value };
 }
 
-/**
- * Validates expense category against the allowed list.
- */
+// checks the category is one of the allowed values
 function validateCategory(value) {
   if (!ALLOWED_CATEGORIES.includes(value)) {
     return { fieldError: `category must be one of: ${ALLOWED_CATEGORIES.join(", ")}` };
@@ -203,17 +147,13 @@ function validateCategory(value) {
   return { value };
 }
 
-/**
- * Strips HTML tags and trims — apply to all string inputs.
- */
+// strips html tags and trims — run every string input through this
 function sanitize(value) {
   if (typeof value !== "string") return value;
   return value.trim().replace(/<[^>]*>/g, "").replace(/[<>'"]/g, "");
 }
 
-//////////////////////////////////////////////////////////////
-// EXPORTS
-//////////////////////////////////////////////////////////////
+// exports
 
 module.exports = {
   SECURITY_HEADERS,

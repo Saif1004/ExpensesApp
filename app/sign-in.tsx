@@ -31,9 +31,7 @@ import { auth, db } from "./firebase/firebaseConfig";
 import { useTheme } from "../hooks/useTheme";
 import GoogleLogo from "../components/GoogleLogo";
 
-//////////////////////////////////////////////////////
-// RATE LIMIT CONSTANTS
-//////////////////////////////////////////////////////
+// client-side rate limit config
 
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MS   = 15 * 60 * 1000; // 15 minutes
@@ -48,13 +46,11 @@ export default function SignIn() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading]           = useState(false);
 
-  // Client-side login rate limiting
+  // track failed logins for client-side lockout
   const failedAttemptsRef             = useRef(0);
   const [lockedUntil, setLockedUntil] = useState<number | null>(null);
 
-  //////////////////////////////////////////////////////
-  // FIND EMAIL FROM USERNAME
-  //////////////////////////////////////////////////////
+  // looks up the email for a given username
 
   const findEmailFromUsername = async (username: string): Promise<string | "OLD_ACCOUNT" | null> => {
     try {
@@ -69,9 +65,7 @@ export default function SignIn() {
     }
   };
 
-  //////////////////////////////////////////////////////
-  // CHECK MEMBERSHIP
-  //////////////////////////////////////////////////////
+  // checks membership status before deciding where to route
 
   const checkMembership = async (uid: string) => {
     try {
@@ -83,9 +77,7 @@ export default function SignIn() {
     }
   };
 
-  //////////////////////////////////////////////////////
-  // SOCIAL AUTH — shared membership routing
-  //////////////////////////////////////////////////////
+  // handles the membership check after google/apple sign-in
 
   const handleSocialAuth = async (uid: string) => {
     const membership = await checkMembership(uid);
@@ -97,19 +89,16 @@ export default function SignIn() {
         "Your admin hasn't approved your account yet. Please check back later."
       );
     }
-    // All other routing (new user → social-onboarding, approved → home)
-    // is handled by AuthProvider once membership loads.
+    // authprovider handles the rest of the routing once membership loads
   };
 
-  //////////////////////////////////////////////////////
-  // GOOGLE SIGN-IN
-  //////////////////////////////////////////////////////
+  // google oauth sign-in
 
   const handleGoogleSignIn = async () => {
     try {
       setLoading(true);
       await GoogleSignin.hasPlayServices();
-      await GoogleSignin.signOut(); // clear cached session so the account picker always shows
+      await GoogleSignin.signOut(); // force the account picker to show each time
       const response = await GoogleSignin.signIn();
       const idToken  = (response as any).data?.idToken ?? (response as any).idToken;
       if (!idToken) throw new Error("No ID token returned");
@@ -130,9 +119,7 @@ export default function SignIn() {
     }
   };
 
-  //////////////////////////////////////////////////////
-  // APPLE SIGN-IN
-  //////////////////////////////////////////////////////
+  // apple sign-in (ios only)
 
   const handleAppleSignIn = async () => {
     try {
@@ -158,9 +145,7 @@ export default function SignIn() {
     }
   };
 
-  //////////////////////////////////////////////////////
-  // SIGN IN (email / password)
-  //////////////////////////////////////////////////////
+  // email + password sign-in with lockout logic
 
   const handleSignIn = async () => {
     if (!identifier || !password) {
@@ -268,9 +253,7 @@ export default function SignIn() {
     }
   };
 
-  //////////////////////////////////////////////////////
-  // FORGOT PASSWORD
-  //////////////////////////////////////////////////////
+  // sends a password reset email
 
   const forgotPassword = async () => {
     if (!identifier.trim()) {
@@ -304,9 +287,7 @@ export default function SignIn() {
     }
   };
 
-  //////////////////////////////////////////////////////
-  // STYLES
-  //////////////////////////////////////////////////////
+  // all styles for this screen
 
   const styles = useMemo(() => StyleSheet.create({
     gradient: { flex: 1, backgroundColor: t.bg },
@@ -426,7 +407,7 @@ export default function SignIn() {
       letterSpacing: -0.2,
     },
 
-    // ── Divider ──
+    // divider between email and social buttons
     dividerRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -443,7 +424,7 @@ export default function SignIn() {
       marginHorizontal: 14,
     },
 
-    // ── Social buttons ──
+    // social sign-in buttons
     socialRow: {
       flexDirection: "row",
       gap: 10,
@@ -494,9 +475,7 @@ export default function SignIn() {
     },
   }), [t, isDark]);
 
-  //////////////////////////////////////////////////////
-  // UI
-  //////////////////////////////////////////////////////
+  // the actual sign-in screen
 
   const isLocked = !!(lockedUntil && Date.now() < lockedUntil);
 
@@ -511,7 +490,7 @@ export default function SignIn() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Logo / branding */}
+          {/* logo */}
           <View style={styles.brandRow}>
             <View style={styles.logoBox}>
               <Ionicons name="receipt-outline" size={22} color="#FFFFFF" />
@@ -522,7 +501,7 @@ export default function SignIn() {
           <Text style={styles.heading}>Welcome back</Text>
           <Text style={styles.subheading}>Sign in to continue</Text>
 
-          {/* Identifier */}
+          {/* email or username */}
           <Text style={styles.label}>Email or Username</Text>
           <View style={styles.inputWrapper}>
             <Ionicons name="person-outline" size={18} color={t.textTertiary} style={styles.inputIcon} />
@@ -539,7 +518,7 @@ export default function SignIn() {
             />
           </View>
 
-          {/* Password */}
+          {/* password */}
           <Text style={styles.label}>Password</Text>
           <View style={styles.inputWrapper}>
             <Ionicons name="lock-closed-outline" size={18} color={t.textTertiary} style={styles.inputIcon} />
@@ -561,12 +540,12 @@ export default function SignIn() {
             </TouchableOpacity>
           </View>
 
-          {/* Forgot password */}
+          {/* forgot password link */}
           <TouchableOpacity onPress={forgotPassword} style={styles.forgotBtn} disabled={loading}>
             <Text style={styles.forgotText}>Forgot password?</Text>
           </TouchableOpacity>
 
-          {/* Lockout warning */}
+          {/* lockout banner */}
           {isLocked && (
             <View style={styles.lockoutBanner}>
               <Ionicons name="lock-closed" size={14} color={t.error} />
@@ -577,7 +556,7 @@ export default function SignIn() {
             </View>
           )}
 
-          {/* Sign in button */}
+          {/* sign in button */}
           <TouchableOpacity
             style={[styles.signInBtn, (loading || isLocked) && styles.btnDisabled]}
             onPress={handleSignIn}
@@ -590,16 +569,16 @@ export default function SignIn() {
             }
           </TouchableOpacity>
 
-          {/* Divider */}
+          {/* or divider */}
           <View style={styles.dividerRow}>
             <View style={styles.dividerLine} />
             <Text style={styles.dividerText}>or continue with</Text>
             <View style={styles.dividerLine} />
           </View>
 
-          {/* Social buttons */}
+          {/* google and apple sign-in */}
           <View style={styles.socialRow}>
-            {/* Google */}
+            {/* google */}
             <TouchableOpacity
               style={[styles.socialBtn, loading && styles.btnDisabled]}
               onPress={handleGoogleSignIn}
@@ -610,7 +589,7 @@ export default function SignIn() {
               <Text style={styles.socialBtnText}>Google</Text>
             </TouchableOpacity>
 
-            {/* Apple — iOS only */}
+            {/* apple (ios only) */}
             {Platform.OS === "ios" && (
               <TouchableOpacity
                 style={[styles.socialBtn, styles.appleBtn, loading && styles.btnDisabled]}
@@ -624,7 +603,7 @@ export default function SignIn() {
             )}
           </View>
 
-          {/* Sign up link */}
+          {/* link to sign up */}
           <TouchableOpacity onPress={() => router.push("/sign-up")} style={styles.signUpRow}>
             <Text style={styles.signUpText}>
               Don't have an account?{" "}

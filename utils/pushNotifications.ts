@@ -40,7 +40,7 @@ export async function registerForPushNotifications(uid: string): Promise<void> {
       });
     }
   } catch (e) {
-    // Silently fail — push notifications are non-critical
+    // push is optional, don't let it crash anything
   }
 }
 
@@ -62,6 +62,6 @@ export async function sendPushNotification(
       }),
     });
   } catch (e) {
-    // Silently fail
+    // non-critical, swallow it
   }
 }

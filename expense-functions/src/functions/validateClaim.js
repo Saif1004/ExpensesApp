@@ -15,9 +15,7 @@ const { sendEmail, sendPush, newClaimAdminEmail } = require("./notify");
 const PLAN_LIMITS = require("./planLimits");
 const { checkAndDeductCredit } = require("./aiCredits");
 
-//////////////////////////////////////////////////////
-// OPENAI CLIENT
-//////////////////////////////////////////////////////
+// lazy openai client so the api key is resolved at call time
 
 function getOpenAIClient() {
   return new OpenAI({
@@ -26,9 +24,7 @@ function getOpenAIClient() {
   });
 }
 
-//////////////////////////////////////////////////////
-// FIREBASE INIT
-//////////////////////////////////////////////////////
+// firebase init (skip if already done)
 
 if (!admin.apps.length) {
   admin.initializeApp({
@@ -42,9 +38,7 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-//////////////////////////////////////////////////////
-// VALIDATE CLAIM
-//////////////////////////////////////////////////////
+// main handler — validates and saves the expense claim
 
 app.http("validateClaim", {
   methods: ["POST"],
@@ -54,14 +48,12 @@ app.http("validateClaim", {
 
     try {
 
-      ////////////////////////////////////////////////////
-      // AUTH + RATE LIMIT (10 submissions per minute)
-      ////////////////////////////////////////////////////
+      // auth check + rate limit, 10 submissions per minute
 
       const auth = await authAndLimit(request, "rateLimitValidate", 10);
       if (auth.error) return auth.error;
 
-      // uid from verified token — never trust body
+      // always pull uid from the token, not the request body
       const userId = auth.uid;
 
       const {
@@ -73,9 +65,7 @@ app.http("validateClaim", {
         userEmail
       } = await request.json();
 
-      ////////////////////////////////////////////////////
-      // INPUT VALIDATION (security.js)
-      ////////////////////////////////////////////////////
+      // run all fields through the validators in security.js
 
       const amountResult = validateAmount(amount);
       if (amountResult.fieldError)
@@ -97,9 +87,7 @@ app.http("validateClaim", {
       const cleanMerchant = sanitize(merchantResult.value);
       const cleanUserEmail = sanitize(userEmail ?? "");
 
-      ////////////////////////////////////////////////////
-      // FIND USER ORG
-      ////////////////////////////////////////////////////
+      // figure out which org this user belongs to
 
       const membershipSnap = await db
         .collection("memberships")
@@ -113,15 +101,13 @@ app.http("validateClaim", {
 
       const orgId = membershipSnap.docs[0].data().orgId;
 
-      ////////////////////////////////////////////////////
-      // MONTHLY CLAIM LIMIT (from planLimits.js)
-      ////////////////////////////////////////////////////
+      // enforce the monthly claim cap based on the org's plan
 
       const orgRef  = db.collection("organisations").doc(orgId);
       const orgDoc  = await orgRef.get();
       const orgData = orgDoc.data() || {};
 
-      // Resolve effective plan (expired trial → free)
+      // treat expired trials as free
       let orgPlan = orgData.plan ?? "free";
       if (orgPlan === "trial") {
         const trialEndsAt = orgData.trialEndsAt?.toDate?.() ?? null;
@@ -132,7 +118,7 @@ app.http("validateClaim", {
       const monthlyLimit = planConfig.claimsPerMonth ?? null;
 
       if (monthlyLimit !== null) {
-        // Query by userId only (no composite index needed), then filter by date client-side
+        // filter by user first, then narrow by date in memory to avoid a composite index
         const now           = new Date();
         const startOfMonth  = new Date(now.getFullYear(), now.getMonth(), 1);
 
@@ -155,16 +141,14 @@ app.http("validateClaim", {
         }
       }
 
-      ////////////////////////////////////////////////////
-      // LOAD + APPLY POLICIES
-      ////////////////////////////////////////////////////
+      // pull the org's policies and set defaults before applying them
 
       const policiesSnap = await db
         .collection("policies")
         .where("orgId", "==", orgId)
         .get();
 
-      // All limits start as null (inactive) — only activated if admin creates a policy
+      // everything is null by default — only kicks in if the admin actually created a policy
       let receiptThreshold    = null;  // null = no receipt requirement
       let submissionWindowDays = null; // null = no submission window
       const categoryLimits    = {};   // empty = no category limits
@@ -179,36 +163,26 @@ app.http("validateClaim", {
           submissionWindowDays = policy.value;
       });
 
-      ////////////////////////////////////////////////////
-      // RECEIPT POLICY (only enforced if admin has set one)
-      ////////////////////////////////////////////////////
+      // check receipt requirement if the admin has configured one
 
       const hasReceipt = !!receiptUrl;
 
       if (receiptThreshold !== null && numericAmount > receiptThreshold && !hasReceipt)
         return secureResponse({ valid: false, reason: `Receipt required for expenses above £${receiptThreshold}.` }, 400);
 
-      ////////////////////////////////////////////////////
-      // CATEGORY LIMIT (only enforced if admin has set one)
-      ////////////////////////////////////////////////////
+      // block if the amount exceeds a per-category cap the admin set
 
       if (category in categoryLimits && numericAmount > categoryLimits[category])
         return secureResponse({ valid: false, reason: `${category} expenses are limited to £${categoryLimits[category]} per claim.` }, 400);
 
-      ////////////////////////////////////////////////////
-      // SUBMISSION WINDOW (only enforced if admin has set one)
-      ////////////////////////////////////////////////////
+      // reject if the claim is too old and the admin has a submission window set
 
       const diffDays = (Date.now() - new Date(purchaseDate).getTime()) / (1000 * 60 * 60 * 24);
 
       if (submissionWindowDays !== null && diffDays > submissionWindowDays)
         return secureResponse({ valid: false, reason: `Submission window expired. Claims must be submitted within ${submissionWindowDays} days of purchase.` }, 400);
 
-      ////////////////////////////////////////////////////
-      // AI GENERAL-RULE POLICY CHECK
-      // Runs any policy stored as "general_rule" (or any
-      // unrecognised type) through an LLM compliance check.
-      ////////////////////////////////////////////////////
+      // send any free-text / unrecognised policies through the LLM to check compliance
 
       const MECHANICAL_TYPES = new Set(["receipt_required", "category_limit", "submission_window", "approval_required"]);
 
@@ -221,17 +195,17 @@ app.http("validateClaim", {
       });
 
       if (generalPolicies.length > 0) {
-        // Check kill switch before making AI call
+        // bail out early if AI has been disabled
         const aiBlocked = await checkAiKillSwitch("validateClaim");
         if (aiBlocked) {
-          // Kill switch active — skip AI check, fail open
+          // AI is off, skip the check and let it through
           context.log("AI kill switch active for validateClaim — skipping policy AI check");
         } else
         try {
-          // Deduct 1 AI credit for the policy compliance check
+          // use one AI credit for this check
           const { creditError: policyCheckCreditError } = await checkAndDeductCredit(orgRef, orgData, planConfig, orgPlan);
           if (policyCheckCreditError) {
-            // No credits — skip AI check, fail open (don't block submission)
+            // out of credits, skip the AI check and let it through
             context.log("No AI credits remaining — skipping policy AI check");
           } else {
 
@@ -271,7 +245,7 @@ Reply with JSON only — no explanation outside the JSON:
             .trim();
 
           let aiResult;
-          try { aiResult = JSON.parse(cleaned); } catch { /* fail open */ }
+          try { aiResult = JSON.parse(cleaned); } catch { /* swallow it */ }
 
           if (aiResult?.violated === true) {
             return secureResponse(
@@ -280,16 +254,14 @@ Reply with JSON only — no explanation outside the JSON:
             );
           }
 
-          } // end: else (credits available)
+          }
         } catch (aiErr) {
           context.log("AI policy check error (non-fatal):", aiErr);
-          // Fail open — do not block the claim if the AI check itself errors
+          // AI errored out, let the claim through rather than blocking it
         }
       }
 
-      ////////////////////////////////////////////////////
-      // SAVE CLAIM
-      ////////////////////////////////////////////////////
+      // all checks passed, write the claim to firestore
 
       const claimRef = await db.collection("claims").add({
         userId,
@@ -305,9 +277,7 @@ Reply with JSON only — no explanation outside the JSON:
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      ////////////////////////////////////////////////////
-      // NOTIFY ADMINS — fire-and-forget, never blocks response
-      ////////////////////////////////////////////////////
+      // ping admins in the background so the response isn't held up
 
       (async () => {
         try {
@@ -346,9 +316,7 @@ Reply with JSON only — no explanation outside the JSON:
         }
       })();
 
-      ////////////////////////////////////////////////////
-      // RESPONSE — HTTPS headers via secureResponse
-      ////////////////////////////////////////////////////
+      // done, send back the claim id with security headers
 
       return secureResponse({ valid: true, claimId: claimRef.id, status: "pending" }, 200);
 

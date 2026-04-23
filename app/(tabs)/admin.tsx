@@ -83,22 +83,19 @@ export default function AdminScreen() {
     visible: false, claim: null, action: null
   });
 
-  // Search & filter state
+  // search and filter state for both tabs
   const [exportLoading, setExportLoading]           = useState(false);
   const [search, setSearch]                         = useState("");
   const [categoryFilter, setCategoryFilter]         = useState<string | null>(null);
   const [historyFilter, setHistoryFilter]           = useState<HistoryFilter>("all");
 
-  // Refresh role when this tab is opened — picks up promotions without needing
-  // the user to background/foreground the app.
+  // re-check membership on mount so promotions show up without restarting the app
   useEffect(() => { refreshMembership(); }, []);
 
-  //////////////////////////////////////////////////////
-  // PENDING CLAIMS LISTENER
-  //////////////////////////////////////////////////////
+  // real-time listener for pending claims in this org
 
   useEffect(() => {
-    // Not yet an admin — reset loading flags so spinner doesn't freeze
+    // not an admin yet, clear the spinner so it doesn't hang
     if (role !== "admin" || !orgId || !user?.emailVerified) {
       setLoading(false);
       setHistoryLoading(false);
@@ -124,9 +121,7 @@ export default function AdminScreen() {
     return unsub;
   }, [role, orgId, user]);
 
-  //////////////////////////////////////////////////////
-  // HISTORY CLAIMS LISTENER
-  //////////////////////////////////////////////////////
+  // real-time listener for approved/rejected claims
 
   useEffect(() => {
     if (role !== "admin" || !orgId || !user?.emailVerified) return;
@@ -150,9 +145,7 @@ export default function AdminScreen() {
     return unsub;
   }, [role, orgId, user]);
 
-  //////////////////////////////////////////////////////
-  // DERIVED — FILTERED LISTS
-  //////////////////////////////////////////////////////
+  // filtered and searched lists derived from the raw snapshots
 
   const pendingCategories = useMemo(
     () => [...new Set(claims.map((c) => c.category))].sort(),
@@ -189,9 +182,7 @@ export default function AdminScreen() {
     return list;
   }, [historyClaims, historyFilter, search]);
 
-  //////////////////////////////////////////////////////
-  // EXPORT HELPERS
-  //////////////////////////////////////////////////////
+  // CSV and PDF export helpers
 
   function claimToRow(c: Claim) {
     const fmtDate = (val?: string) => val ? new Date(val).toLocaleDateString("en-GB") : "—";
@@ -290,9 +281,7 @@ export default function AdminScreen() {
     }
   }
 
-  //////////////////////////////////////////////////////
-  // CONFIRM MODAL
-  //////////////////////////////////////////////////////
+  // opens/closes the approve/reject confirmation modal
 
   const openConfirmModal  = (claim: Claim, action: "approved" | "rejected") => {
     setAdminMessage("");
@@ -325,7 +314,7 @@ export default function AdminScreen() {
         : { rejectedAt: serverTimestamp() }),
     });
 
-    // Push + email notification to employee via Azure Function (fire-and-forget)
+    // notify the employee in the background, don't wait on it
     currentUser?.getIdToken().then((token) => {
       fetch(NOTIFY_URL, {
         method:  "POST",
@@ -359,9 +348,7 @@ export default function AdminScreen() {
     }
   };
 
-  //////////////////////////////////////////////////////
-  // ACCESS GUARD
-  //////////////////////////////////////////////////////
+  // styles (defined before the access guard so hooks are always called in order)
 
   const styles = useMemo(() => StyleSheet.create({
     container: {
@@ -401,7 +388,7 @@ export default function AdminScreen() {
       fontWeight: "600"
     },
 
-    /* Tab bar */
+    // tab bar
     tabBar: {
       flexDirection: "row",
       gap: 10,
@@ -427,7 +414,7 @@ export default function AdminScreen() {
       fontWeight: "700"
     },
 
-    /* Search */
+    // search bar
     searchWrap: {
       flexDirection: "row",
       alignItems: "center",
@@ -447,7 +434,7 @@ export default function AdminScreen() {
       fontSize: 14
     },
 
-    /* Category chips */
+    // category filter chips
     chipsScroll: {
       paddingBottom: 10,
       gap: 8,
@@ -472,7 +459,7 @@ export default function AdminScreen() {
       fontWeight: "700"
     },
 
-    /* History status filter */
+    // history status filter
     historyFilterRow: {
       flexDirection: "row",
       gap: 8,
@@ -517,7 +504,7 @@ export default function AdminScreen() {
       fontWeight: "600",
     },
 
-    /* Empty state */
+    // empty state
     emptyState: {
       alignItems: "center",
       justifyContent: "center",
@@ -529,7 +516,7 @@ export default function AdminScreen() {
       fontSize: 14
     },
 
-    /* Card */
+    // claim card
     card: {
       backgroundColor: t.surface,
       borderRadius: 20,
@@ -595,7 +582,7 @@ export default function AdminScreen() {
       maxWidth: "70%"
     },
 
-    /* History status badges */
+    // history status badges
     historyStatusBadge: {
       borderRadius: 999,
       paddingHorizontal: 10,
@@ -607,7 +594,7 @@ export default function AdminScreen() {
     historyStatusTextApproved: { color: t.success },
     historyStatusTextRejected: { color: t.error },
 
-    /* Payment badges */
+    // payment badges
     paymentBadge: {
       marginHorizontal: 18,
       marginTop: 10,
@@ -624,7 +611,7 @@ export default function AdminScreen() {
       color: t.text
     },
 
-    /* Receipt */
+    // receipt thumbnail
     receiptWrapper: {
       marginHorizontal: 16,
       marginTop: 12,
@@ -660,7 +647,7 @@ export default function AdminScreen() {
       fontSize: 12
     },
 
-    /* Action buttons */
+    // approve and reject buttons
     buttonRow: {
       flexDirection: "row",
       margin: 18,
@@ -686,7 +673,7 @@ export default function AdminScreen() {
       fontSize: 14
     },
 
-    /* Modal overlay */
+    // modal overlay backdrop
     modalOverlay: {
       flex: 1,
       backgroundColor: "rgba(0,0,0,0.75)",
@@ -694,7 +681,7 @@ export default function AdminScreen() {
       padding: 20
     },
 
-    /* Confirmation modal */
+    // confirmation modal
     confirmModalContent: {
       backgroundColor: t.surface,
       borderRadius: 24,
@@ -791,7 +778,7 @@ export default function AdminScreen() {
       fontSize: 14
     },
 
-    /* Receipt image modal */
+    // receipt image modal
     imageModalContent: {
       backgroundColor: t.surface,
       borderRadius: 24,
@@ -815,7 +802,7 @@ export default function AdminScreen() {
       fontSize: 14
     },
 
-    /* Self-claim lock */
+    // self-claim lock notice
     selfClaimNotice: {
       flexDirection: "row",
       alignItems: "center",
@@ -832,7 +819,7 @@ export default function AdminScreen() {
       fontStyle: "italic"
     },
 
-    /* Misc */
+    // misc
     center: {
       flex: 1,
       justifyContent: "center",
@@ -855,9 +842,7 @@ export default function AdminScreen() {
 
   const isApprove = confirmModal.action === "approved";
 
-  //////////////////////////////////////////////////////
-  // SEARCH + FILTER BAR
-  //////////////////////////////////////////////////////
+  // search bar component
 
   const SearchBar = (
     <View style={styles.searchWrap}>
@@ -880,9 +865,7 @@ export default function AdminScreen() {
     </View>
   );
 
-  //////////////////////////////////////////////////////
-  // CATEGORY FILTER CHIPS  (pending tab)
-  //////////////////////////////////////////////////////
+  // category filter chips for the pending tab
 
   const CategoryChips = pendingCategories.length > 0 ? (
     <ScrollView
@@ -912,9 +895,7 @@ export default function AdminScreen() {
     </ScrollView>
   ) : null;
 
-  //////////////////////////////////////////////////////
-  // STATUS FILTER  (history tab)
-  //////////////////////////////////////////////////////
+  // status filter and export buttons for the history tab
 
   const HistoryStatusFilter = (
     <View>

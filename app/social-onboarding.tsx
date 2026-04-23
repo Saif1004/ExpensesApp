@@ -1,11 +1,4 @@
-/**
- * social-onboarding.tsx
- *
- * Shown after a new user signs in with Google or Apple for the first time.
- * The user is already authenticated in Firebase — they just need to choose a
- * username and either create an organisation (admin) or join one (employee).
- * No email/password fields needed here.
- */
+// shown after google/apple sign-in — lets new users pick a username and set up or join an org
 
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -37,9 +30,7 @@ import { auth, db } from "./firebase/firebaseConfig";
 import { useAuth } from "./context/AuthProvider";
 import { useTheme } from "../hooks/useTheme";
 
-//////////////////////////////////////////////////////
-// HELPERS
-//////////////////////////////////////////////////////
+// small helpers for invite code generation and uniqueness checks
 
 const generateInviteCode = () => {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -62,15 +53,11 @@ const orgNameExists = async (nameLower: string) => {
   return !snap.empty;
 };
 
-//////////////////////////////////////////////////////
-// TYPES
-//////////////////////////////////////////////////////
+// which step the user is on
 
 type Mode = "choose" | "create" | "join";
 
-//////////////////////////////////////////////////////
-// SCREEN
-//////////////////////////////////////////////////////
+// main onboarding screen
 
 export default function SocialOnboarding() {
   const router = useRouter();
@@ -79,7 +66,7 @@ export default function SocialOnboarding() {
 
   const [mode, setMode]             = useState<Mode>("choose");
   const [username, setUsername]     = useState(() => {
-    // Pre-fill from Google/Apple display name: "John Doe" → "johndoe"
+    // use the google/apple display name as a starting point
     const name = user?.displayName ?? "";
     return name.toLowerCase().replace(/\s+/g, "").replace(/[^a-z0-9_]/g, "");
   });
@@ -93,9 +80,7 @@ export default function SocialOnboarding() {
     setMode(m);
   };
 
-  //////////////////////////////////////////////////////
-  // CREATE ORGANISATION
-  //////////////////////////////////////////////////////
+  // handles the create org flow
 
   const handleCreate = async () => {
     const trimmedUsername    = username.trim();
@@ -175,9 +160,7 @@ export default function SocialOnboarding() {
     }
   };
 
-  //////////////////////////////////////////////////////
-  // JOIN ORGANISATION
-  //////////////////////////////////////////////////////
+  // handles the join org flow
 
   const handleJoin = async () => {
     const trimmedUsername    = username.trim();
@@ -242,7 +225,7 @@ export default function SocialOnboarding() {
 
       await batch.commit();
 
-      // Notify admins — fire-and-forget
+      // let admins know someone requested to join
       const notifyJoinUrl = process.env.EXPO_PUBLIC_NOTIFY_JOIN_REQUEST_URL;
       if (notifyJoinUrl) {
         user?.getIdToken().then(token =>
@@ -268,9 +251,7 @@ export default function SocialOnboarding() {
     }
   };
 
-  //////////////////////////////////////////////////////
-  // STYLES
-  //////////////////////////////////////////////////////
+  // styles
 
   const styles = useMemo(() => StyleSheet.create({
     flex: { flex: 1, backgroundColor: t.bg },
@@ -418,16 +399,13 @@ export default function SocialOnboarding() {
     },
   }), [t]);
 
-  // Guard: if no user is authenticated, redirect to sign-in
-  // (placed after all hooks to satisfy React's rules of hooks)
+  // redirect if somehow unauthenticated (after hooks to follow rules of hooks)
   if (!user) {
     router.replace("/sign-in");
     return null;
   }
 
-  //////////////////////////////////////////////////////
-  // CHOOSE SCREEN
-  //////////////////////////////////////////////////////
+  // mode: choose — pick create or join
 
   if (mode === "choose") {
     return (
@@ -485,9 +463,7 @@ export default function SocialOnboarding() {
     );
   }
 
-  //////////////////////////////////////////////////////
-  // CREATE SCREEN
-  //////////////////////////////////////////////////////
+  // mode: create — set up a new org
 
   if (mode === "create") {
     return (
@@ -552,9 +528,7 @@ export default function SocialOnboarding() {
     );
   }
 
-  //////////////////////////////////////////////////////
-  // JOIN SCREEN
-  //////////////////////////////////////////////////////
+  // mode: join — enter an invite code
 
   return (
     <View style={[styles.flex, { backgroundColor: t.bg }]}>

@@ -26,23 +26,19 @@ import { unsubscribeAll } from "../../utils/listenerStore";
 import { auth, db } from "../firebase/firebaseConfig";
 import { getIsSigningUp } from "../utils/signUpFlag";
 
-//////////////////////////////////////////////////////
-// MODULE-LEVEL GUARDS
-//////////////////////////////////////////////////////
+// module-level guards — live outside the component
 
-// True when running inside Expo Go (purchases not supported)
+// expo go doesn't support native purchases
 const isExpoGo = Constants.executionEnvironment === "storeClient";
 
-// Prevents configure() being called twice (survives StrictMode double-mount)
+// stops rc from being configured twice
 let rcConfigured = false;
 
-// Throttle RevenueCat syncs to at most once per 60 seconds
+// throttle rc syncs to once per minute
 let lastRcSync = 0;
 const RC_SYNC_COOLDOWN_MS = 60_000;
 
-//////////////////////////////////////////////////////
-// TYPES
-//////////////////////////////////////////////////////
+// auth context shape
 
 type AuthContextType = {
   user: User | null;
@@ -62,9 +58,7 @@ type AuthContextType = {
   refreshOrgPlan: () => Promise<void>;
 };
 
-//////////////////////////////////////////////////////
-// CONTEXT
-//////////////////////////////////////////////////////
+// context with safe defaults
 
 export const AuthContext = createContext<AuthContextType>({
   user: null,
@@ -88,9 +82,7 @@ export function useAuth() {
   return useContext(AuthContext);
 }
 
-//////////////////////////////////////////////////////
-// PROVIDER
-//////////////////////////////////////////////////////
+// the actual provider component
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
 
@@ -107,17 +99,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router   = useRouter();
   const segments = useSegments();
 
-  // Keeps track of current user uid for AppState refresh
+  // refs to track current uid, role and org across re-renders
   const currentUidRef  = useRef<string | null>(null);
   const currentRoleRef = useRef<string | null>(null);
   const currentOrgRef  = useRef<string | null>(null);
 
-  //////////////////////////////////////////////////////
-  // REVENUECAT INIT (once, native only)
-  //////////////////////////////////////////////////////
+  // init revenuecat once — skipped in dev and expo go
 
   const initRevenueCat = useCallback(async () => {
-    // Skip RC in dev builds — billing unavailable & keys won't validate
+    // skip in dev builds, keys won't work and billing isn't available
     if (rcConfigured || Platform.OS === "web" || isExpoGo || __DEV__) return;
     rcConfigured = true;
     try {
@@ -131,9 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  //////////////////////////////////////////////////////
-  // REVENUECAT SYNC (admin only — syncs entitlements → Firestore)
-  //////////////////////////////////////////////////////
+  // syncs revenuecat entitlements to firestore — admin only
 
   const syncRevenueCat = useCallback(async (uid: string, oid: string) => {
     if (Platform.OS === "web" || isExpoGo || __DEV__) return;
@@ -144,8 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const Purchases = (await import("react-native-purchases")).default;
       await Purchases.logIn(uid);
 
-      // Verify entitlements server-side via Azure Function — client cannot
-      // write plan/aiCreditsRemaining directly (Firestore rules block it).
+      // validate server-side because the client can't write plan fields directly
       const token = await auth.currentUser?.getIdToken();
       if (!token) return;
 
@@ -154,15 +141,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body:    JSON.stringify({ orgId: oid }),
       });
-      // refreshOrgPlan() will be called by the caller (loadOrgData) after this returns
+      // caller will refresh the plan after this resolves
     } catch (err) {
       console.log("RevenueCat sync error:", err);
     }
   }, []);
 
-  //////////////////////////////////////////////////////
-  // LOAD ORG DATA
-  //////////////////////////////////////////////////////
+  // loads the org plan, credits, and categories
 
   const loadOrgData = useCallback(async (oid: string, memberRole: string, uid: string) => {
     const orgSnap = await getDoc(doc(db, "organisations", oid));
@@ -180,10 +165,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAiCreditsRemaining(credits);
     setOrgCategories(categories);
 
-    // Admin: sync RevenueCat → Firestore (fire-and-forget; plan refreshes on next loadOrgData)
+    // sync rc in the background — re-read org after it resolves (admin only)
     if (memberRole === "admin") {
       syncRevenueCat(uid, oid).then(async () => {
-        // Re-read org after sync so the UI reflects any plan change
+        // re-read org doc so we pick up any plan upgrade
         const refreshed = await getDoc(doc(db, "organisations", oid));
         const d = refreshed.data() || {};
         setOrgPlan((d.plan ?? "free") as OrgPlan);
@@ -198,9 +183,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [syncRevenueCat]);
 
-  //////////////////////////////////////////////////////
-  // LOAD MEMBERSHIP + ORG
-  //////////////////////////////////////////////////////
+  // grabs the user's membership and loads their org
 
   const loadMembership = useCallback(async (uid: string) => {
     try {
@@ -238,9 +221,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [loadOrgData]);
 
-  //////////////////////////////////////////////////////
-  // REFRESH ORG PLAN (called after purchase)
-  //////////////////////////////////////////////////////
+  // re-fetches org data — call this after a purchase
 
   const refreshOrgPlan = useCallback(async () => {
     const oid = currentOrgRef.current;
@@ -256,14 +237,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [loadMembership]);
 
-  //////////////////////////////////////////////////////
-  // PUSH NOTIFICATION REGISTRATION
-  //////////////////////////////////////////////////////
+  // asks for push permission and saves the token to firestore
 
   async function registerPushToken(uid: string) {
     if (Platform.OS === "web" || isExpoGo) return;
     try {
-      // Android: create a default notification channel
+      // android needs a channel before it can show anything
       if (Platform.OS === "android") {
         await Notifications.setNotificationChannelAsync("default", {
           name: "Default",
@@ -281,39 +260,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         finalStatus = status;
       }
 
-      if (finalStatus !== "granted") return; // user denied
+      if (finalStatus !== "granted") return; // nothing we can do without permission
 
       const projectId = Constants.expoConfig?.extra?.eas?.projectId;
       if (!projectId) return;
 
       const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
 
-      // Save to Firestore user doc — merge so we don't overwrite other fields
+      // write the token to the user doc (merge keeps everything else intact)
       await setDoc(doc(db, "users", uid), { expoPushToken: token }, { merge: true });
     } catch {
-      // Non-fatal — app works without push
+      // push is optional, don't crash the app over it
     }
   }
 
-  //////////////////////////////////////////////////////
-  // AUTH STATE LISTENER
-  //////////////////////////////////////////////////////
+  // fires whenever firebase auth changes
 
   useEffect(() => {
     initRevenueCat();
 
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // Reload to get latest emailVerified status, then force-refresh the JWT
-        // so Firestore rules see the updated email_verified claim immediately.
+        // reload + get a fresh token so firestore rules see the latest verified state
         try {
           await firebaseUser.reload();
-          await firebaseUser.getIdToken(true); // force new JWT with fresh claims
+          await firebaseUser.getIdToken(true); // refresh the jwt so it has current claims
         } catch {}
 
-        // Block unverified users — sign them out so they can't access the app.
-        // Exception: skip during sign-up flow so the batch writes can complete
-        // before the user is signed out (signUpFlag prevents the race condition).
+        // kick out unverified users, but let sign-up finish writing before we boot them
         if (!firebaseUser.emailVerified && !getIsSigningUp()) {
           await signOut(auth);
           setAuthLoaded(true);
@@ -324,13 +298,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         currentUidRef.current = firebaseUser.uid;
 
         if (firebaseUser.emailVerified) {
-          // Only verified users have memberships — avoids a permission error
-          // on the memberships query for unverified email sign-up users.
+          // only load membership for verified users (prevents a firestore permission error)
           await loadMembership(firebaseUser.uid);
-          // Register for push notifications and save token to Firestore
+          // sign them up for push while we're here
           registerPushToken(firebaseUser.uid).catch(() => {});
         } else {
-          // Unverified user mid sign-up — no membership to load yet
+          // mid sign-up, skip the membership fetch for now
           setRole("employee");
           setStatus("none");
         }
@@ -348,7 +321,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         currentRoleRef.current = null;
         currentOrgRef.current  = null;
 
-        // RevenueCat logout — only if user was identified (not anonymous)
+        // log out of rc but only if they were actually identified (not anon)
         if (!isExpoGo && Platform.OS !== "web") {
           try {
             const Purchases = (await import("react-native-purchases")).default;
@@ -365,20 +338,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return unsubscribe;
   }, [initRevenueCat, loadMembership]);
 
-  //////////////////////////////////////////////////////
-  // REFRESH ORG PLAN WHEN APP COMES TO FOREGROUND
-  //////////////////////////////////////////////////////
+  // re-checks the plan whenever the app comes back into view
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", async (state) => {
       if (state === "active") {
-        // Force-refresh the ID token when app comes to foreground.
-        // If the token has been revoked (e.g. password changed, account deleted),
-        // getIdToken(true) will throw — we then sign the user out immediately.
+        // force a token refresh — if it throws the account is gone so we sign them out
         if (auth.currentUser) {
           try {
-            await auth.currentUser.getIdToken(true); // throws on revoked token
-            await auth.currentUser.reload();          // get fresh emailVerified
+            await auth.currentUser.getIdToken(true); // blows up if the account got deleted
+            await auth.currentUser.reload();          // pick up any profile changes
           } catch {
             await signOut(auth);
             return;
@@ -387,7 +356,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (currentOrgRef.current) {
           refreshOrgPlan();
         }
-        // Refresh role in case an admin promoted/demoted this user while the app was backgrounded
+        // also refresh membership in case the admin changed their role while backgrounded
         if (currentUidRef.current) {
           refreshMembership();
         }
@@ -396,9 +365,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => sub.remove();
   }, [refreshOrgPlan, refreshMembership]);
 
-  //////////////////////////////////////////////////////
-  // ROUTE PROTECTION
-  //////////////////////////////////////////////////////
+  // keeps users on the right screens based on their auth state
 
   useEffect(() => {
     if (!authLoaded || (user && role === null)) return;
@@ -412,7 +379,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Extra guard: if somehow an unverified user's session survived, block them
+    // just in case an unverified session slipped through
     if (!user.emailVerified) {
       if (inTabs || inOnboarding) router.replace("/sign-in");
       return;
@@ -423,21 +390,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    // Authenticated but no org yet (new social user) — send to onboarding
+    // logged in but no org yet — they need to set one up first
     if (status === "none") {
       if (inTabs || inAuth) router.replace("/social-onboarding");
       return; // stay on onboarding if already there
     }
 
-    // Approved user on auth or onboarding screen → send to app
+    // all good — get them into the app
     if (inAuth || inOnboarding) {
       router.replace("/(tabs)/home");
     }
   }, [user, status, authLoaded, role, segments]);
 
-  //////////////////////////////////////////////////////
-  // COMPUTED VALUES
-  //////////////////////////////////////////////////////
+  // derived values from the raw state
 
   const isPro = useMemo(() => {
     if (orgPlan === "pro" || orgPlan === "business") return true;
@@ -445,7 +410,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return false;
   }, [orgPlan, trialEndsAt]);
 
-  // During an active trial, expose business-tier features (user is trialling Business plan)
+  // trial counts as business for feature access
   const isBusiness = useMemo(() => {
     if (orgPlan === "business") return true;
     if (orgPlan === "trial" && trialEndsAt && trialEndsAt > new Date()) return true;
@@ -462,9 +427,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return Math.max(0, Math.ceil(ms / (1000 * 60 * 60 * 24)));
   }, [orgPlan, trialEndsAt]);
 
-  //////////////////////////////////////////////////////
-  // CONTEXT VALUE
-  //////////////////////////////////////////////////////
+  // package everything up for the context
 
   const value = useMemo(() => ({
     user,
@@ -488,9 +451,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     trialDaysLeft, orgCategories, authLoaded, refreshMembership, refreshOrgPlan
   ]);
 
-  //////////////////////////////////////////////////////
-  // BLOCK UNTIL READY
-  //////////////////////////////////////////////////////
+  // don't render until we know who the user is
 
   const roleLoaded = role !== null || !user;
 

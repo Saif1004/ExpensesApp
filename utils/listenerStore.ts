@@ -1,9 +1,6 @@
 const store = new Set<() => void>();
 
-/**
- * Register a Firestore unsubscriber.
- * Returns a wrapped function that also removes it from the store when called.
- */
+// registers a firestore unsubscriber and returns a self-cleaning wrapper
 export function addListener(unsub: () => void): () => void {
   store.add(unsub);
   return () => {
@@ -12,10 +9,7 @@ export function addListener(unsub: () => void): () => void {
   };
 }
 
-/**
- * Detach every active listener immediately.
- * Call this before signOut so Firestore never gets a permission-denied window.
- */
+// kills every active listener at once — call this before signing out
 export function unsubscribeAll() {
   store.forEach(fn => fn());
   store.clear();

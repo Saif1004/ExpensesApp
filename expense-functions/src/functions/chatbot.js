@@ -17,11 +17,9 @@ const client = new OpenAI({
   baseURL: `${process.env.AZURE_OPENAI_ENDPOINT}/openai/v1`
 });
 
-const RATE_WINDOW_MS = 60 * 1000; // 1 minute sliding window
+const RATE_WINDOW_MS = 60 * 1000; // 60 second sliding window
 
-//////////////////////////////////////////////////////
-// HELPERS
-//////////////////////////////////////////////////////
+// small helpers used by the handler below
 
 async function getOrgForUser(userId) {
   const snap = await db.collection("memberships")
@@ -42,9 +40,7 @@ function getEffectivePlan(orgData) {
   return plan;
 }
 
-//////////////////////////////////////////////////////
-// HANDLER
-//////////////////////////////////////////////////////
+// main chatbot handler
 
 app.http("chatbot", {
   methods: ["POST"],
@@ -54,9 +50,7 @@ app.http("chatbot", {
 
     try {
 
-      ////////////////////////////////////////////////////
-      // OAUTH 2.0 — Bearer token verification
-      ////////////////////////////////////////////////////
+      // verify the bearer token before anything else
 
       const { uid: userId, authError } = await requireAuth(request);
       if (authError) return authError;
@@ -66,9 +60,7 @@ app.http("chatbot", {
 
       const { message, history = [] } = await request.json();
 
-      ////////////////////////////////////////////////////
-      // INPUT VALIDATION
-      ////////////////////////////////////////////////////
+      // sanity check the incoming message and history
 
       if (message !== "__getCredits__") {
         if (typeof message !== "string" || message.trim().length === 0) {
@@ -85,9 +77,7 @@ app.http("chatbot", {
         }
       }
 
-      ////////////////////////////////////////////////////
-      // RBAC — org membership lookup
-      ////////////////////////////////////////////////////
+      // check the user belongs to an org before going further
 
       const orgId = await getOrgForUser(userId);
       if (!orgId) {
@@ -101,9 +91,7 @@ app.http("chatbot", {
       const plan = getEffectivePlan(orgData);
       const planConfig = PLAN_LIMITS[plan];
 
-      ////////////////////////////////////////////////////
-      // HANDLE __getCredits__
-      ////////////////////////////////////////////////////
+      // internal ping to fetch remaining credits without making an AI call
 
       if (message === "__getCredits__") {
         return secureResponse({
@@ -113,24 +101,18 @@ app.http("chatbot", {
         }, 200);
       }
 
-      ////////////////////////////////////////////////////
-      // PLAN CHECK
-      ////////////////////////////////////////////////////
+      // chatbot is a paid feature, block free plans
 
       if (!planConfig?.chatbotAccess) {
         return secureResponse({ success: false, error: "Upgrade your plan to use the AI assistant." }, 403);
       }
 
-      ////////////////////////////////////////////////////
-      // CREDIT RESET + CHECK + DEDUCT (shared utility)
-      ////////////////////////////////////////////////////
+      // check there are credits left and deduct one for this message
 
       const { creditError, remaining: creditsAfter } = await checkAndDeductCredit(orgRef, orgData, planConfig, plan);
       if (creditError) return creditError;
 
-      ////////////////////////////////////////////////////
-      // RATE LIMIT (per user, per minute)
-      ////////////////////////////////////////////////////
+      // per-user rate limit to stop message spam
 
       const userRef = db.collection("users").doc(userId);
       const userSnap = await userRef.get();
@@ -149,7 +131,7 @@ app.http("chatbot", {
         }, 429);
       }
 
-      // Fire-and-forget window update to keep latency low
+      // update the rate limit counter without waiting on it
       userRef.update({
         rateLimitChatbot: {
           count: newCount,
@@ -157,9 +139,7 @@ app.http("chatbot", {
         }
       });
 
-      ////////////////////////////////////////////////////
-      // POLICIES (live from Firestore)
-      ////////////////////////////////////////////////////
+      // pull the org's current policies to include in the AI context
 
       const policiesSnap = await db.collection("policies")
         .where("orgId", "==", orgId)
@@ -178,9 +158,7 @@ app.http("chatbot", {
         policyContext = "ORG EXPENSE POLICIES:\n" + lines.join("\n");
       }
 
-      ////////////////////////////////////////////////////
-      // CLAIM DATA — full history with tax-year breakdown
-      ////////////////////////////////////////////////////
+      // load the user's full claim history, broken down by tax year, for the AI
 
       const claimsSnap = await db.collection("claims")
         .where("userId", "==", userId)
@@ -190,7 +168,7 @@ app.http("chatbot", {
       let claimsContext = "User has no claims on record.";
 
       if (claims.length) {
-        // UK tax year: April 6 – April 5
+        // uk tax year runs april 6 to april 5
         const now = new Date();
         const taxYearStartYear =
           now.getMonth() < 3 || (now.getMonth() === 3 && now.getDate() < 6)
@@ -213,7 +191,7 @@ app.http("chatbot", {
           return d && d >= prevTaxYearStart && d < taxYearStart;
         });
 
-        // Summarise a set of claims
+        // builds a summary object for a given set of claims
         const summarise = (cs) => {
           const total    = cs.reduce((s, c) => s + (Number(c.amount) || 0), 0);
           const approved = cs.filter(c => c.status === "approved").reduce((s, c) => s + (Number(c.amount) || 0), 0);
@@ -243,7 +221,7 @@ app.http("chatbot", {
         const ly  = summarise(lastYearClaims);
         const all = summarise(claims);
 
-        // Last 20 individual claims (most recent first)
+        // grab the 20 most recent individual claims for the AI context
         const sorted = [...claims].sort((a, b) => {
           const da = getDate(a), db2 = getDate(b);
           return (db2?.getTime() ?? 0) - (da?.getTime() ?? 0);
@@ -284,9 +262,7 @@ ${recentLines || "  (none)"}
 `;
       }
 
-      ////////////////////////////////////////////////////
-      // AI CALL
-      ////////////////////////////////////////////////////
+      // send everything to the AI and get a reply
 
       const aiRes = await client.chat.completions.create({
         model: process.env.AZURE_OPENAI_DEPLOYMENT,
@@ -334,7 +310,7 @@ GENERAL RULES:
 
       const reply = aiRes.choices[0].message.content;
 
-      // Credit was already deducted by checkAndDeductCredit above
+      // credit was already taken above, just return the remaining count
       return secureResponse({
         success: true,
         reply,

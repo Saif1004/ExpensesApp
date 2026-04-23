@@ -42,7 +42,7 @@ import { db } from "../firebase/firebaseConfig";
 const screenWidth = Dimensions.get("window").width;
 const AI_URL = process.env.EXPO_PUBLIC_ANALYTICS_AI_URL!;
 
-// 10 distinct colours for dynamic categories — no purples
+// one colour per category — picked to be distinct and accessible
 const CATEGORY_COLOURS = [
   "#0066FF", "#22C55E", "#F59E0B", "#F97316",
   "#EF4444", "#06B6D4", "#0EA5E9", "#EC4899",
@@ -72,7 +72,7 @@ type Claim = {
   createdAt?: { toDate: () => Date };
 };
 
-// Purchase date from string field (YYYY-MM-DD)
+// formats the purchase date stored as a YYYY-MM-DD string
 function formatDate(c: Claim): string {
   if (c.purchaseDate) {
     try { return new Date(c.purchaseDate).toLocaleDateString("en-GB"); } catch { return c.purchaseDate; }
@@ -80,12 +80,12 @@ function formatDate(c: Claim): string {
   return "—";
 }
 
-// Submitted date from Firestore timestamp
+// formats the createdAt firestore timestamp for display
 function submittedDate(c: Claim): string {
   try { return c.createdAt?.toDate().toLocaleDateString("en-GB") ?? "—"; } catch { return "—"; }
 }
 
-// UK tax year starts April 6
+// uk tax year starts on april 6 — returns the start date for the current year
 function taxYearStart(): Date {
   const now = new Date();
   const year =
@@ -143,7 +143,7 @@ export default function AnalyticsScreen() {
     return unsub;
   }, [user, role, orgId, scope]);
 
-  // Load org account codes for exports
+  // pull the org's custom nominal codes for accounting exports
   useEffect(() => {
     if (!orgId) return;
     getDoc(doc(db, "organisations", orgId)).then(snap => {
@@ -151,10 +151,10 @@ export default function AnalyticsScreen() {
     }).catch(() => {});
   }, [orgId]);
 
-  // Filtered claims for selected period
+  // apply the selected time period filter
   const claims = useMemo(() => filterByPeriod(allClaims, period), [allClaims, period]);
 
-  // Computed stats
+  // crunch all the numbers for the dashboard cards and charts
   const stats = useMemo(() => {
     let totalSpend = 0, approvedSpend = 0, pendingSpend = 0;
     let approved = 0, pending = 0, rejected = 0, suspicious = 0;
@@ -193,7 +193,7 @@ export default function AnalyticsScreen() {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5);
 
-    // Last 6 calendar months
+    // build the last 6 months for the bar chart
     const now = new Date();
     const last6 = Array.from({ length: 6 }, (_, i) => {
       const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
@@ -226,13 +226,13 @@ export default function AnalyticsScreen() {
     [stats.categoryCount, cats, t]
   );
 
-  // ── FORECASTS & PROJECTIONS ──────────────────────────
+  // spending forecasts and year-end projections
   const forecast = useMemo(() => {
     if (allClaims.length === 0) return null;
 
     const now = new Date();
 
-    // UK tax year: April 6 – April 5
+    // figure out where we are in the current uk tax year
     const tyStartYear =
       now.getMonth() < 3 || (now.getMonth() === 3 && now.getDate() < 6)
         ? now.getFullYear() - 1
@@ -245,7 +245,7 @@ export default function AnalyticsScreen() {
     const daysRemaining = Math.max(0, daysInYear - daysElapsed);
     const completionPct = (daysElapsed / daysInYear) * 100;
 
-    // Tax-year spend from allClaims (always full history, ignores period filter)
+    // sum up everything since the tax year started (not affected by the period filter)
     const tySpend = allClaims
       .filter(c => {
         const d = c.purchaseDate ? new Date(c.purchaseDate) : c.createdAt?.toDate();
@@ -257,7 +257,7 @@ export default function AnalyticsScreen() {
     const projectedYearEnd = dailyBurn * daysInYear;
     const projectedRemaining = dailyBurn * daysRemaining;
 
-    // Monthly buckets for trend
+    // bucket claims by month for the trend calculation
     const monthly: Record<string, number> = {};
     allClaims.forEach(c => {
       const d = c.purchaseDate ? new Date(c.purchaseDate) : c.createdAt?.toDate();
@@ -272,12 +272,12 @@ export default function AnalyticsScreen() {
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     };
 
-    // 3-month rolling average (months 1-3 back) vs prior 3 (months 4-6 back)
+    // compare last 3 months vs the 3 before that to get a trend direction
     const last3Avg = ([1,2,3].reduce((s, i) => s + (monthly[monthKey(i)] ?? 0), 0)) / 3;
     const prev3Avg = ([4,5,6].reduce((s, i) => s + (monthly[monthKey(i)] ?? 0), 0)) / 3;
     const trendPct = prev3Avg > 0 ? ((last3Avg - prev3Avg) / prev3Avg) * 100 : 0;
 
-    // Per-category year-end projections
+    // project each category's spend to the end of the year
     const catProjections = cats
       .map(cat => {
         const current = allClaims
@@ -299,7 +299,7 @@ export default function AnalyticsScreen() {
     };
   }, [allClaims, cats]);
 
-  // ── AI INSIGHTS ──────────────────────────────────────
+  // calls the ai endpoint to generate spending insights
   async function generateAIInsights() {
     try {
       setAiLoading(true);
@@ -319,7 +319,7 @@ export default function AnalyticsScreen() {
     }
   }
 
-  // ── EXPORT HELPERS ────────────────────────────────────
+  // export helpers — one per format
   async function getExportClaims(): Promise<Claim[]> {
     if (!user) return [];
     const q = scope === "org" && role === "admin" && orgId
@@ -351,7 +351,7 @@ export default function AnalyticsScreen() {
   const CSV_HEADER = "Reference,Employee,Merchant,Amount (£),Category,Status,Payment Status,Approved By,Notes,Purchase Date,Submitted Date\n";
   const XLS_HEADER = "Reference\tEmployee\tMerchant\tAmount (£)\tCategory\tStatus\tPayment Status\tApproved By\tNotes\tPurchase Date\tSubmitted Date\n";
 
-  // Default nominal codes (UK standard) — overridden by org's custom accountCodes
+  // fallback uk nominal codes — org can override these in settings
   const DEFAULT_ACCOUNT_CODES: Record<string, string> = {
     "Meals": "420", "Travel": "493", "Technology": "404", "Office": "429",
   };
@@ -359,7 +359,7 @@ export default function AnalyticsScreen() {
     return accountCodes[category] ?? DEFAULT_ACCOUNT_CODES[category] ?? "429";
   }
 
-  // Xero "Spend Money" import
+  // xero spend money import format
   const XERO_HEADER = "Date,Amount,Payee,Description,Reference,Account Code,Tax Rate,Currency\n";
   function rowToXero(r: ReturnType<typeof rowData>[0]) {
     return [r.purchaseDate, r.amount, r.merchant, r.category, r.claimRef, getAccountCode(r.category), "20% (VAT on Expenses)", "GBP"]
@@ -367,7 +367,7 @@ export default function AnalyticsScreen() {
       .join(",");
   }
 
-  // QuickBooks Online expense import
+  // quickbooks online expense import format
   const QBO_HEADER = "Date,Amount,Description,Account,Payee,Ref No.,Memo\n";
   function rowToQBO(r: ReturnType<typeof rowData>[0]) {
     return [r.purchaseDate, r.amount, r.category, getAccountCode(r.category), r.merchant, r.claimRef, r.notes]
@@ -375,7 +375,7 @@ export default function AnalyticsScreen() {
       .join(",");
   }
 
-  // Sage 50 expense import
+  // sage 50 expense import format
   const SAGE_HEADER = "Date,Reference,Description,Net,Tax Code,Account Ref,Department\n";
   function rowToSage(r: ReturnType<typeof rowData>[0]) {
     return [r.purchaseDate, r.claimRef, `${r.category} - ${r.merchant}`, r.amount, "T1", getAccountCode(r.category), ""]
@@ -444,7 +444,7 @@ export default function AnalyticsScreen() {
     if (!requireBusiness()) return;
     try {
       const cs = await getExportClaims();
-      // Only include approved claims for Xero import
+      // xero only wants approved claims
       const approved = cs.filter(c => c.status === "approved");
       if (approved.length === 0) {
         Alert.alert("No approved claims", "Xero export only includes approved claims.");
@@ -569,7 +569,7 @@ export default function AnalyticsScreen() {
     } catch (e: any) { Alert.alert("Export Error", e?.message ?? "Failed to export."); }
   }
 
-  // ── STYLES ────────────────────────────────────────────
+  // all the styles for this screen
   const isDark = mode === "dark";
   const { chartConfig, styles } = useMemo(() => {
     const cfg = {
@@ -634,7 +634,7 @@ export default function AnalyticsScreen() {
       center:         { flex: 1, justifyContent: "center", alignItems: "center", paddingTop: 60 },
       emptyNote:      { color: t.textSecondary, fontSize: 13, textAlign: "center", marginTop: 6, marginBottom: 4 },
 
-      // Forecast styles
+      // forecast section cards
       forecastCard:   { backgroundColor: t.surface, borderRadius: 18, padding: 16, marginBottom: 12, ...shadow },
       forecastHighlight: { backgroundColor: t.accentSurface },
       forecastCardTitle: { color: t.text, fontWeight: "700", fontSize: 14, marginBottom: 2 },
@@ -649,7 +649,7 @@ export default function AnalyticsScreen() {
     return { chartConfig: cfg, styles: st };
   }, [t, isDark]);
 
-  // All hooks are above this line — safe to return early now
+  // all hooks are above — safe to bail out early here
   if (!isPro) return <PaywallScreen />;
 
   if (loading) {
@@ -668,7 +668,7 @@ export default function AnalyticsScreen() {
         {stats.total} claim{stats.total !== 1 ? "s" : ""} · £{stats.totalSpend.toFixed(2)} total spend
       </ThemedText>
 
-      {/* Admin scope toggle */}
+      {/* mine vs org toggle for admins */}
       {role === "admin" && (
         <View style={styles.scopeRow}>
           <TouchableOpacity
@@ -690,7 +690,7 @@ export default function AnalyticsScreen() {
         </View>
       )}
 
-      {/* Period filter */}
+      {/* time period filter pills */}
       <View style={styles.periodRow}>
         {(["month", "quarter", "year", "tax_year", "all"] as Period[]).map(p => (
           <TouchableOpacity
@@ -705,7 +705,7 @@ export default function AnalyticsScreen() {
         ))}
       </View>
 
-      {/* Summary cards */}
+      {/* stat summary cards */}
       <View style={styles.grid}>
         <View style={styles.card}>
           <ThemedText style={styles.cardLabel}>Total Spend</ThemedText>
@@ -739,7 +739,7 @@ export default function AnalyticsScreen() {
         </View>
       </View>
 
-      {/* Export */}
+      {/* export buttons */}
       <ThemedText style={styles.sectionTitle}>Export</ThemedText>
       <View style={styles.exportRow}>
         <TouchableOpacity style={styles.exportBtn} onPress={exportCSV}>
@@ -765,7 +765,7 @@ export default function AnalyticsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* AI Insights */}
+      {/* ai spending insights */}
       <ThemedText style={styles.sectionTitle}>AI Insights</ThemedText>
       <View style={styles.aiCard}>
         <ThemedText style={styles.aiTitle}>✦ Spending Analysis</ThemedText>
@@ -783,7 +783,7 @@ export default function AnalyticsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Claim status bar chart */}
+      {/* approved/pending/rejected bar chart */}
       <ThemedText style={styles.sectionTitle}>Claim Status</ThemedText>
       <BarChart
         data={{
@@ -800,7 +800,7 @@ export default function AnalyticsScreen() {
         style={styles.chart}
       />
 
-      {/* Monthly spend (last 6 months) */}
+      {/* last 6 months bar chart */}
       <ThemedText style={styles.sectionTitle}>Monthly Spend</ThemedText>
       <BarChart
         data={{
@@ -817,7 +817,7 @@ export default function AnalyticsScreen() {
         style={styles.chart}
       />
 
-      {/* Claims by category pie */}
+      {/* category pie chart */}
       <ThemedText style={styles.sectionTitle}>Claims by Category</ThemedText>
       {categoryPieData.length > 0 ? (
         <PieChart
@@ -833,7 +833,7 @@ export default function AnalyticsScreen() {
         <ThemedText style={styles.emptyNote}>No claims in this period.</ThemedText>
       )}
 
-      {/* Category breakdown */}
+      {/* per-category spend breakdown */}
       <ThemedText style={styles.sectionTitle}>Category Breakdown</ThemedText>
       {cats.filter(cat => (stats.categoryCount[cat] ?? 0) > 0).length > 0
         ? cats
@@ -856,7 +856,7 @@ export default function AnalyticsScreen() {
         <>
           <ThemedText style={styles.sectionTitle}>Forecasts & Projections</ThemedText>
 
-          {/* Tax year progress bar */}
+          {/* tax year progress */}
           <View style={styles.forecastCard}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
               <ThemedText style={styles.forecastCardTitle}>
@@ -874,7 +874,7 @@ export default function AnalyticsScreen() {
             </ThemedText>
           </View>
 
-          {/* Projection cards */}
+          {/* year-end projection cards */}
           <View style={styles.grid}>
             <View style={[styles.card, styles.forecastHighlight]}>
               <ThemedText style={styles.cardLabel}>Year-End Projected</ThemedText>
@@ -904,7 +904,7 @@ export default function AnalyticsScreen() {
             </View>
           </View>
 
-          {/* MoM trend indicator */}
+          {/* month-on-month trend arrow */}
           {Math.abs(forecast.trendPct) >= 1 && (
             <View style={[styles.forecastCard, { flexDirection: "row", alignItems: "center", gap: 12 }]}>
               <View style={[
@@ -929,7 +929,7 @@ export default function AnalyticsScreen() {
             </View>
           )}
 
-          {/* Per-category year-end projections */}
+          {/* category-level year-end projections */}
           {forecast.catProjections.length > 0 && (
             <>
               <ThemedText style={[styles.sectionTitle, { marginTop: 8 }]}>
@@ -953,7 +953,7 @@ export default function AnalyticsScreen() {
         </>
       )}
 
-      {/* Top merchants */}
+      {/* top merchants by spend */}
       {stats.topMerchants.length > 0 && (
         <>
           <ThemedText style={styles.sectionTitle}>Top Merchants by Spend</ThemedText>

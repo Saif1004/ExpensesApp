@@ -57,7 +57,7 @@ export default function HomeScreen() {
   const [approved,     setApproved]     = useState(0);
   const [recent,       setRecent]       = useState<Claim[]>([]);
 
-  // Budget
+  // budget state
   const [monthlyBudget,    setMonthlyBudget]    = useState(DEFAULT_BUDGET);
   const [adminBudgetLimit, setAdminBudgetLimit]  = useState<number | null>(null);
   const [budgetModalOpen,  setBudgetModalOpen]   = useState(false);
@@ -66,12 +66,12 @@ export default function HomeScreen() {
   const [saving,           setSaving]            = useState(false);
   const customInputRef = useRef<TextInput>(null);
 
-  // Force refresh role on load
+  // make sure the role is fresh when we land here
   useEffect(() => {
     if (user) refreshMembership();
   }, [user]);
 
-  // Load saved budget + admin override + username
+  // load the user's saved budget, any admin cap, and their display name
   useEffect(() => {
     if (!user) return;
 
@@ -92,11 +92,11 @@ export default function HomeScreen() {
       }).catch(() => {});
   }, [user]);
 
-  // Greeting
+  // time-based greeting
   const hour     = new Date().getHours();
   const greeting = hour < 12 ? "Morning" : hour < 18 ? "Afternoon" : "Evening";
 
-  // Firestore listeners
+  // live claim counts and recent activity from firestore
   useEffect(() => {
     if (!user) return;
 
@@ -134,7 +134,7 @@ export default function HomeScreen() {
     progress >= 80  ? t.warning :
                       t.accent;
 
-  // ── Budget modal helpers ─────────────────────────────────────────
+  // budget modal open/close/save helpers
 
   function openBudgetModal() {
     if (adminBudgetLimit) {
@@ -190,7 +190,7 @@ export default function HomeScreen() {
     root: { flex: 1, backgroundColor: t.bg },
     container: { paddingTop: 0 },
 
-    /* ── Header ── */
+    // header row
     headerRow: {
       flexDirection: "row",
       justifyContent: "space-between",
@@ -215,7 +215,7 @@ export default function HomeScreen() {
       borderWidth: 1, borderColor: t.border,
     },
 
-    /* ── Trial banner ── */
+    // trial banner
     trialBanner: {
       flexDirection: "row", alignItems: "center",
       backgroundColor: t.warningSurface,
@@ -225,7 +225,7 @@ export default function HomeScreen() {
     },
     trialText: { flex: 1, color: t.warning, fontSize: 13, fontWeight: "600" },
 
-    /* ── Hero spending card — Revolut/BMW clean surface ── */
+    // main spending card
     heroCard: {
       marginHorizontal: 20,
       marginBottom: 14,
@@ -285,7 +285,7 @@ export default function HomeScreen() {
       color: t.textSecondary, fontSize: 12,
     },
 
-    /* ── Stats ── */
+    // stat cards row
     statsRow: { flexDirection: "row", gap: 10, marginHorizontal: 20, marginBottom: 24 },
     statCard: {
       flex: 1, backgroundColor: t.surface,
@@ -304,7 +304,7 @@ export default function HomeScreen() {
     },
     statLabel: { color: t.textSecondary, fontSize: 12, fontWeight: "500" },
 
-    /* ── Quick actions — horizontal pill chips ── */
+    // quick action chips
     actionsSection: { marginBottom: 28 },
     sectionHeader: {
       flexDirection: "row", justifyContent: "space-between", alignItems: "center",
@@ -312,7 +312,7 @@ export default function HomeScreen() {
     },
     sectionTitle: { color: t.text, fontSize: 15, fontWeight: "700", letterSpacing: -0.3 },
     actionsScroll: { paddingLeft: 20, paddingRight: 8, gap: 8 },
-    // ActionChip styles (used in component below)
+    // chip used in the ActionChip sub-component below
     chipWrap: {
       flexDirection: "row", alignItems: "center", gap: 7,
       backgroundColor: t.surface,
@@ -324,7 +324,7 @@ export default function HomeScreen() {
     },
     chipLabel: { color: t.text, fontSize: 13, fontWeight: "600" },
 
-    /* ── Recent activity ── */
+    // recent claims section
     recentSection: { paddingHorizontal: 20 },
     recentHeader:  { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
     viewAllLink:   { color: t.accent, fontSize: 14, fontWeight: "600" },
@@ -348,7 +348,7 @@ export default function HomeScreen() {
     statusPill:     { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, alignSelf: "flex-end" },
     statusPillText: { fontSize: 10, fontWeight: "700" },
 
-    /* ── Empty state ── */
+    // empty state when no claims exist
     emptyState:    { alignItems: "center", paddingVertical: 48 },
     emptyIconWrap: {
       width: 72, height: 72, borderRadius: 20, backgroundColor: t.surface,
@@ -359,7 +359,7 @@ export default function HomeScreen() {
     emptyBtn:      { backgroundColor: t.accent, borderRadius: 999, paddingVertical: 14, paddingHorizontal: 28 },
     emptyBtnText:  { color: "#FFFFFF", fontWeight: "700", fontSize: 15 },
 
-    /* ── Budget modal ── */
+    // budget modal sheet
     modalOverlay:  { flex: 1, justifyContent: "flex-end" },
     modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.6)" },
     modalSheet: {
@@ -407,7 +407,7 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
 
-        {/* ── HEADER ── */}
+        {/* header */}
         <View style={styles.headerRow}>
           <View>
             <ThemedText style={styles.greetingLabel}>Good {greeting} 👋</ThemedText>
@@ -424,7 +424,7 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* ── TRIAL BANNER ── */}
+        {/* trial expiry banner */}
         {orgPlan === "trial" && (
           <TouchableOpacity style={styles.trialBanner} onPress={() => router.push("/plans")} activeOpacity={0.8}>
             <Ionicons name="time-outline" size={16} color={t.warning} />
@@ -437,11 +437,11 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
 
-        {/* ── HERO SPENDING CARD ── */}
+        {/* spending card */}
         <View style={styles.heroCard}>
           <View style={styles.heroGradient}>
 
-            {/* Row 1 — label + controls */}
+            {/* top row: label and edit button */}
             <View style={styles.heroTopRow}>
               <ThemedText style={styles.heroLabel}>Total Spending</ThemedText>
               <View style={{ flexDirection: "row", alignItems: "center" }}>
@@ -459,12 +459,12 @@ export default function HomeScreen() {
               </View>
             </View>
 
-            {/* Row 2 — big number, fully independent */}
+            {/* the big spend number */}
             <ThemedText style={styles.heroAmount}>
               £{monthlySpend.toFixed(2)}
             </ThemedText>
 
-            {/* Row 3 — progress */}
+            {/* budget progress bar */}
             <View style={styles.progressTrack}>
               <View style={[styles.progressFill, { width: `${progress}%` as any, backgroundColor: progressColor }]} />
             </View>
@@ -481,13 +481,13 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* ── STAT CARDS ── */}
+        {/* pending/approved stat cards */}
         <View style={styles.statsRow}>
           <StatCard label="Pending"  value={pending}  icon="time-outline"             color={t.warning} bg={t.warningSurface} />
           <StatCard label="Approved" value={approved} icon="checkmark-circle-outline" color={t.success} bg={t.successSurface} />
         </View>
 
-        {/* ── QUICK ACTIONS — horizontal pill chips ── */}
+        {/* quick action chips */}
         <View style={styles.actionsSection}>
           <View style={styles.sectionHeader}>
             <ThemedText style={styles.sectionTitle}>Quick Actions</ThemedText>
@@ -503,7 +503,7 @@ export default function HomeScreen() {
           </ScrollView>
         </View>
 
-        {/* ── RECENT ACTIVITY ── */}
+        {/* recent claims list */}
         <View style={styles.recentSection}>
           <View style={styles.recentHeader}>
             <ThemedText style={styles.sectionTitle}>Recent Activity</ThemedText>
@@ -540,7 +540,7 @@ export default function HomeScreen() {
 
       </ScrollView>
 
-      {/* ── BUDGET MODAL ── */}
+      {/* budget modal */}
 
       <Modal visible={budgetModalOpen} animationType="slide" transparent onRequestClose={closeBudgetModal}>
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : "height"}>
@@ -602,9 +602,7 @@ export default function HomeScreen() {
   );
 }
 
-//////////////////////////////////////////////////////
-// SUB-COMPONENTS
-//////////////////////////////////////////////////////
+// small sub-components used by the home screen
 
 function StatCard({
   label,

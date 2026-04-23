@@ -59,9 +59,7 @@ export default function ChatbotScreen() {
   const [remainingAI, setRemainingAI] = useState<number | null>(null);
   const [creditLimit,  setCreditLimit]  = useState<number | null>(null);
 
-  /////////////////////////////////////////////////////////
-  // LOAD CREDITS
-  /////////////////////////////////////////////////////////
+  // fetch how many ai credits are left for this org
 
   useEffect(() => {
     const loadCredits = async () => {
@@ -93,9 +91,7 @@ export default function ChatbotScreen() {
     loadCredits();
   }, [user]);
 
-  /////////////////////////////////////////////////////////
-  // SEND MESSAGE
-  /////////////////////////////////////////////////////////
+  // sends the user's message and streams the bot reply
 
   const sendMessage = async (preset?: string) => {
 
@@ -181,9 +177,7 @@ export default function ChatbotScreen() {
     }
   };
 
-  /////////////////////////////////////////////////////////
-  // STYLES
-  /////////////////////////////////////////////////////////
+  // all the styles for this screen
 
   const styles = useMemo(() => StyleSheet.create({
 
@@ -312,9 +306,7 @@ export default function ChatbotScreen() {
   // Guard: show paywall if not pro (after all hooks)
   if (!isPro) return <PaywallScreen />;
 
-  /////////////////////////////////////////////////////////
-  // MESSAGE BUBBLE
-  /////////////////////////////////////////////////////////
+  // individual chat message with a fade-in animation
 
   const MessageBubble = ({ item }: { item: ChatMessage }) => {
 
@@ -345,9 +337,7 @@ export default function ChatbotScreen() {
     );
   };
 
-  /////////////////////////////////////////////////////////
-  // UI
-  /////////////////////////////////////////////////////////
+  // the main screen layout
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
@@ -390,7 +380,7 @@ export default function ChatbotScreen() {
               ))}
             </View>
 
-            {/* CHAT */}
+            {/* message list */}
             <FlatList
               ref={flatListRef}
               data={messages}
@@ -415,7 +405,7 @@ export default function ChatbotScreen() {
               }
             />
 
-            {/* INPUT + DISCLAIMER */}
+            {/* input bar and disclaimer */}
             <View style={styles.inputWrapper}>
 
               <ThemedText style={styles.disclaimer}>

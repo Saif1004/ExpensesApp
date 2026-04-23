@@ -49,9 +49,7 @@ type Claim = {
   paymentStatus?: string;
 };
 
-/////////////////////////////////////////////////////////
-// Date helper — "27 Mar"
-/////////////////////////////////////////////////////////
+// formats a firestore timestamp as "27 Mar"
 
 function formatDate(ts: Timestamp): string {
   const months = ["Jan","Feb","Mar","Apr","May","Jun",
@@ -86,17 +84,13 @@ export default function ClaimsScreen() {
   const [viewReceipt, setViewReceipt] =
     useState<string | null>(null);
 
-  /////////////////////////////////////////////////////////
-  // Reset badge
-  /////////////////////////////////////////////////////////
+  // mark claims as seen so the badge clears
 
   useEffect(() => {
     AsyncStorage.setItem(LAST_SEEN_KEY, Date.now().toString());
   }, []);
 
-  /////////////////////////////////////////////////////////
-  // Firestore
-  /////////////////////////////////////////////////////////
+  // subscribe to the user's claims in real time
 
   useEffect(() => {
 
@@ -124,15 +118,13 @@ export default function ClaimsScreen() {
       setLoading(false);
       setRefreshing(false);
 
-    }, () => { /* silently swallow permission-denied on sign-out/delete */ }));
+    }, () => { /* ignore permission errors on sign-out */ }));
 
     return unsub;
 
   }, [user]);
 
-  /////////////////////////////////////////////////////////
-  // Filter + search
-  /////////////////////////////////////////////////////////
+  // apply the active tab filter and search query
 
   useEffect(() => {
     const base = allClaims.filter(c => c.status === filter);
@@ -147,18 +139,14 @@ export default function ClaimsScreen() {
     ));
   }, [filter, allClaims, search]);
 
-  /////////////////////////////////////////////////////////
-  // Pull refresh
-  /////////////////////////////////////////////////////////
+  // pull-to-refresh handler
 
   const onRefresh = () => {
     setRefreshing(true);
     setTimeout(() => setRefreshing(false), 600);
   };
 
-  /////////////////////////////////////////////////////////
-  // STATUS CONFIG
-  /////////////////////////////////////////////////////////
+  // colours and icons for each claim status
 
   const STATUS_CONFIG = {
     pending:  { color: t.warning,  bg: t.warningSurface,  icon: "time-outline" as const },
@@ -166,9 +154,7 @@ export default function ClaimsScreen() {
     rejected: { color: t.error,    bg: t.errorSurface,    icon: "close-circle-outline" as const },
   };
 
-  /////////////////////////////////////////////////////////
-  // Badge colours
-  /////////////////////////////////////////////////////////
+  // returns the right badge style for a given status
 
   const getStatusStyle = (status: string) => {
     switch (status) {
@@ -188,9 +174,7 @@ export default function ClaimsScreen() {
     }
   };
 
-  /////////////////////////////////////////////////////////
-  // Styles
-  /////////////////////////////////////////////////////////
+  // styles
 
   const styles = useMemo(() => StyleSheet.create({
 
@@ -209,7 +193,7 @@ export default function ClaimsScreen() {
       marginBottom: 16
     },
 
-    /* Search */
+    // search bar
     searchWrap: {
       flexDirection: "row",
       alignItems: "center",
@@ -234,7 +218,7 @@ export default function ClaimsScreen() {
       fontSize: 14
     },
 
-    /* Filter tabs */
+    // filter tabs
     filterRow: {
       flexDirection: "row",
       gap: 8,
@@ -295,7 +279,7 @@ export default function ClaimsScreen() {
       color: "#FFFFFF"
     },
 
-    /* Empty state */
+    // empty state
     emptyCard: {
       flex: 1,
       alignItems: "center",
@@ -308,7 +292,7 @@ export default function ClaimsScreen() {
       fontSize: 14
     },
 
-    /* Claim card */
+    // claim card
     claimCard: {
       backgroundColor: t.surface,
       borderRadius: 20,
@@ -396,7 +380,7 @@ export default function ClaimsScreen() {
     badgeTextPending:   { color: t.warning },
     badgeTextRejected:  { color: t.error },
 
-    /* Paid badge */
+    // paid badge
     paidBadge: {
       backgroundColor: t.successSurface,
       borderRadius: 999,
@@ -410,7 +394,7 @@ export default function ClaimsScreen() {
       fontWeight: "700"
     },
 
-    /* Failed payment badge */
+    // failed payment badge
     failedBadge: {
       backgroundColor: t.errorSurface,
       borderRadius: 999,
@@ -424,7 +408,7 @@ export default function ClaimsScreen() {
       fontWeight: "700"
     },
 
-    /* Approved/rejected by */
+    // approved/rejected by line
     approvedBy: {
       color: t.success,
       fontSize: 12,
@@ -439,7 +423,7 @@ export default function ClaimsScreen() {
       paddingBottom: 8
     },
 
-    /* Admin message bubble */
+    // admin message bubble
     messageBubble: {
       flexDirection: "row",
       alignItems: "flex-start",
@@ -458,7 +442,7 @@ export default function ClaimsScreen() {
       lineHeight: 18
     },
 
-    /* Receipt */
+    // receipt thumbnail
     receiptPreview: {
       width: "100%",
       height: 130,
@@ -490,7 +474,7 @@ export default function ClaimsScreen() {
       alignItems: "center"
     },
 
-    /* Receipt modal */
+    // fullscreen receipt modal
     imageModalOverlay: {
       flex: 1,
       backgroundColor: "rgba(0,0,0,0.95)",
@@ -516,19 +500,17 @@ export default function ClaimsScreen() {
 
   }), [t, isDark, insets]);
 
-  /////////////////////////////////////////////////////////
-  // UI
-  /////////////////////////////////////////////////////////
+  // render
 
   return (
     <ThemedView style={styles.container}>
 
-      {/* Title */}
+      {/* title */}
       <ThemedText type="title" style={styles.title}>
         My Claims
       </ThemedText>
 
-      {/* Search */}
+      {/* search bar */}
       <View style={styles.searchWrap}>
         <Ionicons name="search-outline" size={16} color={t.textSecondary} style={styles.searchIcon} />
         <TextInput
@@ -543,7 +525,7 @@ export default function ClaimsScreen() {
         />
       </View>
 
-      {/* Filter tabs */}
+      {/* filter tabs */}
       <View style={styles.filterRow}>
         {(["pending", "approved", "rejected"] as const).map((status) => (
           <TouchableOpacity
@@ -575,7 +557,7 @@ export default function ClaimsScreen() {
         ))}
       </View>
 
-      {/* Content */}
+      {/* main content area */}
       {loading ? (
 
         <View style={styles.center}>
@@ -616,7 +598,7 @@ export default function ClaimsScreen() {
               activeOpacity={0.75}
             >
 
-              {/* Header row: amount + date */}
+              {/* amount and date */}
               <View style={styles.cardHeader}>
                 <ThemedText style={styles.amount}>
                   £{item.amount.toFixed(2)}
@@ -626,7 +608,7 @@ export default function ClaimsScreen() {
                 </ThemedText>
               </View>
 
-              {/* Merchant + category */}
+              {/* merchant and category */}
               <View style={styles.metaRow}>
                 <Ionicons name="storefront-outline" size={13} color={t.textSecondary} />
                 <ThemedText style={styles.merchant}>{item.merchant}</ThemedText>
@@ -634,7 +616,7 @@ export default function ClaimsScreen() {
                 <ThemedText style={styles.category}>{item.category}</ThemedText>
               </View>
 
-              {/* Status badge row */}
+              {/* status badge row */}
               <View style={styles.statusRow}>
                 <View style={[styles.statusBadge, getStatusStyle(item.status)]}>
                   <ThemedText style={[styles.statusText, getStatusTextStyle(item.status)]}>
@@ -642,14 +624,14 @@ export default function ClaimsScreen() {
                   </ThemedText>
                 </View>
 
-                {/* Reimbursed pill */}
+                {/* reimbursed pill */}
                 {item.paymentStatus === "paid" && (
                   <View style={styles.paidBadge}>
                     <ThemedText style={styles.paidText}>💳 Reimbursed</ThemedText>
                   </View>
                 )}
 
-                {/* Payment Failed pill */}
+                {/* payment failed pill */}
                 {item.paymentStatus === "failed" && (
                   <View style={styles.failedBadge}>
                     <ThemedText style={styles.failedText}>⚠️ Payment Failed</ThemedText>
@@ -657,7 +639,7 @@ export default function ClaimsScreen() {
                 )}
               </View>
 
-              {/* Approved / rejected by line */}
+              {/* who approved or rejected it */}
               {item.status === "approved" && item.approvedBy && (
                 <ThemedText style={styles.approvedBy}>
                   ✓ Approved by {item.approvedBy}
@@ -669,7 +651,7 @@ export default function ClaimsScreen() {
                 </ThemedText>
               )}
 
-              {/* Admin message */}
+              {/* admin feedback message */}
               {!!item.adminFeedback && (
                 <View style={styles.messageBubble}>
                   <Ionicons name="chatbubble-outline" size={13} color={t.textSecondary} style={{ marginTop: 1 }} />
@@ -679,7 +661,7 @@ export default function ClaimsScreen() {
                 </View>
               )}
 
-              {/* Receipt thumbnail */}
+              {/* receipt thumbnail, tap to expand */}
               {item.receiptUrl && (
                 <TouchableOpacity
                   onPress={() => setViewReceipt(item.receiptUrl!)}
@@ -703,7 +685,7 @@ export default function ClaimsScreen() {
 
       )}
 
-      {/* Receipt modal */}
+      {/* fullscreen receipt modal */}
       <Modal visible={!!viewReceipt} transparent animationType="fade">
         <View style={styles.imageModalOverlay}>
           {viewReceipt && (

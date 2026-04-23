@@ -37,7 +37,7 @@ export default function AddExpenseScreen() {
   const { tokens: t, mode } = useTheme();
   const isDark = mode === "dark";
 
-  // Categories come from AuthProvider — updated instantly when hard refresh is pressed
+  // fall back to defaults if the org hasn't set custom categories yet
   const dynamicCategories = orgCategories.length > 0 ? orgCategories : DEFAULT_CATEGORIES;
 
   const [amount, setAmount] = useState("");
@@ -138,7 +138,7 @@ export default function AddExpenseScreen() {
     try {
       setOcrLoading(true);
 
-      // Get a fresh Firebase ID token — required by every Azure Function
+      // fresh token for the azure function calls
       if (!user) throw new Error("Not authenticated");
       const idToken = await user.getIdToken();
       const authHeaders = {
@@ -146,9 +146,7 @@ export default function AddExpenseScreen() {
         "Authorization": `Bearer ${idToken}`,
       };
 
-      //////////////////////
-      // Upload Receipt
-      //////////////////////
+      // upload the image first so we have a url for the claim
 
       const uploadRes = await fetch(AZURE_UPLOAD_URL, {
         method: "POST",
@@ -165,9 +163,7 @@ export default function AddExpenseScreen() {
       setReceiptUrl(uploadData.url);
       setReceiptPreview(image.uri);
 
-      //////////////////////
-      // OCR
-      //////////////////////
+      // now run OCR to extract the receipt data
 
       const ocrRes = await fetch(AZURE_OCR_URL, {
         method: "POST",
@@ -183,7 +179,7 @@ export default function AddExpenseScreen() {
         throw new Error(data?.error || "OCR failed");
       }
 
-      // Autofill fields safely
+      // autofill whatever the OCR found
 
       if (data.amount !== null && data.amount !== undefined) {
         setAmount(String(data.amount));
@@ -241,7 +237,7 @@ export default function AddExpenseScreen() {
     try {
       setSaving(true);
 
-      // Get a fresh Firebase ID token — required by every Azure Function
+      // fresh token for the validate call
       const idToken = await user.getIdToken();
 
       const response = await fetch(AZURE_VALIDATE_URL, {
@@ -291,7 +287,7 @@ export default function AddExpenseScreen() {
       flex: 1
     },
 
-    /* Header */
+    // header
     header: {
       flexDirection: "row",
       alignItems: "center",
@@ -319,7 +315,7 @@ export default function AddExpenseScreen() {
       marginTop: 2
     },
 
-    /* Section labels */
+    // section labels
     sectionLabel: {
       flexDirection: "row",
       alignItems: "center",
@@ -333,7 +329,7 @@ export default function AddExpenseScreen() {
       textTransform: "uppercase"
     },
 
-    /* Cards */
+    // cards
     card: {
       backgroundColor: t.surface,
       padding: 18,
@@ -345,7 +341,7 @@ export default function AddExpenseScreen() {
       })
     },
 
-    /* Switch row */
+    // receipt toggle switch
     switchRow: {
       flexDirection: "row",
       justifyContent: "space-between",
@@ -362,7 +358,7 @@ export default function AddExpenseScreen() {
       fontWeight: "600"
     },
 
-    /* Upload box */
+    // upload/scan box
     uploadBox: {
       borderWidth: 1.5,
       borderColor: t.border,
@@ -404,7 +400,7 @@ export default function AddExpenseScreen() {
       fontWeight: "600"
     },
 
-    /* Receipt preview */
+    // receipt preview once scanned
     previewWrapper: {
       borderRadius: 14,
       overflow: "hidden"
@@ -427,7 +423,7 @@ export default function AddExpenseScreen() {
       fontWeight: "500"
     },
 
-    /* Form inputs */
+    // form input fields
     inputWrapper: {
       flexDirection: "row",
       alignItems: "center",
@@ -446,7 +442,7 @@ export default function AddExpenseScreen() {
       paddingVertical: 14
     },
 
-    /* Dropdown */
+    // category dropdown
     dropdownTrigger: {
       paddingVertical: 14
     },
@@ -482,7 +478,7 @@ export default function AddExpenseScreen() {
       fontWeight: "700"
     },
 
-    /* Submit */
+    // submit button
     submitButton: {
       backgroundColor: t.accent,
       paddingVertical: 16,
@@ -504,7 +500,7 @@ export default function AddExpenseScreen() {
       letterSpacing: -0.2
     },
 
-    /* Modals */
+    // modals
     modalOverlay: {
       flex: 1,
       backgroundColor: "rgba(0,0,0,0.85)",
@@ -542,7 +538,7 @@ export default function AddExpenseScreen() {
         >
           <ThemedView style={[styles.container, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 24 }]}>
 
-            {/* HEADER */}
+            {/* header */}
             <View style={styles.header}>
               <View style={styles.headerIconWrap}>
                 <Ionicons name="receipt-outline" size={22} color={t.accent} />
@@ -557,7 +553,7 @@ export default function AddExpenseScreen() {
               </View>
             </View>
 
-            {/* RECEIPT CARD */}
+            {/* receipt section */}
             <View style={styles.sectionLabel}>
               <Ionicons name="camera-outline" size={14} color={t.textTertiary} style={{ marginRight: 6 }} />
               <ThemedText style={styles.sectionLabelText}>RECEIPT</ThemedText>
@@ -618,7 +614,7 @@ export default function AddExpenseScreen() {
                 ))}
             </ThemedView>
 
-            {/* FORM */}
+            {/* expense details form */}
             <View style={styles.sectionLabel}>
               <Ionicons name="create-outline" size={14} color={t.textTertiary} style={{ marginRight: 6 }} />
               <ThemedText style={styles.sectionLabelText}>EXPENSE DETAILS</ThemedText>
@@ -717,8 +713,7 @@ export default function AddExpenseScreen() {
         </ScrollView>
       </TouchableWithoutFeedback>
 
-      {/* RECEIPT MODAL */}
-
+      {/* fullscreen receipt modal */}
       <Modal visible={showReceiptModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>

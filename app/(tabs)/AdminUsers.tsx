@@ -66,19 +66,17 @@ export default function AdminUsers() {
   const [pendingCount, setPendingCount]     = useState(0);
   const [searchQuery, setSearchQuery]       = useState("");
 
-  // Budget override modal state
+  // state for the budget override modal
   const [budgetUser,    setBudgetUser]    = useState<UserItem | null>(null);
   const [budgetPreset,  setBudgetPreset]  = useState<number | null>(null);
   const [budgetCustom,  setBudgetCustom]  = useState("");
   const [savingBudget,  setSavingBudget]  = useState(false);
   const customRef = useRef<TextInput>(null);
 
-  // Refresh membership on mount so promoted admins work immediately
+  // refresh role on mount so newly promoted admins get access right away
   useEffect(() => { refreshMembership(); }, []);
 
-  //////////////////////////////////////////////////////
-  // LOAD USERS
-  //////////////////////////////////////////////////////
+  // fetches the member list for the current tab
 
   const loadUsers = async (silent = false) => {
     try {
@@ -114,7 +112,7 @@ export default function AdminUsers() {
 
       setUsers(list);
 
-      // Keep approved count fresh
+      // always keep the approved count current for the plan limit check
       if (tab === "approved") {
         setApprovedCount(list.length);
       } else {
@@ -158,9 +156,7 @@ export default function AdminUsers() {
     loadPendingCount();
   };
 
-  //////////////////////////////////////////////////////
-  // APPROVE
-  //////////////////////////////////////////////////////
+  // approve a pending member
 
   const approveUser = async (membershipId: string) => {
     try {
@@ -173,7 +169,7 @@ export default function AdminUsers() {
       }
       await updateDoc(doc(db, "memberships", membershipId), { status: "approved" });
 
-      // Notify employee — fire-and-forget
+      // ping the employee with a notification — fire and forget
       const notifyUrl = process.env.EXPO_PUBLIC_NOTIFY_MEMBERSHIP_STATUS_URL;
       if (notifyUrl) {
         user?.getIdToken().then(token =>
@@ -193,15 +189,13 @@ export default function AdminUsers() {
     }
   };
 
-  //////////////////////////////////////////////////////
-  // REJECT
-  //////////////////////////////////////////////////////
+  // reject a pending member
 
   const rejectUser = async (membershipId: string) => {
     try {
       await updateDoc(doc(db, "memberships", membershipId), { status: "rejected" });
 
-      // Notify employee — fire-and-forget
+      // same notification flow for rejection
       const notifyUrl = process.env.EXPO_PUBLIC_NOTIFY_MEMBERSHIP_STATUS_URL;
       if (notifyUrl) {
         user?.getIdToken().then(token =>
@@ -221,9 +215,7 @@ export default function AdminUsers() {
     }
   };
 
-  //////////////////////////////////////////////////////
-  // BUDGET OVERRIDE
-  //////////////////////////////////////////////////////
+  // open/close/save the budget override modal
 
   const openBudgetModal = (u: UserItem) => {
     const current = u.budgetLimit ?? null;
@@ -254,7 +246,7 @@ export default function AdminUsers() {
       }
       value = parsed;
     }
-    // value === null means "remove override"
+    // null means "remove the cap entirely"
 
     setSavingBudget(true);
     try {
@@ -292,9 +284,7 @@ export default function AdminUsers() {
     );
   };
 
-  //////////////////////////////////////////////////////
-  // FILTERED USERS
-  //////////////////////////////////////////////////////
+  // filter the list by the search query
 
   const filteredUsers = users.filter((u) => {
     if (!searchQuery.trim()) return true;
@@ -303,9 +293,7 @@ export default function AdminUsers() {
            (u.email?.toLowerCase().includes(q) ?? false);
   });
 
-  //////////////////////////////////////////////////////
-  // STYLES
-  //////////////////////////////////////////////////////
+  // styles for the whole screen
 
   const styles = useMemo(() => StyleSheet.create({
 
@@ -333,7 +321,7 @@ export default function AdminUsers() {
     limitText:    { color: t.textSecondary, fontSize: 12 },
     limitWarning: { color: t.warning, fontSize: 11, fontWeight: "700" },
 
-    /* Search */
+    // search bar
     searchWrapper: {
       flexDirection: "row",
       alignItems: "center",
@@ -345,7 +333,7 @@ export default function AdminUsers() {
     },
     searchInput: { flex: 1, color: t.text, fontSize: 14 },
 
-    /* Tabs */
+    // tab row
     tabs: { flexDirection: "row", marginBottom: 20, gap: 8 },
     tab: {
       flex: 1,
@@ -368,7 +356,7 @@ export default function AdminUsers() {
     },
     badgeText: { color: "#fff", fontSize: 10, fontWeight: "700" },
 
-    /* Cards */
+    // user cards
     card: {
       backgroundColor: t.surface,
       borderRadius: 20,
@@ -382,7 +370,7 @@ export default function AdminUsers() {
       gap: 12
     },
 
-    /* Avatar */
+    // avatar/initials circle
     avatar: {
       width: 44, height: 44,
       borderRadius: 22,
@@ -397,7 +385,7 @@ export default function AdminUsers() {
     name:  { color: t.text, fontSize: 15, fontWeight: "600" },
     email: { color: t.textSecondary, marginTop: 2, fontSize: 12 },
 
-    /* Role badge */
+    // role pill badge
     roleBadge: {
       backgroundColor: t.accentSurface,
       borderRadius: 999,
@@ -413,7 +401,7 @@ export default function AdminUsers() {
     },
     roleBadgeTextAdmin: { color: t.warning },
 
-    /* Budget row */
+    // budget limit row
     budgetRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -454,7 +442,7 @@ export default function AdminUsers() {
     },
     setBudgetText: { color: t.accent, fontSize: 12, fontWeight: "600" },
 
-    /* Action buttons */
+    // approve/reject buttons
     buttons: {
       flexDirection: "row",
       paddingHorizontal: 14,
@@ -478,12 +466,12 @@ export default function AdminUsers() {
     approveBtnText: { color: "#fff",     fontWeight: "700", fontSize: 14 },
     rejectBtnText:  { color: t.error,    fontWeight: "700", fontSize: 14 },
 
-    /* Empty state */
+    // empty state
     emptyState: { alignItems: "center", marginTop: 60, gap: 10 },
     emptyIcon:  { fontSize: 36 },
     empty:      { color: t.textSecondary, textAlign: "center", fontSize: 14 },
 
-    /* Budget modal */
+    // budget override modal
     modalOverlay:  { flex: 1, justifyContent: "flex-end" },
     modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.6)" },
     modalSheet: {
@@ -562,9 +550,7 @@ export default function AdminUsers() {
 
   }), [t]);
 
-  //////////////////////////////////////////////////////
-  // TAB BUTTON
-  //////////////////////////////////////////////////////
+  // renders a single tab button with optional badge
 
   const TabButton = (name: "pending" | "approved" | "rejected", label: string) => (
     <TouchableOpacity
@@ -578,9 +564,7 @@ export default function AdminUsers() {
     </TouchableOpacity>
   );
 
-  //////////////////////////////////////////////////////
-  // UI
-  //////////////////////////////////////////////////////
+  // the screen layout
 
   return (
     <SafeAreaView style={styles.container}>
@@ -592,7 +576,7 @@ export default function AdminUsers() {
         {approvedCount >= employeeLimit && <Text style={styles.limitWarning}>Limit reached</Text>}
       </View>
 
-      {/* Search bar */}
+      {/* search */}
       <View style={styles.searchWrapper}>
         <Ionicons name="search-outline" size={15} color={t.textSecondary} style={{ marginRight: 8 }} />
         <TextInput
@@ -653,7 +637,7 @@ export default function AdminUsers() {
                   </View>
                 </View>
 
-                {/* Budget limit badge (approved tab) */}
+                {/* budget limit display for approved users */}
                 {tab === "approved" && (
                   <View style={styles.budgetRow}>
                     {u.budgetLimit ? (
@@ -697,7 +681,7 @@ export default function AdminUsers() {
         </ScrollView>
       )}
 
-      {/* ── BUDGET OVERRIDE MODAL ── */}
+      {/* budget override modal */}
       <Modal visible={!!budgetUser} animationType="slide" transparent onRequestClose={closeBudgetModal}>
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : "height"}>
           <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={closeBudgetModal} />
@@ -717,7 +701,7 @@ export default function AdminUsers() {
               Leave blank to remove the limit.
             </ThemedText>
 
-            {/* Presets */}
+            {/* preset budget amounts */}
             <View style={styles.presetGrid}>
               {BUDGET_PRESETS.map((p) => {
                 const active = budgetPreset === p;
@@ -736,7 +720,7 @@ export default function AdminUsers() {
               })}
             </View>
 
-            {/* Custom */}
+            {/* custom amount input */}
             <ThemedText style={styles.customLabel}>Custom amount</ThemedText>
             <View style={[
               styles.customInputRow,
