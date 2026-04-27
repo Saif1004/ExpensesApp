@@ -18,7 +18,7 @@ app.http('notifyClaimStatus', {
 
       const { claimId, status, adminFeedback } = await request.json();
 
-      if (!claimId || !['approved', 'rejected'].includes(status)) {
+      if (!claimId || !['approved', 'rejected', 'pending_l2'].includes(status)) {
         return secureResponse({ error: 'claimId and valid status required' }, 400);
       }
 
@@ -38,6 +38,38 @@ app.http('notifyClaimStatus', {
 
       if (memberSnap.empty) {
         return secureResponse({ error: 'Forbidden' }, 403);
+      }
+
+      // notify all admins when a claim needs L2 sign-off
+      if (status === 'pending_l2') {
+        const adminSnap = await admin.firestore()
+          .collection('memberships')
+          .where('orgId', '==', claim.orgId)
+          .where('role', '==', 'admin')
+          .where('status', '==', 'approved')
+          .get();
+
+        await Promise.all(adminSnap.docs.map(async memberDoc => {
+          const adminUser = await admin.firestore().collection('users').doc(memberDoc.data().userId).get();
+          if (!adminUser.exists) return;
+          const a = adminUser.data();
+          const amount = Number(claim.amount).toFixed(2);
+
+          if (a.expoPushToken && a.notifPushEnabled !== false) {
+            await sendPush(a.expoPushToken, '⚠️ Second Approval Needed',
+              `A £${amount} claim at ${claim.merchant ?? 'Unknown'} needs your final sign-off`,
+              { claimId }
+            ).catch(() => {});
+          }
+          if (a.email && a.notifEmailEnabled !== false) {
+            await sendEmail(a.email,
+              `Second approval needed: £${amount} claim`,
+              `<p>A £${amount} claim at ${claim.merchant ?? 'Unknown'} from ${claim.userEmail ?? 'employee'} has passed L1 review and needs your final approval.</p><p>Open the Claimio admin panel to review it.</p>`
+            ).catch(() => {});
+          }
+        }));
+
+        return secureResponse({ success: true }, 200);
       }
 
       // Load employee

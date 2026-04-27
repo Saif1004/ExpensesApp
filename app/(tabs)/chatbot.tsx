@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import PaywallScreen from "../../components/paywall-screen";
 import { ThemedText } from "../../components/themed-text";
+import { usePostHog } from "posthog-react-native";
 import { useAuth } from "../context/AuthProvider";
 import { useTheme } from "../../hooks/useTheme";
 
@@ -38,6 +39,7 @@ export default function ChatbotScreen() {
 
   const { user, isPro } = useAuth();
   const { tokens: t, mode } = useTheme();
+  const posthog = usePostHog();
   const isDark = mode === "dark";
 
   const flatListRef = useRef<FlatList>(null);
@@ -104,6 +106,7 @@ export default function ChatbotScreen() {
 
     lastMessageRef.current = text;
     setSending(true);
+    posthog.capture("chatbot_message_sent", { is_preset: !!preset, message_length: text.length });
 
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -147,10 +150,13 @@ export default function ChatbotScreen() {
 
       if (data.remaining !== undefined) {
         setRemainingAI(data.remaining);
+        if (data.remaining === 0) posthog.capture("chatbot_credits_depleted");
       }
       if (data.limit !== undefined) {
         setCreditLimit(data.limit);
       }
+
+      posthog.capture("chatbot_response_received", { credits_remaining: data.remaining ?? null });
 
       const botMessage: ChatMessage = {
         id: `${Date.now()}bot`,

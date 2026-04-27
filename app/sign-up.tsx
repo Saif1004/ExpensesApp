@@ -1,3 +1,4 @@
+import { usePostHog } from "posthog-react-native";
 import { useRouter } from "expo-router";
 import {
   GoogleSignin,
@@ -72,6 +73,7 @@ type Mode = "choose" | "create" | "join";
 
 export default function SignUp() {
   const router = useRouter();
+  const posthog = usePostHog();
   const { refreshMembership } = useAuth();
   const { tokens: t } = useTheme();
 
@@ -263,6 +265,12 @@ export default function SignUp() {
       });
       await batch.commit();
 
+      posthog.identify(uid, {
+        $set: { email: trimmedEmail, username: normalizedUsername },
+        $set_once: { first_sign_up_date: new Date().toISOString() },
+      });
+      posthog.capture("organisation_created", { org_name: trimmedOrg });
+
       // sign them out — they need to verify their email first
       await signOut(auth);
 
@@ -374,6 +382,12 @@ export default function SignUp() {
       });
 
       await batch.commit();
+
+      posthog.identify(uid, {
+        $set: { email: trimmedEmail, username: normalizedUsername },
+        $set_once: { first_sign_up_date: new Date().toISOString() },
+      });
+      posthog.capture("organisation_joined");
 
       // 4. sign out — they need email verification + admin approval before accessing the app
       await signOut(auth);

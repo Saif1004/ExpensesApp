@@ -99,7 +99,7 @@ app.http("validateClaim", {
       if (membershipSnap.empty)
         return secureResponse({ valid: false, reason: "User not assigned to an approved organisation." }, 400);
 
-      const orgId = membershipSnap.docs[0].data().orgId;
+      const { orgId, departmentId = null, departmentName = null } = membershipSnap.docs[0].data();
 
       // enforce the monthly claim cap based on the org's plan
 
@@ -274,6 +274,8 @@ Reply with JSON only — no explanation outside the JSON:
         receiptUrl: receiptUrl ?? null,
         hasReceipt,
         status: "pending",
+        departmentId,
+        departmentName,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 

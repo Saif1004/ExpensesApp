@@ -54,6 +54,8 @@ type AuthContextType = {
   trialDaysLeft: number;
   orgCategories: string[];
   authLoaded: boolean;
+  departmentId: string | null;
+  departmentName: string | null;
   refreshMembership: () => Promise<void>;
   refreshOrgPlan: () => Promise<void>;
 };
@@ -74,6 +76,8 @@ export const AuthContext = createContext<AuthContextType>({
   trialDaysLeft: 0,
   orgCategories: [],
   authLoaded: false,
+  departmentId: null,
+  departmentName: null,
   refreshMembership: async () => {},
   refreshOrgPlan: async () => {}
 });
@@ -95,6 +99,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [trialEndsAt, setTrialEndsAt]               = useState<Date | null>(null);
   const [orgCategories, setOrgCategories]           = useState<string[]>([]);
   const [authLoaded, setAuthLoaded]                 = useState(false);
+  const [departmentId, setDepartmentId]             = useState<string | null>(null);
+  const [departmentName, setDepartmentName]         = useState<string | null>(null);
 
   const router   = useRouter();
   const segments = useSegments();
@@ -208,6 +214,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setRole(memberRole);
       setStatus(memberStatus);
       setOrgId(oid);
+      setDepartmentId(membership.departmentId ?? null);
+      setDepartmentName(membership.departmentName ?? null);
       currentRoleRef.current = memberRole;
       currentOrgRef.current  = oid;
 
@@ -317,6 +325,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAiCreditsRemaining(0);
         setTrialEndsAt(null);
         setOrgCategories([]);
+        setDepartmentId(null);
+        setDepartmentName(null);
         currentUidRef.current  = null;
         currentRoleRef.current = null;
         currentOrgRef.current  = null;
@@ -443,12 +453,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     trialDaysLeft,
     orgCategories,
     authLoaded,
+    departmentId,
+    departmentName,
     refreshMembership,
     refreshOrgPlan
   }), [
     user, role, status, orgId, orgPlan, isPro, isBusiness,
     aiCreditsRemaining, employeeLimit, trialEndsAt,
-    trialDaysLeft, orgCategories, authLoaded, refreshMembership, refreshOrgPlan
+    trialDaysLeft, orgCategories, authLoaded, departmentId, departmentName,
+    refreshMembership, refreshOrgPlan
   ]);
 
   // don't render until we know who the user is

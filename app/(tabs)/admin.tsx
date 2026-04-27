@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   getDoc,
+  getDocs,
   onSnapshot,
   orderBy,
   query,
@@ -30,6 +31,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
+import { usePostHog } from "posthog-react-native";
 import { ThemedText } from "../../components/themed-text";
 import { ThemedView } from "../../components/themed-view";
 import { useAuth } from "../context/AuthProvider";
@@ -56,6 +58,9 @@ type Claim = {
   adminFeedback?: string;
   purchaseDate?: string;
   createdAt?: { toDate?: () => Date; seconds?: number };
+  departmentName?: string;
+  approvalThreshold?: number;
+  l1ApprovedBy?: string;
 };
 
 type ConfirmModal = {
@@ -67,7 +72,8 @@ type ConfirmModal = {
 type HistoryFilter = "all" | "approved" | "rejected";
 
 export default function AdminScreen() {
-  const { role, orgId, user, refreshMembership } = useAuth();
+  const { role, orgId, user, refreshMembership, isBusiness } = useAuth();
+  const posthog = usePostHog();
   const insets = useSafeAreaInsets();
   const { tokens: t, mode } = useTheme();
   const isDark = mode === "dark";
@@ -88,9 +94,20 @@ export default function AdminScreen() {
   const [search, setSearch]                         = useState("");
   const [categoryFilter, setCategoryFilter]         = useState<string | null>(null);
   const [historyFilter, setHistoryFilter]           = useState<HistoryFilter>("all");
+  const [approvalThreshold, setApprovalThreshold]   = useState<number | null>(null);
 
   // re-check membership on mount so promotions show up without restarting the app
   useEffect(() => { refreshMembership(); }, []);
+
+  // load the L2 approval threshold if one has been set
+  useEffect(() => {
+    if (!orgId) return;
+    getDocs(query(collection(db, "policies"), where("orgId", "==", orgId), where("type", "==", "approval_required_above")))
+      .then(snap => {
+        if (!snap.empty) setApprovalThreshold(snap.docs[0].data().value ?? null);
+        else setApprovalThreshold(null);
+      }).catch(() => {});
+  }, [orgId]);
 
   // real-time listener for pending claims in this org
 
@@ -105,7 +122,7 @@ export default function AdminScreen() {
     const q = query(
       collection(db, "claims"),
       where("orgId",  "==", orgId),
-      where("status", "==", "pending"),
+      where("status", "in", ["pending", "pending_l2"]),
       orderBy("createdAt", "desc")
     );
 
@@ -197,6 +214,7 @@ export default function AdminScreen() {
       merchant:      c.merchant ?? "—",
       amount:        Number(c.amount).toFixed(2),
       category:      c.category ?? "—",
+      department:    c.departmentName ?? "—",
       status:        c.status ?? "—",
       paymentStatus: c.paymentStatus ?? "—",
       approvedBy:    c.approvedBy ?? "—",
@@ -210,10 +228,10 @@ export default function AdminScreen() {
     if (exportLoading || filteredHistory.length === 0) return;
     setExportLoading(true);
     try {
-      const header = "Reference,Employee,Merchant,Amount (£),Category,Status,Payment Status,Approved By,Notes,Purchase Date,Submitted Date\n";
+      const header = "Reference,Employee,Merchant,Amount (£),Category,Department,Status,Payment Status,Approved By,Notes,Purchase Date,Submitted Date\n";
       const rows = filteredHistory.map(c => {
         const r = claimToRow(c);
-        return [r.claimRef, r.employee, r.merchant, r.amount, r.category, r.status, r.paymentStatus, r.approvedBy, r.notes, r.purchaseDate, r.submittedDate]
+        return [r.claimRef, r.employee, r.merchant, r.amount, r.category, r.department, r.status, r.paymentStatus, r.approvedBy, r.notes, r.purchaseDate, r.submittedDate]
           .map(v => `"${String(v).replace(/"/g, '""')}"`)
           .join(",");
       });
@@ -240,7 +258,7 @@ export default function AdminScreen() {
       const tableRows = rows.map(r => `
         <tr>
           <td>${r.claimRef}</td><td>${r.employee}</td><td>${r.merchant}</td>
-          <td>£${r.amount}</td><td>${r.category}</td>
+          <td>£${r.amount}</td><td>${r.category}</td><td>${r.department}</td>
           <td class="s-${r.status}">${r.status}</td><td>${r.paymentStatus}</td>
           <td>${r.approvedBy}</td><td>${r.notes}</td>
           <td>${r.purchaseDate}</td><td>${r.submittedDate}</td>
@@ -262,7 +280,7 @@ export default function AdminScreen() {
   <h1>Claimio — Expense Report</h1>
   <p class="meta">Generated: ${new Date().toLocaleDateString("en-GB")} &nbsp;·&nbsp; ${rows.length} claim${rows.length !== 1 ? "s" : ""}</p>
   <table><thead><tr>
-    <th>Ref</th><th>Employee</th><th>Merchant</th><th>Amount</th><th>Category</th>
+    <th>Ref</th><th>Employee</th><th>Merchant</th><th>Amount</th><th>Category</th><th>Department</th>
     <th>Status</th><th>Payment</th><th>Approved By</th><th>Notes</th><th>Purchase Date</th><th>Submitted</th>
   </tr></thead><tbody>${tableRows}</tbody></table>
   <p class="total">Total: £${grandTotal}</p>
@@ -301,6 +319,27 @@ export default function AdminScreen() {
     const approvedBy  = currentUser?.displayName || currentUser?.email || "Unknown";
     const adminId     = currentUser?.uid || null;
 
+    // escalate to L2 if approving a pending claim that exceeds the threshold
+    if (action === "approved" && claim.status === "pending" && approvalThreshold !== null && claim.amount > approvalThreshold) {
+      closeConfirmModal();
+      await updateDoc(doc(db, "claims", claim.id), {
+        status:        "pending_l2",
+        l1ApprovedBy:  approvedBy,
+        l1ApprovedAt:  serverTimestamp(),
+        adminFeedback: adminMessage.trim() || null,
+      });
+      currentUser?.getIdToken().then(token => {
+        fetch(NOTIFY_URL, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ claimId: claim.id, status: "pending_l2", adminFeedback: adminMessage.trim() || null }),
+        }).catch(() => {});
+      }).catch(() => {});
+      posthog.capture("claim_escalated_to_l2", { amount: claim.amount, category: claim.category });
+      Alert.alert("Escalated", `This claim exceeds the £${approvalThreshold} threshold and needs a second approval.`);
+      return;
+    }
+
     closeConfirmModal();
 
     await updateDoc(doc(db, "claims", claim.id), {
@@ -328,6 +367,11 @@ export default function AdminScreen() {
     }).catch(() => {});
 
     if (action === "approved") {
+      posthog.capture("claim_approved", {
+        amount:   claim.amount,
+        category: claim.category,
+        reimburse: true,
+      });
       try {
         const token = await currentUser?.getIdToken();
         const res   = await fetch(REIMBURSE_URL, {
@@ -345,6 +389,11 @@ export default function AdminScreen() {
       } catch (err: any) {
         Alert.alert("Payment Error", err.message);
       }
+    } else {
+      posthog.capture("claim_rejected", {
+        amount:   claim.amount,
+        category: claim.category,
+      });
     }
   };
 
@@ -951,9 +1000,7 @@ export default function AdminScreen() {
     </View>
   );
 
-  //////////////////////////////////////////////////////
-  // EMPTY STATE
-  //////////////////////////////////////////////////////
+  // reusable empty state component
 
   const EmptyState = ({ message }: { message: string }) => (
     <View style={styles.emptyState}>
@@ -962,14 +1009,12 @@ export default function AdminScreen() {
     </View>
   );
 
-  //////////////////////////////////////////////////////
-  // RENDER
-  //////////////////////////////////////////////////////
+  // render
 
   return (
     <ThemedView style={[styles.container, { paddingTop: insets.top + 8 }]}>
 
-      {/* Header */}
+      {/* header */}
       <View style={styles.headerRow}>
         <View>
           <ThemedText type="title" style={styles.title}>Admin Panel</ThemedText>
@@ -989,7 +1034,7 @@ export default function AdminScreen() {
         </View>
       </View>
 
-      {/* Tab bar */}
+      {/* tab bar */}
       <View style={styles.tabBar}>
         <TouchableOpacity
           style={[styles.tabPill, tab === "pending" && styles.tabPillActive]}
@@ -1011,10 +1056,10 @@ export default function AdminScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Search bar */}
+      {/* search bar */}
       {SearchBar}
 
-      {/* ── PENDING TAB ── */}
+      {/* pending tab */}
       {tab === "pending" ? (
         loading ? (
           <View style={styles.center}><ActivityIndicator size="large" color={t.accent} /></View>
@@ -1039,8 +1084,15 @@ export default function AdminScreen() {
                     <ThemedText style={styles.amount}>£{Number(item.amount).toFixed(2)}</ThemedText>
                     <ThemedText style={styles.merchant}>{item.merchant}</ThemedText>
                   </View>
-                  <View style={styles.categoryBadge}>
-                    <ThemedText style={styles.categoryText}>{item.category}</ThemedText>
+                  <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
+                    <View style={styles.categoryBadge}>
+                      <ThemedText style={styles.categoryText}>{item.category}</ThemedText>
+                    </View>
+                    {item.status === "pending_l2" && (
+                      <View style={[styles.categoryBadge, { backgroundColor: "#7C3AED" + "33" }]}>
+                        <ThemedText style={[styles.categoryText, { color: "#A78BFA" }]}>L2 Review</ThemedText>
+                      </View>
+                    )}
                   </View>
                 </View>
 
@@ -1055,6 +1107,13 @@ export default function AdminScreen() {
                   <ThemedText style={styles.infoLabel}>Category</ThemedText>
                   <ThemedText style={styles.infoValue}>{item.category}</ThemedText>
                 </View>
+
+                {item.departmentName ? (
+                  <View style={styles.infoRow}>
+                    <ThemedText style={styles.infoLabel}>Department</ThemedText>
+                    <ThemedText style={styles.infoValue}>{item.departmentName}</ThemedText>
+                  </View>
+                ) : null}
 
                 {item.description ? (
                   <View style={styles.infoRow}>
@@ -1098,7 +1157,9 @@ export default function AdminScreen() {
                 ) : (
                   <View style={styles.buttonRow}>
                     <TouchableOpacity style={styles.approveBtn} onPress={() => openConfirmModal(item, "approved")}>
-                      <ThemedText style={styles.btnText} numberOfLines={1}>Approve & Pay</ThemedText>
+                      <ThemedText style={styles.btnText} numberOfLines={1}>
+                        {item.status === "pending_l2" ? "Final Approve" : "Approve & Pay"}
+                      </ThemedText>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.rejectBtn} onPress={() => openConfirmModal(item, "rejected")}>
                       <ThemedText style={styles.btnText} numberOfLines={1}>Reject</ThemedText>
@@ -1111,7 +1172,7 @@ export default function AdminScreen() {
         )
       ) : (
 
-        /* ── HISTORY TAB ── */
+        /* history tab */
         historyLoading ? (
           <View style={styles.center}><ActivityIndicator size="large" color={t.accent} /></View>
         ) : (
@@ -1159,12 +1220,26 @@ export default function AdminScreen() {
                   <ThemedText style={styles.infoValue}>{item.category}</ThemedText>
                 </View>
 
+                {item.departmentName ? (
+                  <View style={styles.infoRow}>
+                    <ThemedText style={styles.infoLabel}>Department</ThemedText>
+                    <ThemedText style={styles.infoValue}>{item.departmentName}</ThemedText>
+                  </View>
+                ) : null}
+
                 {item.approvedBy ? (
                   <View style={styles.infoRow}>
                     <ThemedText style={styles.infoLabel}>
                       {item.status === "approved" ? "Approved By" : "Rejected By"}
                     </ThemedText>
                     <ThemedText style={styles.infoValue}>{item.approvedBy}</ThemedText>
+                  </View>
+                ) : null}
+
+                {item.l1ApprovedBy ? (
+                  <View style={styles.infoRow}>
+                    <ThemedText style={styles.infoLabel}>L1 Approved By</ThemedText>
+                    <ThemedText style={styles.infoValue}>{item.l1ApprovedBy}</ThemedText>
                   </View>
                 ) : null}
 
@@ -1207,7 +1282,7 @@ export default function AdminScreen() {
         )
       )}
 
-      {/* ── Confirmation Modal ── */}
+      {/* confirmation modal */}
       <Modal
         visible={confirmModal.visible}
         transparent
@@ -1276,7 +1351,7 @@ export default function AdminScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* ── Receipt image Modal ── */}
+      {/* receipt image modal */}
       <Modal visible={!!selectedImage} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.imageModalContent}>

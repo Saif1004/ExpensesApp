@@ -15,6 +15,7 @@ const isExpoGo = Constants.executionEnvironment === "storeClient";
 const START_TRIAL_URL = process.env.EXPO_PUBLIC_START_TRIAL_URL!;
 const SYNC_PLAN_URL   = process.env.EXPO_PUBLIC_SYNC_PLAN_URL!;
 
+import { usePostHog } from "posthog-react-native";
 import { PLAN_LIMITS, OrgPlan } from "../constants/planLimits";
 import { useAuth } from "../app/context/AuthProvider";
 import { ThemedText } from "./themed-text";
@@ -92,6 +93,7 @@ export default function PaywallScreen() {
   } = useAuth();
 
   const { tokens: t } = useTheme();
+  const posthog = usePostHog();
 
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>("monthly");
   const [startingTrial, setStartingTrial] = useState(false);
@@ -177,6 +179,7 @@ export default function PaywallScreen() {
     }
 
     const purchaseKey = `${targetPlan}_${billingPeriod}`;
+    posthog.capture("subscription_purchase_started", { plan: targetPlan, billing: billingPeriod });
     setPurchasing(purchaseKey);
 
     try {
@@ -195,9 +198,11 @@ export default function PaywallScreen() {
       const newPlan: OrgPlan = syncData.plan ?? targetPlan;
 
       await refreshOrgPlan();
+      posthog.capture("subscription_purchased", { plan: newPlan, billing: billingPeriod });
       Alert.alert("Subscribed!", `Welcome to ${PLAN_LIMITS[newPlan]?.label ?? newPlan}! Your whole team now has access.`);
     } catch (err: any) {
       if (!err?.userCancelled) {
+        posthog.capture("subscription_purchase_failed", { plan: targetPlan, billing: billingPeriod });
         Alert.alert("Purchase failed", "Something went wrong. Please try again.");
       }
     } finally {
@@ -215,6 +220,7 @@ export default function PaywallScreen() {
       Alert.alert("Admin required", "Ask your organisation admin to start the trial.");
       return;
     }
+    posthog.capture("trial_start_tapped");
     setStartingTrial(true);
     try {
       const token = await user.getIdToken();
@@ -229,6 +235,7 @@ export default function PaywallScreen() {
         return;
       }
       await refreshOrgPlan();
+      posthog.capture("trial_started");
       Alert.alert("Trial Started!", "Your organisation has 7 days of Pro access for free. No payment needed.");
     } catch {
       Alert.alert("Error", "Could not start trial. Please try again.");
@@ -243,6 +250,7 @@ export default function PaywallScreen() {
 
   const handleRestore = async () => {
     if (!orgId || role !== "admin" || Platform.OS === "web" || isExpoGo || __DEV__) return;
+    posthog.capture("restore_purchases_tapped");
     setRestoring(true);
     try {
       const Purchases = (await import("react-native-purchases")).default;

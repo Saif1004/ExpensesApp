@@ -26,6 +26,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
+import { usePostHog } from "posthog-react-native";
+import { useRouter } from "expo-router";
 import { db } from "../firebase/firebaseConfig";
 import { useAuth } from "../context/AuthProvider";
 import { ThemedText } from "../../components/themed-text";
@@ -41,6 +43,13 @@ type UserItem = {
   role?: string;
   status?: string;
   budgetLimit?: number | null;
+  departmentId?: string | null;
+  departmentName?: string | null;
+};
+
+type Department = {
+  id: string;
+  name: string;
 };
 
 function getInitials(displayName?: string, email?: string): string {
@@ -55,8 +64,10 @@ function getInitials(displayName?: string, email?: string): string {
 
 export default function AdminUsers() {
 
-  const { employeeLimit, orgPlan, orgId, user, refreshMembership } = useAuth();
+  const { employeeLimit, orgPlan, orgId, user, refreshMembership, isBusiness } = useAuth();
   const { tokens: t } = useTheme();
+  const posthog = usePostHog();
+  const router  = useRouter();
 
   const [users, setUsers]                   = useState<UserItem[]>([]);
   const [approvedCount, setApprovedCount]   = useState(0);
@@ -73,8 +84,23 @@ export default function AdminUsers() {
   const [savingBudget,  setSavingBudget]  = useState(false);
   const customRef = useRef<TextInput>(null);
 
+  // department state
+  const [departments,     setDepartments]     = useState<Department[]>([]);
+  const [deptModalUser,   setDeptModalUser]   = useState<UserItem | null>(null);
+  const [savingDept,      setSavingDept]      = useState(false);
+
   // refresh role on mount so newly promoted admins get access right away
   useEffect(() => { refreshMembership(); }, []);
+
+  // load departments once on mount for business orgs
+  useEffect(() => {
+    if (!orgId || !isBusiness) return;
+    getDocs(query(collection(db, "departments"), where("orgId", "==", orgId)))
+      .then(snap => {
+        setDepartments(snap.docs.map(d => ({ id: d.id, name: d.data().name })));
+      })
+      .catch(() => {});
+  }, [orgId, isBusiness]);
 
   // fetches the member list for the current tab
 
@@ -100,13 +126,15 @@ export default function AdminUsers() {
       const list: UserItem[] = snap.docs.map((docSnap) => {
         const m = docSnap.data();
         return {
-          membershipId: docSnap.id,
-          userId:       m.userId,
-          role:         m.role,
-          status:       m.status,
-          displayName:  m.displayName,
-          email:        m.email,
-          budgetLimit:  typeof m.budgetLimit === "number" ? m.budgetLimit : null,
+          membershipId:   docSnap.id,
+          userId:         m.userId,
+          role:           m.role,
+          status:         m.status,
+          displayName:    m.displayName,
+          email:          m.email,
+          budgetLimit:    typeof m.budgetLimit === "number" ? m.budgetLimit : null,
+          departmentId:   m.departmentId ?? null,
+          departmentName: m.departmentName ?? null,
         };
       });
 
@@ -168,6 +196,7 @@ export default function AdminUsers() {
         return;
       }
       await updateDoc(doc(db, "memberships", membershipId), { status: "approved" });
+      posthog.capture("member_request_approved");
 
       // ping the employee with a notification — fire and forget
       const notifyUrl = process.env.EXPO_PUBLIC_NOTIFY_MEMBERSHIP_STATUS_URL;
@@ -194,6 +223,7 @@ export default function AdminUsers() {
   const rejectUser = async (membershipId: string) => {
     try {
       await updateDoc(doc(db, "memberships", membershipId), { status: "rejected" });
+      posthog.capture("member_request_rejected");
 
       // same notification flow for rejection
       const notifyUrl = process.env.EXPO_PUBLIC_NOTIFY_MEMBERSHIP_STATUS_URL;
@@ -253,6 +283,7 @@ export default function AdminUsers() {
       await updateDoc(doc(db, "memberships", budgetUser.membershipId), {
         budgetLimit: value
       });
+      posthog.capture("budget_limit_set", { limit: value ?? "removed" });
       closeBudgetModal();
       loadUsers(true);
     } catch {
@@ -282,6 +313,28 @@ export default function AdminUsers() {
         }
       ]
     );
+  };
+
+  // open the department picker for an approved member
+  const openDeptModal = (u: UserItem) => setDeptModalUser(u);
+  const closeDeptModal = () => setDeptModalUser(null);
+
+  // save department selection to the membership doc
+  const saveDepartment = async (dept: Department | null) => {
+    if (!deptModalUser) return;
+    setSavingDept(true);
+    try {
+      await updateDoc(doc(db, "memberships", deptModalUser.membershipId), {
+        departmentId:   dept?.id ?? null,
+        departmentName: dept?.name ?? null,
+      });
+      closeDeptModal();
+      loadUsers(true);
+    } catch {
+      Alert.alert("Error", "Could not save department.");
+    } finally {
+      setSavingDept(false);
+    }
   };
 
   // filter the list by the search query
@@ -546,7 +599,48 @@ export default function AdminUsers() {
       paddingVertical: 15,
       alignItems: "center"
     },
-    saveBtnText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" }
+    saveBtnText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
+
+    // department row styles
+    deptRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      paddingHorizontal: 14,
+      paddingBottom: 12,
+    },
+    deptBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: t.accentSurface,
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+    },
+    deptBadgeText: { color: t.accent, fontSize: 11, fontWeight: "600" },
+    deptChangeBtn: {
+      backgroundColor: t.surfaceAlt,
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+    },
+    deptChangeBtnText: { color: t.textSecondary, fontSize: 11, fontWeight: "600" },
+    deptOptionRow: {
+      paddingVertical: 14,
+      paddingHorizontal: 4,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: t.border,
+    },
+    deptOptionText: { color: t.text, fontSize: 15 },
+    deptOptionNone: { color: t.textSecondary, fontSize: 15, fontStyle: "italic" },
+    deptUpgradeRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: 14,
+      paddingBottom: 12,
+    },
+    deptUpgradeText: { color: "#A78BFA", fontSize: 11, fontWeight: "600", flex: 1 },
 
   }), [t]);
 
@@ -662,6 +756,29 @@ export default function AdminUsers() {
                   </View>
                 )}
 
+                {/* department assignment — business plan only */}
+                {tab === "approved" && (
+                  isBusiness ? (
+                    <View style={styles.deptRow}>
+                      {u.departmentName ? (
+                        <View style={styles.deptBadge}>
+                          <Ionicons name="business-outline" size={11} color={t.accent} style={{ marginRight: 4 }} />
+                          <Text style={styles.deptBadgeText}>{u.departmentName}</Text>
+                        </View>
+                      ) : null}
+                      <TouchableOpacity style={styles.deptChangeBtn} onPress={() => openDeptModal(u)} activeOpacity={0.8}>
+                        <Text style={styles.deptChangeBtnText}>{u.departmentName ? "Change" : "Assign Dept"}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <TouchableOpacity style={styles.deptUpgradeRow} onPress={() => router.push("/plans")} activeOpacity={0.8}>
+                      <Ionicons name="lock-closed" size={11} color="#7C3AED" />
+                      <Text style={styles.deptUpgradeText}>Departments — Upgrade to Business</Text>
+                      <Ionicons name="chevron-forward" size={11} color="#7C3AED" />
+                    </TouchableOpacity>
+                  )
+                )}
+
                 {tab === "pending" && (
                   <View style={styles.buttons}>
                     <TouchableOpacity style={styles.approveBtn} onPress={() => approveUser(u.membershipId)}>
@@ -680,6 +797,48 @@ export default function AdminUsers() {
           <View style={{ height: 40 }} />
         </ScrollView>
       )}
+
+      {/* department picker modal */}
+      <Modal visible={!!deptModalUser} animationType="slide" transparent onRequestClose={closeDeptModal}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={closeDeptModal} />
+          <View style={styles.modalSheet}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.modalHeader}>
+              <ThemedText style={styles.modalTitle}>Assign Department</ThemedText>
+              <TouchableOpacity onPress={closeDeptModal} hitSlop={12}>
+                <Ionicons name="close" size={22} color={t.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <ThemedText style={styles.modalSubtitle}>
+              Pick a department for {deptModalUser?.displayName || deptModalUser?.email || "this user"}.
+            </ThemedText>
+            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+              {/* none option */}
+              <TouchableOpacity
+                style={styles.deptOptionRow}
+                onPress={() => saveDepartment(null)}
+                disabled={savingDept}
+                activeOpacity={0.7}
+              >
+                <ThemedText style={styles.deptOptionNone}>None (remove department)</ThemedText>
+              </TouchableOpacity>
+              {departments.map(dept => (
+                <TouchableOpacity
+                  key={dept.id}
+                  style={styles.deptOptionRow}
+                  onPress={() => saveDepartment(dept)}
+                  disabled={savingDept}
+                  activeOpacity={0.7}
+                >
+                  <ThemedText style={styles.deptOptionText}>{dept.name}</ThemedText>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            {savingDept && <ActivityIndicator color={t.accent} style={{ marginTop: 12 }} />}
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* budget override modal */}
       <Modal visible={!!budgetUser} animationType="slide" transparent onRequestClose={closeBudgetModal}>

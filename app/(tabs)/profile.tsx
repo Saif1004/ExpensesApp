@@ -1,3 +1,4 @@
+import { usePostHog } from "posthog-react-native";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -195,8 +196,9 @@ function MenuRow({
 export default function ProfileScreen() {
 
   const router = useRouter();
+  const posthog = usePostHog();
   const insets = useSafeAreaInsets();
-  const { role, orgPlan, trialDaysLeft, orgId, refreshMembership } = useAuth();
+  const { role, orgPlan, trialDaysLeft, orgId, refreshMembership, isBusiness } = useAuth();
   const { tokens: t, mode, toggleTheme } = useTheme();
   const isDark = mode === "dark";
   const [refreshingRole, setRefreshingRole] = useState(false);
@@ -326,6 +328,8 @@ export default function ProfileScreen() {
   const logout = async () => {
     try {
       setLoggingOut(true);
+      posthog.capture("user_signed_out");
+      posthog.reset();
       unsubscribeAll();
       await signOut(auth);
       router.replace("/");
@@ -379,6 +383,7 @@ export default function ProfileScreen() {
       }
       await updateDoc(doc(db, "organisations", orgId), { inviteCode: newCode });
       setInviteCode(newCode);
+      posthog.capture("invite_code_generated");
     } catch (err: any) {
       console.error("Generate code error:", err);
       Alert.alert("Error", err?.message ?? "Could not generate a code. Try again.");
@@ -394,6 +399,7 @@ export default function ProfileScreen() {
       await Share.share({
         message: `Join our organisation on Claimio!\n\nInvite code: ${formatted}\n\nDownload Claimio, tap "Join Organisation" and enter this code.`
       });
+      posthog.capture("invite_code_shared");
     } catch {
       console.log("Share cancelled");
     }
@@ -862,11 +868,14 @@ export default function ProfileScreen() {
         {/* plan card */}
         <TouchableOpacity
           style={styles.planCard}
-          onPress={() => router.push(
-            orgPlan === "pro" || orgPlan === "business"
-              ? "/manage-subscription"
-              : "/plans"
-          )}
+          onPress={() => {
+            posthog.capture("subscription_upgrade_tapped", { current_plan: orgPlan });
+            router.push(
+              orgPlan === "pro" || orgPlan === "business"
+                ? "/manage-subscription"
+                : "/plans"
+            );
+          }}
           activeOpacity={0.8}
         >
           <View style={styles.planCardIcon}>
@@ -957,6 +966,13 @@ export default function ProfileScreen() {
                 label="Manage Categories"
                 onPress={() => router.push("../admin/manage-categories")}
               />
+              {isBusiness && (
+                <MenuRow
+                  icon="business-outline"
+                  label="Manage Departments"
+                  onPress={() => router.push("../admin/manage-departments")}
+                />
+              )}
               <MenuRow
                 icon="card-outline"
                 label="Payment Method"

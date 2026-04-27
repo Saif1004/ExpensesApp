@@ -31,6 +31,7 @@ import {
   PieChart
 } from "react-native-chart-kit";
 
+import { usePostHog } from "posthog-react-native";
 import { Ionicons } from "@expo/vector-icons";
 import PaywallScreen from "../../components/paywall-screen";
 import { ThemedText } from "../../components/themed-text";
@@ -117,6 +118,7 @@ function filterByPeriod(claims: Claim[], period: Period): Claim[] {
 
 export default function AnalyticsScreen() {
   const { user, role, isPro, isBusiness, orgId, orgCategories } = useAuth();
+  const posthog = usePostHog();
   const { tokens: t, mode } = useTheme();
 
   const [loading, setLoading]               = useState(true);
@@ -301,6 +303,7 @@ export default function AnalyticsScreen() {
 
   // calls the ai endpoint to generate spending insights
   async function generateAIInsights() {
+    posthog.capture("ai_insights_generated", { period, scope });
     try {
       setAiLoading(true);
       if (!user) return;
@@ -394,6 +397,7 @@ export default function AnalyticsScreen() {
   }
 
   async function exportCSV() {
+    posthog.capture("analytics_export_triggered", { format: "csv", period, scope });
     try {
       const cs = await getExportClaims();
       const rows = rowData(cs).map(rowToCSV);
@@ -410,6 +414,7 @@ export default function AnalyticsScreen() {
   }
 
   async function exportExcel() {
+    posthog.capture("analytics_export_triggered", { format: "excel", period, scope });
     try {
       const cs = await getExportClaims();
       const rows = rowData(cs).map(rowToXLS);
@@ -442,6 +447,7 @@ export default function AnalyticsScreen() {
 
   async function exportXero() {
     if (!requireBusiness()) return;
+    posthog.capture("analytics_export_triggered", { format: "xero", period, scope });
     try {
       const cs = await getExportClaims();
       // xero only wants approved claims
@@ -465,6 +471,7 @@ export default function AnalyticsScreen() {
 
   async function exportQuickBooks() {
     if (!requireBusiness()) return;
+    posthog.capture("analytics_export_triggered", { format: "qbo", period, scope });
     try {
       const cs = await getExportClaims();
       const approved = cs.filter(c => c.status === "approved");
@@ -485,6 +492,7 @@ export default function AnalyticsScreen() {
 
   async function exportSage() {
     if (!requireBusiness()) return;
+    posthog.capture("analytics_export_triggered", { format: "sage", period, scope });
     try {
       const cs = await getExportClaims();
       const approved = cs.filter(c => c.status === "approved");
@@ -504,6 +512,7 @@ export default function AnalyticsScreen() {
   }
 
   async function exportPDF() {
+    posthog.capture("analytics_export_triggered", { format: "pdf", period, scope });
     try {
       const cs = await getExportClaims();
       const rows = rowData(cs);

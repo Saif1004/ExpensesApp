@@ -1,3 +1,4 @@
+import { usePostHog } from "posthog-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -33,6 +34,7 @@ const DEFAULT_CATEGORIES = ["Meals", "Travel", "Technology", "Office"];
 
 export default function AddExpenseScreen() {
   const { user, orgCategories } = useAuth();
+  const posthog = usePostHog();
   const insets = useSafeAreaInsets();
   const { tokens: t, mode } = useTheme();
   const isDark = mode === "dark";
@@ -199,8 +201,17 @@ export default function AddExpenseScreen() {
 
       setHasReceipt(true);
 
+      const filledFields = [
+        data.amount !== null && data.amount !== undefined ? "amount" : null,
+        data.merchant ? "merchant" : null,
+        data.date ? "date" : null,
+        data.category ? "category" : null,
+      ].filter(Boolean);
+      posthog.capture("receipt_scanned", { fields_autofilled: filledFields.length });
+
       Alert.alert("Receipt scanned", "Receipt fields auto-filled.");
     } catch (error: any) {
+      posthog.capture("receipt_scan_failed");
       Alert.alert("Receipt Error", error?.message ?? "Something went wrong.");
       clearReceipt();
     } finally {
@@ -261,10 +272,16 @@ export default function AddExpenseScreen() {
       const result = await response.json();
 
       if (!response.ok || !result.valid) {
+        posthog.capture("expense_submission_failed", { reason: result.reason });
         Alert.alert("Policy violation", result.reason);
         return;
       }
 
+      posthog.capture("expense_submitted", {
+        amount: Number(amount),
+        category,
+        has_receipt: !!receiptUrl,
+      });
       Alert.alert("Success", "Claim submitted");
 
       setAmount("");

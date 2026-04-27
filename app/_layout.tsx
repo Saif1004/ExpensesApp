@@ -2,9 +2,10 @@ import * as Sentry from "@sentry/react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StripeProvider } from "@stripe/stripe-react-native";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
-import { Stack } from "expo-router";
+import { Stack, usePathname } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { PostHogProvider, usePostHog } from "posthog-react-native";
 
 // set up google sign-in once at startup
 GoogleSignin.configure({
@@ -32,15 +33,18 @@ import { AuthProvider, useAuth } from "./context/AuthProvider";
 import { ThemeProvider, useThemeContext } from "./context/ThemeContext";
 import { db } from "./firebase/firebaseConfig";
 
-const STRIPE_PK  = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY!;
-const TERMS_URL   = "https://doc-hosting.flycricket.io/claimio-terms-of-use/1f9b2874-dd4b-4eea-b8e0-6ad1c9ab563b/terms";
-const PRIVACY_URL = "https://doc-hosting.flycricket.io/claimio-privacy-policy/b73958a1-ae06-494d-b3a9-2c9b7183d4b3/privacy";
+const STRIPE_PK      = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY!;
+const POSTHOG_KEY    = process.env.EXPO_PUBLIC_POSTHOG_API_KEY!;
+const POSTHOG_HOST   = process.env.EXPO_PUBLIC_POSTHOG_HOST ?? "https://eu.i.posthog.com";
+const TERMS_URL      = "https://doc-hosting.flycricket.io/claimio-terms-of-use/1f9b2874-dd4b-4eea-b8e0-6ad1c9ab563b/terms";
+const PRIVACY_URL    = "https://doc-hosting.flycricket.io/claimio-privacy-policy/b73958a1-ae06-494d-b3a9-2c9b7183d4b3/privacy";
 
 // terms gate — shown once on first login, acceptance stored in firestore
 
 function TermsGate({ children }: { children: React.ReactNode }) {
   const { tokens: t } = useThemeContext();
   const { user, authLoaded } = useAuth();
+  const posthog = usePostHog();
   const [visible, setVisible]   = useState(false);
   const [declined, setDeclined] = useState(false);
   const checkedUidRef = useRef<string | null>(null);
@@ -201,6 +205,7 @@ function TermsGate({ children }: { children: React.ReactNode }) {
         setDoc(doc(db, "users", user.uid), { termsAccepted: true }, { merge: true }),
         AsyncStorage.setItem(cacheKey, "true"),
       ]);
+      posthog.capture("terms_accepted");
     }
     setVisible(false);
   };
@@ -284,6 +289,19 @@ function TermsGate({ children }: { children: React.ReactNode }) {
   );
 }
 
+// auto-tracks every screen view via expo-router's pathname
+
+function ScreenTracker() {
+  const pathname = usePathname();
+  const posthog  = usePostHog();
+
+  useEffect(() => {
+    if (pathname) posthog.screen(pathname);
+  }, [pathname]);
+
+  return null;
+}
+
 // registers push tokens when a verified user signs in
 
 function PushNotificationRegistrar() {
@@ -308,6 +326,7 @@ function AppShell() {
     <>
       <StatusBar style={tokens.statusBar === 'dark-content' ? 'dark' : 'light'} />
       <AuthProvider>
+        <ScreenTracker />
         <PushNotificationRegistrar />
         <TermsGate>
           <Stack screenOptions={{ headerShown: false }} />
@@ -319,10 +338,12 @@ function AppShell() {
 
 export default Sentry.wrap(function RootLayout() {
   return (
-    <StripeProvider publishableKey={STRIPE_PK} merchantIdentifier="merchant.com.saif1004.claimio">
-      <ThemeProvider>
-        <AppShell />
-      </ThemeProvider>
-    </StripeProvider>
+    <PostHogProvider apiKey={POSTHOG_KEY} options={{ host: POSTHOG_HOST }}>
+      <StripeProvider publishableKey={STRIPE_PK} merchantIdentifier="merchant.com.saif1004.claimio">
+        <ThemeProvider>
+          <AppShell />
+        </ThemeProvider>
+      </StripeProvider>
+    </PostHogProvider>
   );
 });
