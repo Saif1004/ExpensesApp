@@ -973,6 +973,14 @@ export default function ProfileScreen() {
                   onPress={() => router.push("../admin/manage-departments")}
                 />
               )}
+              {isBusiness && (
+                <MenuRow
+                  icon="link-outline"
+                  label="Integrations"
+                  sublabel="Slack & Teams notifications"
+                  onPress={() => router.push("../admin/integrations")}
+                />
+              )}
               <MenuRow
                 icon="card-outline"
                 label="Payment Method"

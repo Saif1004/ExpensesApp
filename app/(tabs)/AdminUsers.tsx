@@ -7,7 +7,7 @@ import {
   where
 } from "firebase/firestore";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -27,7 +27,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
 import { usePostHog } from "posthog-react-native";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { db } from "../firebase/firebaseConfig";
 import { useAuth } from "../context/AuthProvider";
 import { ThemedText } from "../../components/themed-text";
@@ -92,15 +92,19 @@ export default function AdminUsers() {
   // refresh role on mount so newly promoted admins get access right away
   useEffect(() => { refreshMembership(); }, []);
 
-  // load departments once on mount for business orgs
-  useEffect(() => {
-    if (!orgId || !isBusiness) return;
-    getDocs(query(collection(db, "departments"), where("orgId", "==", orgId)))
-      .then(snap => {
-        setDepartments(snap.docs.map(d => ({ id: d.id, name: d.data().name })));
-      })
-      .catch(() => {});
-  }, [orgId, isBusiness]);
+  // reload departments every time this screen comes into focus
+  // (handles the case where admin creates a new dept in manage-departments
+  //  and then navigates back here — without this the list stays stale)
+  useFocusEffect(
+    useCallback(() => {
+      if (!orgId || !isBusiness) return;
+      getDocs(query(collection(db, "departments"), where("orgId", "==", orgId)))
+        .then(snap => {
+          setDepartments(snap.docs.map(d => ({ id: d.id, name: d.data().name })));
+        })
+        .catch(() => {});
+    }, [orgId, isBusiness])
+  );
 
   // fetches the member list for the current tab
 

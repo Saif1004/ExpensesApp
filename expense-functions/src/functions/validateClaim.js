@@ -62,8 +62,17 @@ app.http("validateClaim", {
         purchaseDate,
         receiptUrl,
         merchant,
-        userEmail
+        userEmail,
+        claimType = "receipt",
+        mileageFrom,
+        mileageTo,
+        mileageDistance,
+        perDiemDays,
+        perDiemDestination,
       } = await request.json();
+
+      // flag whether this is a non-receipt claim type
+      const isNonReceiptClaim = claimType === "mileage" || claimType === "perdiem";
 
       // run all fields through the validators in security.js
 
@@ -164,10 +173,11 @@ app.http("validateClaim", {
       });
 
       // check receipt requirement if the admin has configured one
+      // mileage and per diem claims never have receipts — skip this check for them
 
       const hasReceipt = !!receiptUrl;
 
-      if (receiptThreshold !== null && numericAmount > receiptThreshold && !hasReceipt)
+      if (!isNonReceiptClaim && receiptThreshold !== null && numericAmount > receiptThreshold && !hasReceipt)
         return secureResponse({ valid: false, reason: `Receipt required for expenses above £${receiptThreshold}.` }, 400);
 
       // block if the amount exceeds a per-category cap the admin set
@@ -261,7 +271,49 @@ Reply with JSON only — no explanation outside the JSON:
         }
       }
 
+      // --- Duplicate detection ---
+      // Flag if same user submitted the same merchant + amount within the last 30 days
+      // Only applies to receipt claims — mileage and per-diem can legitimately repeat
+      if (!claimType || claimType === "receipt") {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        const dupSnap = await db.collection("claims")
+          .where("userId", "==", userId)
+          .where("merchant", "==", cleanMerchant)
+          .where("amount", "==", numericAmount)
+          .limit(5)
+          .get();
+
+        const recentDup = dupSnap.docs.find(d => {
+          const createdAt = d.data().createdAt?.toDate?.() ?? null;
+          return createdAt && createdAt >= thirtyDaysAgo;
+        });
+
+        if (recentDup) {
+          return secureResponse({
+            valid: false,
+            reason: `Possible duplicate: you already submitted a £${numericAmount.toFixed(2)} claim at ${cleanMerchant} within the last 30 days (ref: ${recentDup.id.slice(0,8).toUpperCase()}). If this is a different expense, add a note to distinguish it.`
+          }, 400);
+        }
+      }
+
       // all checks passed, write the claim to firestore
+
+      // build the extra fields for mileage / per diem claim types
+      const claimTypeExtras = {};
+      if (claimType && claimType !== "receipt") {
+        claimTypeExtras.claimType = claimType;
+      }
+      if (claimType === "mileage") {
+        if (mileageFrom)    claimTypeExtras.mileageFrom     = String(mileageFrom).slice(0, 200);
+        if (mileageTo)      claimTypeExtras.mileageTo       = String(mileageTo).slice(0, 200);
+        if (mileageDistance != null) claimTypeExtras.mileageDistance = Number(mileageDistance) || 0;
+      }
+      if (claimType === "perdiem") {
+        if (perDiemDays != null)        claimTypeExtras.perDiemDays        = Number(perDiemDays) || 0;
+        if (perDiemDestination) claimTypeExtras.perDiemDestination = String(perDiemDestination).slice(0, 200);
+      }
 
       const claimRef = await db.collection("claims").add({
         userId,
@@ -276,6 +328,8 @@ Reply with JSON only — no explanation outside the JSON:
         status: "pending",
         departmentId,
         departmentName,
+        checksum: `${userId}_${cleanMerchant}_${numericAmount}_${purchaseDate}`,
+        ...claimTypeExtras,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
@@ -316,6 +370,34 @@ Reply with JSON only — no explanation outside the JSON:
         } catch (notifyErr) {
           context.warn("Admin notification failed:", notifyErr?.message);
         }
+
+        // fire Slack / Teams webhook if the org has one configured
+        try {
+          const orgWebhookDoc = await db.collection('organisations').doc(orgId).get();
+          const orgWebhookData = orgWebhookDoc.exists ? orgWebhookDoc.data() : {};
+          const slackUrl = orgWebhookData.slackWebhookUrl || null;
+          const teamsUrl = orgWebhookData.teamsWebhookUrl || null;
+          if (slackUrl || teamsUrl) {
+            const fields = [
+              ['Amount', `£${numericAmount.toFixed(2)}`],
+              ['Merchant', cleanMerchant],
+              ['Category', category],
+              ['Employee', cleanUserEmail],
+              ...(departmentName ? [['Department', departmentName]] : []),
+            ];
+            if (slackUrl) fetch(slackUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+              text: `🧾 New Claim: £${numericAmount.toFixed(2)} at ${cleanMerchant}`,
+              blocks: [
+                { type: 'section', text: { type: 'mrkdwn', text: '*🧾 New Expense Claim*' } },
+                { type: 'section', fields: fields.map(([l, v]) => ({ type: 'mrkdwn', text: `*${l}*\n${v}` })) },
+              ],
+            }) }).catch(() => {});
+            if (teamsUrl) fetch(teamsUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+              '@type': 'MessageCard', '@context': 'http://schema.org/extensions', themeColor: '6366F1', summary: 'New Expense Claim',
+              sections: [{ activityTitle: `🧾 New Expense Claim — £${numericAmount.toFixed(2)} at ${cleanMerchant}`, facts: fields.map(([n, v]) => ({ name: n, value: v })) }],
+            }) }).catch(() => {});
+          }
+        } catch { /* non-fatal */ }
       })();
 
       // done, send back the claim id with security headers

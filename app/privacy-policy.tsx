@@ -134,7 +134,7 @@ export default function PrivacyPolicyScreen() {
         </View>
 
         <ThemedText style={styles.title}>Privacy Policy</ThemedText>
-        <ThemedText style={styles.subtitle}>Last updated: March 2026</ThemedText>
+        <ThemedText style={styles.subtitle}>Last updated: April 2026</ThemedText>
 
         <View style={styles.card}>
           <ThemedText style={styles.sectionHeading}>Data We Collect</ThemedText>
@@ -153,7 +153,7 @@ export default function PrivacyPolicyScreen() {
         <View style={styles.card}>
           <ThemedText style={styles.sectionHeading}>Data Storage & Security</ThemedText>
           <ThemedText style={styles.body}>
-            All data is stored in Firebase (Google Cloud) with encryption at rest and in transit. Receipt images are stored in Firebase Cloud Storage. Access is controlled by Firebase Security Rules that restrict each user to their own data.
+            All data is stored in Firebase (Google Cloud) with encryption at rest and in transit. Receipt images are stored securely in Azure Blob Storage. Access is controlled by Firebase Security Rules that restrict each user to their own data.
           </ThemedText>
         </View>
 
@@ -167,7 +167,14 @@ export default function PrivacyPolicyScreen() {
         <View style={styles.card}>
           <ThemedText style={styles.sectionHeading}>Third-Party Services</ThemedText>
           <ThemedText style={styles.body}>
-            Claimio uses Firebase (authentication & database), Stripe (payments), RevenueCat (subscriptions), and Microsoft Azure (AI processing). Each service operates under their own privacy policies and data processing agreements.
+            Claimio uses Firebase (authentication & database), Stripe (payments), RevenueCat (subscriptions), Microsoft Azure (AI processing & receipt storage), PostHog (anonymous usage analytics & crash reporting), and Sentry (error monitoring). Each service operates under their own privacy policies and data processing agreements.
+          </ThemedText>
+        </View>
+
+        <View style={styles.card}>
+          <ThemedText style={styles.sectionHeading}>Analytics & Crash Reporting</ThemedText>
+          <ThemedText style={styles.body}>
+            We use PostHog to collect anonymous usage analytics (screen views, feature usage) to improve the app. We use Sentry to monitor crashes and errors. No personally identifiable information is included in these reports. You can contact us to opt out of analytics collection.
           </ThemedText>
         </View>
 

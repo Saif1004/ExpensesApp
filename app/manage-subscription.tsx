@@ -425,7 +425,7 @@ export default function ManageSubscriptionScreen() {
             <View style={styles.actionCard}>
               <ActionRow
                 icon="storefront-outline"
-                label="Manage in Play Store"
+                label={`Manage in ${Platform.OS === "ios" ? "App Store" : "Play Store"}`}
                 sublabel="Cancel, pause or change your plan"
                 onPress={handleManageInStore}
                 styles={styles}
@@ -467,7 +467,7 @@ export default function ManageSubscriptionScreen() {
         <View style={styles.pricingBox}>
           <Ionicons name="information-circle-outline" size={16} color={t.textTertiary} style={{ marginRight: 8, marginTop: 1 }} />
           <ThemedText style={styles.pricingText}>
-            Subscriptions auto-renew. Pricing is per organisation — your whole team gets access. Cancel anytime via the Play Store.
+            Subscriptions auto-renew. Pricing is per organisation — your whole team gets access. Cancel anytime via the {Platform.OS === "ios" ? "App Store" : "Play Store"}.
           </ThemedText>
         </View>
 

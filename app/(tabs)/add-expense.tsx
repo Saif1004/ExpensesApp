@@ -19,18 +19,40 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import {
+  collection,
+  getDocs,
+  addDoc,
+  deleteDoc,
+  doc,
+  query,
+  where,
+  orderBy,
+  serverTimestamp,
+} from "firebase/firestore";
 
 import { ThemedText } from "../../components/themed-text";
 import { ThemedView } from "../../components/themed-view";
 import { IconSymbol } from "../../components/ui/icon-symbol";
 import { useAuth } from "../context/AuthProvider";
 import { useTheme } from "../../hooks/useTheme";
+import { db } from "../firebase/firebaseConfig";
 
 const AZURE_VALIDATE_URL = process.env.EXPO_PUBLIC_AZURE_VALIDATE_URL!;
 const AZURE_OCR_URL = process.env.EXPO_PUBLIC_AZURE_OCR_URL!;
 const AZURE_UPLOAD_URL = process.env.EXPO_PUBLIC_UPLOAD_URL!;
 
 const DEFAULT_CATEGORIES = ["Meals", "Travel", "Technology", "Office"];
+
+type ClaimType = "receipt" | "mileage" | "perdiem";
+
+type Template = {
+  id: string;
+  name: string;
+  merchant: string;
+  amount: string;
+  category: string;
+};
 
 export default function AddExpenseScreen() {
   const { user, orgCategories } = useAuth();
@@ -42,6 +64,10 @@ export default function AddExpenseScreen() {
   // fall back to defaults if the org hasn't set custom categories yet
   const dynamicCategories = orgCategories.length > 0 ? orgCategories : DEFAULT_CATEGORIES;
 
+  // ── claim type ──────────────────────────────────────────────────────────────
+  const [claimType, setClaimType] = useState<ClaimType>("receipt");
+
+  // ── receipt form ────────────────────────────────────────────────────────────
   const [amount, setAmount] = useState("");
   const [merchant, setMerchant] = useState("");
   const [category, setCategory] = useState("Meals");
@@ -51,11 +77,151 @@ export default function AddExpenseScreen() {
   const [receiptPreview, setReceiptPreview] = useState("");
   const [hasReceipt, setHasReceipt] = useState(false);
 
+  // ── mileage form ────────────────────────────────────────────────────────────
+  const [mileageFrom, setMileageFrom] = useState("");
+  const [mileageTo, setMileageTo] = useState("");
+  const [mileageDistance, setMileageDistance] = useState("");
+  const [mileagePurpose, setMileagePurpose] = useState("");
+
+  // ── per diem form ───────────────────────────────────────────────────────────
+  const [perDiemDestination, setPerDiemDestination] = useState("");
+  const [perDiemDays, setPerDiemDays] = useState("");
+
+  // ── templates ───────────────────────────────────────────────────────────────
+  const [templates, setTemplates] = useState<Template[]>([]);
+
+  // ── ui state ─────────────────────────────────────────────────────────────────
   const [saving, setSaving] = useState(false);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // ── derived calculated amounts ───────────────────────────────────────────────
+  const mileageCalculated = (parseFloat(mileageDistance || "0") * 0.45).toFixed(2);
+  const perDiemCalculated = (parseFloat(perDiemDays || "0") * 25).toFixed(2);
+
+  // keep amount state in sync with mileage/per diem calculations
+  useEffect(() => {
+    if (claimType === "mileage") {
+      setAmount(mileageCalculated);
+    }
+  }, [mileageDistance, claimType]);
+
+  useEffect(() => {
+    if (claimType === "perdiem") {
+      setAmount(perDiemCalculated);
+    }
+  }, [perDiemDays, claimType]);
+
+  // when switching claim type reset amount to avoid stale values
+  const handleClaimTypeChange = (type: ClaimType) => {
+    setClaimType(type);
+    if (type === "receipt") {
+      setAmount("");
+    } else if (type === "mileage") {
+      setAmount(mileageCalculated);
+      setCategory("Travel");
+    } else if (type === "perdiem") {
+      setAmount(perDiemCalculated);
+      setCategory("Travel");
+    }
+  };
+
+  // ── template helpers ─────────────────────────────────────────────────────────
+  const loadTemplates = async () => {
+    if (!user) return;
+    try {
+      const q = query(
+        collection(db, "expenseTemplates"),
+        where("userId", "==", user.uid),
+        orderBy("createdAt", "desc")
+      );
+      const snap = await getDocs(q);
+      const loaded: Template[] = snap.docs.map((d) => ({
+        id: d.id,
+        name: d.data().name,
+        merchant: d.data().merchant,
+        amount: String(d.data().amount),
+        category: d.data().category,
+      }));
+      setTemplates(loaded);
+    } catch (e) {
+      // silently ignore — templates are non-critical
+    }
+  };
+
+  useEffect(() => {
+    loadTemplates();
+  }, [user]);
+
+  const applyTemplate = (tpl: Template) => {
+    setMerchant(tpl.merchant);
+    setAmount(tpl.amount);
+    setCategory(tpl.category);
+  };
+
+  const saveTemplate = async (templateName: string) => {
+    if (!user) return;
+    try {
+      await addDoc(collection(db, "expenseTemplates"), {
+        userId: user.uid,
+        name: templateName,
+        merchant: merchant.trim(),
+        amount,
+        category,
+        createdAt: serverTimestamp(),
+      });
+      posthog.capture("template_saved");
+      await loadTemplates();
+    } catch (e: any) {
+      Alert.alert("Error", "Could not save template.");
+    }
+  };
+
+  const promptSaveTemplate = () => {
+    if (Platform.OS === "ios") {
+      Alert.prompt(
+        "Name this template",
+        "Give this template a short name for quick access.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Save",
+            onPress: (name) => {
+              const finalName = name?.trim() || merchant.trim() || "Template";
+              saveTemplate(finalName);
+            },
+          },
+        ],
+        "plain-text",
+        merchant.trim()
+      );
+    } else {
+      // Alert.prompt is iOS-only — use merchant name on Android
+      saveTemplate(merchant.trim() || "Template");
+    }
+  };
+
+  const deleteTemplate = (tpl: Template) => {
+    Alert.alert("Delete Template", "Remove this template?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await deleteDoc(doc(db, "expenseTemplates", tpl.id));
+            await loadTemplates();
+          } catch {
+            Alert.alert("Error", "Could not delete template.");
+          }
+        },
+      },
+    ]);
+  };
+
+  // ── receipt helpers ──────────────────────────────────────────────────────────
   const validateDateFormat = (date: string) => {
     return /^\d{4}-\d{2}-\d{2}$/.test(date);
   };
@@ -219,29 +385,53 @@ export default function AddExpenseScreen() {
     }
   };
 
+  // ── submit ───────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
+    setSubmitError(null);
     if (!user) {
       Alert.alert("Not logged in");
       return;
     }
 
-    if (!amount || isNaN(Number(amount))) {
-      Alert.alert("Invalid amount");
-      return;
-    }
+    // type-specific validation
+    if (claimType === "mileage") {
+      if (!mileagePurpose.trim()) {
+        Alert.alert("Enter a purpose / description");
+        return;
+      }
+      if (!parseFloat(mileageDistance) || parseFloat(mileageDistance) <= 0) {
+        Alert.alert("Enter a valid distance");
+        return;
+      }
+    } else if (claimType === "perdiem") {
+      if (!perDiemDestination.trim()) {
+        Alert.alert("Enter a destination");
+        return;
+      }
+      if (!parseFloat(perDiemDays) || parseFloat(perDiemDays) <= 0) {
+        Alert.alert("Enter a valid number of days");
+        return;
+      }
+    } else {
+      // receipt mode
+      if (!amount || isNaN(Number(amount))) {
+        Alert.alert("Invalid amount");
+        return;
+      }
 
-    if (!merchant.trim()) {
-      Alert.alert("Enter merchant");
-      return;
+      if (!merchant.trim()) {
+        Alert.alert("Enter merchant");
+        return;
+      }
+
+      if (hasReceipt && !receiptUrl) {
+        Alert.alert("Receipt missing");
+        return;
+      }
     }
 
     if (!validateDateFormat(purchaseDate)) {
       Alert.alert("Use YYYY-MM-DD date");
-      return;
-    }
-
-    if (hasReceipt && !receiptUrl) {
-      Alert.alert("Receipt missing");
       return;
     }
 
@@ -251,45 +441,103 @@ export default function AddExpenseScreen() {
       // fresh token for the validate call
       const idToken = await user.getIdToken();
 
+      // build the effective merchant and amount for mileage/perdiem
+      const effectiveMerchant =
+        claimType === "mileage"
+          ? mileagePurpose.trim()
+          : claimType === "perdiem"
+          ? perDiemDestination.trim()
+          : merchant.trim();
+
+      const effectiveAmount =
+        claimType === "mileage"
+          ? parseFloat(mileageCalculated)
+          : claimType === "perdiem"
+          ? parseFloat(perDiemCalculated)
+          : Number(amount);
+
+      const body: Record<string, unknown> = {
+        amount: effectiveAmount,
+        merchant: effectiveMerchant,
+        category: claimType !== "receipt" ? "Travel" : category,
+        purchaseDate,
+        hasReceipt: claimType === "receipt" ? !!receiptUrl : false,
+        receiptUrl: claimType === "receipt" ? receiptUrl || "" : "",
+        userId: user.uid,
+        userEmail: user.email,
+        claimType,
+      };
+
+      if (claimType === "mileage") {
+        body.mileageFrom = mileageFrom.trim();
+        body.mileageTo = mileageTo.trim();
+        body.mileageDistance = parseFloat(mileageDistance);
+      }
+
+      if (claimType === "perdiem") {
+        body.perDiemDays = parseFloat(perDiemDays);
+        body.perDiemDestination = perDiemDestination.trim();
+      }
+
       const response = await fetch(AZURE_VALIDATE_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${idToken}`,
         },
-        body: JSON.stringify({
-          amount: Number(amount),
-          merchant: merchant.trim(),
-          category,
-          purchaseDate,
-          hasReceipt: !!receiptUrl,
-          receiptUrl: receiptUrl || "",
-          userId: user.uid,
-          userEmail: user.email,
-        }),
+        body: JSON.stringify(body),
       });
 
       const result = await response.json();
 
       if (!response.ok || !result.valid) {
         posthog.capture("expense_submission_failed", { reason: result.reason });
-        Alert.alert("Policy violation", result.reason);
+        setSubmitError(result.reason ?? "Your claim could not be submitted. Please check the details and try again.");
         return;
       }
 
-      posthog.capture("expense_submitted", {
-        amount: Number(amount),
-        category,
-        has_receipt: !!receiptUrl,
-      });
+      // clear any previous error on success
+      setSubmitError(null);
+
+      if (claimType === "mileage") {
+        posthog.capture("mileage_claim_submitted", { distance: mileageDistance });
+      } else if (claimType === "perdiem") {
+        posthog.capture("perdiem_claim_submitted", { days: perDiemDays });
+      } else {
+        posthog.capture("expense_submitted", {
+          amount: Number(amount),
+          category,
+          has_receipt: !!receiptUrl,
+        });
+      }
+
       Alert.alert("Success", "Claim submitted");
 
+      // reset form
       setAmount("");
       setMerchant("");
       setPurchaseDate("");
       setCategory(dynamicCategories[0] ?? "Meals");
       setHasReceipt(false);
       clearReceipt();
+      setMileageFrom("");
+      setMileageTo("");
+      setMileageDistance("");
+      setMileagePurpose("");
+      setPerDiemDestination("");
+      setPerDiemDays("");
+
+      // offer to save a template (receipt mode only)
+      if (claimType === "receipt") {
+        Alert.alert(
+          "Save as Template?",
+          "Save this expense as a quick-fill template for future claims.",
+          [
+            { text: "Not now", style: "cancel" },
+            { text: "Save", onPress: () => promptSaveTemplate() },
+          ]
+        );
+      }
     } catch (err: any) {
       Alert.alert("Error", err?.message ?? "Something went wrong.");
     } finally {
@@ -297,6 +545,7 @@ export default function AddExpenseScreen() {
     }
   };
 
+  // ── styles ───────────────────────────────────────────────────────────────────
   const styles = useMemo(() => StyleSheet.create({
     container: {
       paddingHorizontal: 20,
@@ -356,6 +605,53 @@ export default function AddExpenseScreen() {
         shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.07, shadowRadius: 10, elevation: 3
       })
+    },
+
+    // claim type pill selector
+    claimTypeRow: {
+      flexDirection: "row",
+      backgroundColor: t.surfaceAlt,
+      borderRadius: 999,
+      padding: 4,
+      marginBottom: 22,
+    },
+    claimTypeTab: {
+      flex: 1,
+      paddingVertical: 9,
+      alignItems: "center",
+      borderRadius: 999,
+    },
+    claimTypeTabActive: {
+      backgroundColor: t.accent,
+    },
+    claimTypeTabText: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: t.textSecondary,
+    },
+    claimTypeTabTextActive: {
+      color: "#FFFFFF",
+    },
+
+    // templates
+    templatesScroll: {
+      marginBottom: 22,
+    },
+    templateChip: {
+      backgroundColor: t.surface,
+      borderRadius: 999,
+      paddingHorizontal: 14,
+      paddingVertical: 7,
+      marginRight: 8,
+      ...(isDark ? {} : {
+        shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.06, shadowRadius: 4, elevation: 2
+      })
+    },
+    templateChipText: {
+      color: t.text,
+      fontSize: 13,
+      fontWeight: "600",
     },
 
     // receipt toggle switch
@@ -459,6 +755,23 @@ export default function AddExpenseScreen() {
       paddingVertical: 14
     },
 
+    // calculated amount display
+    calcRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: t.accentSurface,
+      borderRadius: 999,
+      paddingHorizontal: 16,
+      paddingVertical: 13,
+      marginBottom: 10,
+      gap: 8,
+    },
+    calcText: {
+      color: t.accent,
+      fontSize: 15,
+      fontWeight: "700",
+    },
+
     // category dropdown
     dropdownTrigger: {
       paddingVertical: 14
@@ -516,6 +829,24 @@ export default function AddExpenseScreen() {
       fontSize: 16,
       letterSpacing: -0.2
     },
+    errorBanner: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      backgroundColor: "#FEF2F2",
+      borderWidth: 1,
+      borderColor: "#FECACA",
+      borderRadius: 12,
+      padding: 12,
+      marginTop: 10,
+      marginBottom: 4,
+    },
+    errorBannerText: {
+      color: "#DC2626",
+      fontSize: 13,
+      lineHeight: 18,
+      flex: 1,
+      fontWeight: "500",
+    },
 
     // modals
     modalOverlay: {
@@ -542,6 +873,14 @@ export default function AddExpenseScreen() {
       alignItems: "center"
     }
   }), [t, isDark]);
+
+  // ── submit button label ───────────────────────────────────────────────────────
+  const submitLabel =
+    claimType === "mileage"
+      ? "Submit Mileage Claim"
+      : claimType === "perdiem"
+      ? "Submit Per Diem Claim"
+      : "Submit Claim";
 
   return (
     <KeyboardAvoidingView
@@ -570,162 +909,410 @@ export default function AddExpenseScreen() {
               </View>
             </View>
 
-            {/* receipt section */}
-            <View style={styles.sectionLabel}>
-              <Ionicons name="camera-outline" size={14} color={t.textTertiary} style={{ marginRight: 6 }} />
-              <ThemedText style={styles.sectionLabelText}>RECEIPT</ThemedText>
+            {/* claim type selector */}
+            <View style={styles.claimTypeRow}>
+              {(["receipt", "mileage", "perdiem"] as ClaimType[]).map((type) => {
+                const label = type === "receipt" ? "Receipt" : type === "mileage" ? "Mileage" : "Per Diem";
+                const isActive = claimType === type;
+                return (
+                  <TouchableOpacity
+                    key={type}
+                    style={[styles.claimTypeTab, isActive && styles.claimTypeTabActive]}
+                    onPress={() => handleClaimTypeChange(type)}
+                    activeOpacity={0.8}
+                  >
+                    <ThemedText style={[styles.claimTypeTabText, isActive && styles.claimTypeTabTextActive]}>
+                      {label}
+                    </ThemedText>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
 
-            <ThemedView style={styles.card}>
-              <View style={styles.switchRow}>
-                <View style={styles.switchLabelRow}>
-                  <Ionicons name="attach-outline" size={18} color={t.accent} style={{ marginRight: 8 }} />
-                  <ThemedText style={styles.switchLabel}>Attach Receipt</ThemedText>
+            {/* templates (receipt mode, when templates exist) */}
+            {claimType === "receipt" && templates.length > 0 && (
+              <>
+                <View style={styles.sectionLabel}>
+                  <Ionicons name="bookmark-outline" size={14} color={t.textTertiary} style={{ marginRight: 6 }} />
+                  <ThemedText style={styles.sectionLabelText}>QUICK FILL</ThemedText>
                 </View>
-                <Switch
-                  value={hasReceipt}
-                  onValueChange={handleReceiptToggle}
-                  trackColor={{ false: t.border, true: t.accent }}
-                  thumbColor={hasReceipt ? "#FFFFFF" : "#FFFFFF"}
-                />
-              </View>
-
-              {hasReceipt &&
-                (receiptPreview ? (
-                  <TouchableOpacity
-                    style={styles.previewWrapper}
-                    onPress={() => setShowReceiptModal(true)}
-                    onLongPress={clearReceipt}
-                  >
-                    <Image
-                      source={{ uri: receiptPreview }}
-                      style={styles.receiptPreview}
-                    />
-                    <View style={styles.previewBanner}>
-                      <Ionicons name="eye-outline" size={14} color={t.text} style={{ marginRight: 4 }} />
-                      <ThemedText style={styles.previewHint}>
-                        Tap to view · Long press to remove
-                      </ThemedText>
-                    </View>
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity
-                    style={styles.uploadBox}
-                    onPress={pickReceipt}
-                  >
-                    {ocrLoading ? (
-                      <View style={styles.ocrLoading}>
-                        <ActivityIndicator color={t.accent} size="large" />
-                        <ThemedText style={styles.ocrText}>Scanning receipt…</ThemedText>
-                      </View>
-                    ) : (
-                      <>
-                        <View style={styles.uploadIconWrap}>
-                          <Ionicons name="camera-outline" size={36} color={t.accent} />
-                        </View>
-                        <ThemedText style={styles.uploadTitle}>Scan Receipt</ThemedText>
-                        <ThemedText style={styles.uploadSubtitle}>AI auto-fills amount, merchant & date</ThemedText>
-                      </>
-                    )}
-                  </TouchableOpacity>
-                ))}
-            </ThemedView>
-
-            {/* expense details form */}
-            <View style={styles.sectionLabel}>
-              <Ionicons name="create-outline" size={14} color={t.textTertiary} style={{ marginRight: 6 }} />
-              <ThemedText style={styles.sectionLabelText}>EXPENSE DETAILS</ThemedText>
-            </View>
-
-            <ThemedView style={styles.card}>
-
-              <View style={styles.inputWrapper}>
-                <Ionicons name="cash-outline" size={16} color={t.textTertiary} style={styles.inputIcon} />
-                <TextInput
-                  placeholder="Amount (£)"
-                  placeholderTextColor={t.textTertiary}
-                  value={amount}
-                  onChangeText={setAmount}
-                  keyboardType="decimal-pad"
-                  style={styles.input}
-                />
-              </View>
-
-              <View style={styles.inputWrapper}>
-                <Ionicons name="storefront-outline" size={16} color={t.textTertiary} style={styles.inputIcon} />
-                <TextInput
-                  placeholder="Merchant name"
-                  placeholderTextColor={t.textTertiary}
-                  value={merchant}
-                  onChangeText={setMerchant}
-                  style={styles.input}
-                />
-              </View>
-
-              <TouchableOpacity
-                style={[styles.inputWrapper, styles.dropdownTrigger]}
-                onPress={() => setShowDropdown(!showDropdown)}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="pricetag-outline" size={16} color={t.textTertiary} style={styles.inputIcon} />
-                <ThemedText style={styles.dropdownValue}>{category}</ThemedText>
-                <Ionicons
-                  name={showDropdown ? "chevron-up" : "chevron-down"}
-                  size={16}
-                  color={t.textTertiary}
-                />
-              </TouchableOpacity>
-
-              {showDropdown && (
-                <View style={styles.dropdown}>
-                  {dynamicCategories.map((cat) => (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.templatesScroll}
+                  contentContainerStyle={{ paddingBottom: 4 }}
+                >
+                  {templates.map((tpl) => (
                     <TouchableOpacity
-                      key={cat}
-                      style={[styles.dropdownItem, cat === category && styles.dropdownItemActive]}
-                      onPress={() => {
-                        setCategory(cat);
-                        setShowDropdown(false);
-                      }}
+                      key={tpl.id}
+                      style={styles.templateChip}
+                      onPress={() => applyTemplate(tpl)}
+                      onLongPress={() => deleteTemplate(tpl)}
+                      activeOpacity={0.75}
                     >
-                      <ThemedText style={[styles.dropdownItemText, cat === category && styles.dropdownItemTextActive]}>
-                        {cat}
-                      </ThemedText>
-                      {cat === category && (
-                        <Ionicons name="checkmark" size={16} color={t.accent} />
-                      )}
+                      <ThemedText style={styles.templateChipText}>{tpl.name}</ThemedText>
                     </TouchableOpacity>
                   ))}
+                </ScrollView>
+              </>
+            )}
+
+            {/* ── receipt mode ── */}
+            {claimType === "receipt" && (
+              <>
+                {/* receipt section */}
+                <View style={styles.sectionLabel}>
+                  <Ionicons name="camera-outline" size={14} color={t.textTertiary} style={{ marginRight: 6 }} />
+                  <ThemedText style={styles.sectionLabelText}>RECEIPT</ThemedText>
                 </View>
-              )}
 
-              <View style={styles.inputWrapper}>
-                <Ionicons name="calendar-outline" size={16} color={t.textTertiary} style={styles.inputIcon} />
-                <TextInput
-                  placeholder="Purchase date (YYYY-MM-DD)"
-                  placeholderTextColor={t.textTertiary}
-                  value={purchaseDate}
-                  onChangeText={setPurchaseDate}
-                  style={styles.input}
-                />
-              </View>
-
-              <TouchableOpacity
-                style={[styles.submitButton, saving && styles.submitDisabled]}
-                onPress={handleSubmit}
-                disabled={saving}
-                activeOpacity={0.85}
-              >
-                {saving ? (
-                  <ActivityIndicator color={t.accentText} />
-                ) : (
-                  <View style={styles.submitInner}>
-                    <Ionicons name="send-outline" size={16} color="#fff" style={{ marginRight: 8 }} />
-                    <ThemedText style={styles.submitText}>Submit Claim</ThemedText>
+                <ThemedView style={styles.card}>
+                  <View style={styles.switchRow}>
+                    <View style={styles.switchLabelRow}>
+                      <Ionicons name="attach-outline" size={18} color={t.accent} style={{ marginRight: 8 }} />
+                      <ThemedText style={styles.switchLabel}>Attach Receipt</ThemedText>
+                    </View>
+                    <Switch
+                      value={hasReceipt}
+                      onValueChange={handleReceiptToggle}
+                      trackColor={{ false: t.border, true: t.accent }}
+                      thumbColor={hasReceipt ? "#FFFFFF" : "#FFFFFF"}
+                    />
                   </View>
-                )}
-              </TouchableOpacity>
 
-            </ThemedView>
+                  {hasReceipt &&
+                    (receiptPreview ? (
+                      <TouchableOpacity
+                        style={styles.previewWrapper}
+                        onPress={() => setShowReceiptModal(true)}
+                        onLongPress={clearReceipt}
+                      >
+                        <Image
+                          source={{ uri: receiptPreview }}
+                          style={styles.receiptPreview}
+                        />
+                        <View style={styles.previewBanner}>
+                          <Ionicons name="eye-outline" size={14} color={t.text} style={{ marginRight: 4 }} />
+                          <ThemedText style={styles.previewHint}>
+                            Tap to view · Long press to remove
+                          </ThemedText>
+                        </View>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        style={styles.uploadBox}
+                        onPress={pickReceipt}
+                      >
+                        {ocrLoading ? (
+                          <View style={styles.ocrLoading}>
+                            <ActivityIndicator color={t.accent} size="large" />
+                            <ThemedText style={styles.ocrText}>Scanning receipt…</ThemedText>
+                          </View>
+                        ) : (
+                          <>
+                            <View style={styles.uploadIconWrap}>
+                              <Ionicons name="camera-outline" size={36} color={t.accent} />
+                            </View>
+                            <ThemedText style={styles.uploadTitle}>Scan Receipt</ThemedText>
+                            <ThemedText style={styles.uploadSubtitle}>AI auto-fills amount, merchant & date</ThemedText>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                </ThemedView>
+
+                {/* expense details form */}
+                <View style={styles.sectionLabel}>
+                  <Ionicons name="create-outline" size={14} color={t.textTertiary} style={{ marginRight: 6 }} />
+                  <ThemedText style={styles.sectionLabelText}>EXPENSE DETAILS</ThemedText>
+                </View>
+
+                <ThemedView style={styles.card}>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="cash-outline" size={16} color={t.textTertiary} style={styles.inputIcon} />
+                    <TextInput
+                      placeholder="Amount (£)"
+                      placeholderTextColor={t.textTertiary}
+                      value={amount}
+                      onChangeText={setAmount}
+                      keyboardType="decimal-pad"
+                      style={styles.input}
+                    />
+                  </View>
+
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="storefront-outline" size={16} color={t.textTertiary} style={styles.inputIcon} />
+                    <TextInput
+                      placeholder="Merchant name"
+                      placeholderTextColor={t.textTertiary}
+                      value={merchant}
+                      onChangeText={setMerchant}
+                      style={styles.input}
+                    />
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.inputWrapper, styles.dropdownTrigger]}
+                    onPress={() => setShowDropdown(!showDropdown)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="pricetag-outline" size={16} color={t.textTertiary} style={styles.inputIcon} />
+                    <ThemedText style={styles.dropdownValue}>{category}</ThemedText>
+                    <Ionicons
+                      name={showDropdown ? "chevron-up" : "chevron-down"}
+                      size={16}
+                      color={t.textTertiary}
+                    />
+                  </TouchableOpacity>
+
+                  {showDropdown && (
+                    <View style={styles.dropdown}>
+                      {dynamicCategories.map((cat) => (
+                        <TouchableOpacity
+                          key={cat}
+                          style={[styles.dropdownItem, cat === category && styles.dropdownItemActive]}
+                          onPress={() => {
+                            setCategory(cat);
+                            setShowDropdown(false);
+                          }}
+                        >
+                          <ThemedText style={[styles.dropdownItemText, cat === category && styles.dropdownItemTextActive]}>
+                            {cat}
+                          </ThemedText>
+                          {cat === category && (
+                            <Ionicons name="checkmark" size={16} color={t.accent} />
+                          )}
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="calendar-outline" size={16} color={t.textTertiary} style={styles.inputIcon} />
+                    <TextInput
+                      placeholder="Purchase date (YYYY-MM-DD)"
+                      placeholderTextColor={t.textTertiary}
+                      value={purchaseDate}
+                      onChangeText={setPurchaseDate}
+                      style={styles.input}
+                    />
+                  </View>
+
+                  {submitError && (
+                    <View style={styles.errorBanner}>
+                      <Ionicons name="alert-circle" size={16} color="#DC2626" style={{ marginRight: 8, marginTop: 1 }} />
+                      <ThemedText style={styles.errorBannerText}>{submitError}</ThemedText>
+                      <TouchableOpacity onPress={() => setSubmitError(null)} style={{ marginLeft: 8 }}>
+                        <Ionicons name="close" size={16} color="#DC2626" />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  <TouchableOpacity
+                    style={[styles.submitButton, saving && styles.submitDisabled]}
+                    onPress={handleSubmit}
+                    disabled={saving}
+                    activeOpacity={0.85}
+                  >
+                    {saving ? (
+                      <ActivityIndicator color={t.accentText} />
+                    ) : (
+                      <View style={styles.submitInner}>
+                        <Ionicons name="send-outline" size={16} color="#fff" style={{ marginRight: 8 }} />
+                        <ThemedText style={styles.submitText}>{submitLabel}</ThemedText>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </ThemedView>
+              </>
+            )}
+
+            {/* ── mileage mode ── */}
+            {claimType === "mileage" && (
+              <>
+                <View style={styles.sectionLabel}>
+                  <Ionicons name="car-outline" size={14} color={t.textTertiary} style={{ marginRight: 6 }} />
+                  <ThemedText style={styles.sectionLabelText}>MILEAGE DETAILS</ThemedText>
+                </View>
+
+                <ThemedView style={styles.card}>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="navigate-outline" size={16} color={t.textTertiary} style={styles.inputIcon} />
+                    <TextInput
+                      placeholder="From (e.g. Manchester)"
+                      placeholderTextColor={t.textTertiary}
+                      value={mileageFrom}
+                      onChangeText={setMileageFrom}
+                      style={styles.input}
+                    />
+                  </View>
+
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="location-outline" size={16} color={t.textTertiary} style={styles.inputIcon} />
+                    <TextInput
+                      placeholder="To (e.g. London)"
+                      placeholderTextColor={t.textTertiary}
+                      value={mileageTo}
+                      onChangeText={setMileageTo}
+                      style={styles.input}
+                    />
+                  </View>
+
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="speedometer-outline" size={16} color={t.textTertiary} style={styles.inputIcon} />
+                    <TextInput
+                      placeholder="Distance (miles)"
+                      placeholderTextColor={t.textTertiary}
+                      value={mileageDistance}
+                      onChangeText={setMileageDistance}
+                      keyboardType="decimal-pad"
+                      style={styles.input}
+                    />
+                  </View>
+
+                  <View style={styles.calcRow}>
+                    <Ionicons name="calculator-outline" size={16} color={t.accent} />
+                    <ThemedText style={styles.calcText}>
+                      Calculated: £{mileageCalculated}
+                    </ThemedText>
+                    <ThemedText style={{ color: t.textTertiary, fontSize: 12, marginLeft: 4 }}>
+                      (45p/mile HMRC)
+                    </ThemedText>
+                  </View>
+
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="document-text-outline" size={16} color={t.textTertiary} style={styles.inputIcon} />
+                    <TextInput
+                      placeholder="Purpose / Description"
+                      placeholderTextColor={t.textTertiary}
+                      value={mileagePurpose}
+                      onChangeText={setMileagePurpose}
+                      style={styles.input}
+                    />
+                  </View>
+
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="calendar-outline" size={16} color={t.textTertiary} style={styles.inputIcon} />
+                    <TextInput
+                      placeholder="Journey date (YYYY-MM-DD)"
+                      placeholderTextColor={t.textTertiary}
+                      value={purchaseDate}
+                      onChangeText={setPurchaseDate}
+                      style={styles.input}
+                    />
+                  </View>
+
+                  {submitError && (
+                    <View style={styles.errorBanner}>
+                      <Ionicons name="alert-circle" size={16} color="#DC2626" style={{ marginRight: 8, marginTop: 1 }} />
+                      <ThemedText style={styles.errorBannerText}>{submitError}</ThemedText>
+                      <TouchableOpacity onPress={() => setSubmitError(null)} style={{ marginLeft: 8 }}>
+                        <Ionicons name="close" size={16} color="#DC2626" />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  <TouchableOpacity
+                    style={[styles.submitButton, saving && styles.submitDisabled]}
+                    onPress={handleSubmit}
+                    disabled={saving}
+                    activeOpacity={0.85}
+                  >
+                    {saving ? (
+                      <ActivityIndicator color={t.accentText} />
+                    ) : (
+                      <View style={styles.submitInner}>
+                        <Ionicons name="car-outline" size={16} color="#fff" style={{ marginRight: 8 }} />
+                        <ThemedText style={styles.submitText}>{submitLabel}</ThemedText>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </ThemedView>
+              </>
+            )}
+
+            {/* ── per diem mode ── */}
+            {claimType === "perdiem" && (
+              <>
+                <View style={styles.sectionLabel}>
+                  <Ionicons name="bed-outline" size={14} color={t.textTertiary} style={{ marginRight: 6 }} />
+                  <ThemedText style={styles.sectionLabelText}>PER DIEM DETAILS</ThemedText>
+                </View>
+
+                <ThemedView style={styles.card}>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="earth-outline" size={16} color={t.textTertiary} style={styles.inputIcon} />
+                    <TextInput
+                      placeholder="Destination"
+                      placeholderTextColor={t.textTertiary}
+                      value={perDiemDestination}
+                      onChangeText={setPerDiemDestination}
+                      style={styles.input}
+                    />
+                  </View>
+
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="today-outline" size={16} color={t.textTertiary} style={styles.inputIcon} />
+                    <TextInput
+                      placeholder="Number of days"
+                      placeholderTextColor={t.textTertiary}
+                      value={perDiemDays}
+                      onChangeText={setPerDiemDays}
+                      keyboardType="decimal-pad"
+                      style={styles.input}
+                    />
+                  </View>
+
+                  <View style={styles.calcRow}>
+                    <Ionicons name="calculator-outline" size={16} color={t.accent} />
+                    <ThemedText style={styles.calcText}>
+                      Calculated: £{perDiemCalculated}
+                    </ThemedText>
+                    <ThemedText style={{ color: t.textTertiary, fontSize: 12, marginLeft: 4 }}>
+                      (£25/day)
+                    </ThemedText>
+                  </View>
+
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="calendar-outline" size={16} color={t.textTertiary} style={styles.inputIcon} />
+                    <TextInput
+                      placeholder="Start date (YYYY-MM-DD)"
+                      placeholderTextColor={t.textTertiary}
+                      value={purchaseDate}
+                      onChangeText={setPurchaseDate}
+                      style={styles.input}
+                    />
+                  </View>
+
+                  {submitError && (
+                    <View style={styles.errorBanner}>
+                      <Ionicons name="alert-circle" size={16} color="#DC2626" style={{ marginRight: 8, marginTop: 1 }} />
+                      <ThemedText style={styles.errorBannerText}>{submitError}</ThemedText>
+                      <TouchableOpacity onPress={() => setSubmitError(null)} style={{ marginLeft: 8 }}>
+                        <Ionicons name="close" size={16} color="#DC2626" />
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  <TouchableOpacity
+                    style={[styles.submitButton, saving && styles.submitDisabled]}
+                    onPress={handleSubmit}
+                    disabled={saving}
+                    activeOpacity={0.85}
+                  >
+                    {saving ? (
+                      <ActivityIndicator color={t.accentText} />
+                    ) : (
+                      <View style={styles.submitInner}>
+                        <Ionicons name="moon-outline" size={16} color="#fff" style={{ marginRight: 8 }} />
+                        <ThemedText style={styles.submitText}>{submitLabel}</ThemedText>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </ThemedView>
+              </>
+            )}
+
           </ThemedView>
         </ScrollView>
       </TouchableWithoutFeedback>

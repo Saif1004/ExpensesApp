@@ -235,14 +235,21 @@ service cloud.firestore {
                           'aiUsage'
                         ]);
 
-      // Any org admin (owner OR promoted): may update only safe fields
-      // (categories, inviteCode, orgAdmins). Billing and identity locked.
+      // Any org admin (owner OR promoted): may update only safe fields.
+      // Billing and identity fields remain locked.
       allow update: if verified()
                     && isOrgAdmin(orgId)
                     && request.resource.data.ownerId == resource.data.ownerId
                     && request.resource.data.diff(resource.data)
                         .affectedKeys()
-                        .hasOnly(['categories', 'inviteCode', 'orgAdmins']);
+                        .hasOnly([
+                          'categories',
+                          'inviteCode',
+                          'orgAdmins',
+                          'slackWebhookUrl',
+                          'teamsWebhookUrl',
+                          'categoryAccountCodes'
+                        ]);
 
       allow delete: if false;
     }
@@ -299,7 +306,9 @@ service cloud.firestore {
                           'rejectedAt',
                           'approvedAt',
                           'approvedBy',
-                          'adminId'
+                          'adminId',
+                          'l1ApprovedBy',
+                          'l1ApprovedAt'
                         ]);
 
       allow delete: if false;
@@ -322,6 +331,65 @@ service cloud.firestore {
       allow create: if false;   // parsePolicy Azure Function only
       allow update: if false;   // Azure Function only
       allow delete: if verified() && isOrgAdmin(resource.data.orgId);
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // COLLECTION: departments/{deptId}
+    //
+    // Cost centres created by org admins via manage-departments.tsx.
+    //
+    // Read:   any org admin of the owning org (employees don't query this
+    //         collection directly — departmentName is stored on membership).
+    // Create: org admins only.
+    // Update: org admins only; orgId is immutable.
+    // Delete: org admins only.
+    // ══════════════════════════════════════════════════════════════════
+
+    match /departments/{deptId} {
+      allow read:   if verified() && isOrgAdmin(resource.data.orgId);
+      allow create: if verified() && isOrgAdmin(request.resource.data.orgId);
+      allow update: if verified()
+                    && isOrgAdmin(resource.data.orgId)
+                    && request.resource.data.orgId == resource.data.orgId;
+      allow delete: if verified() && isOrgAdmin(resource.data.orgId);
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // COLLECTION: auditLog/{logId}
+    //
+    // Append-only audit trail — every claim status change is logged.
+    // Also written by Azure Functions (Admin SDK) and by admin.tsx client.
+    //
+    // Read:   org admins only.
+    // Create: org admins only; actorId must match auth uid.
+    // Update/Delete: locked — audit entries are immutable.
+    // ══════════════════════════════════════════════════════════════════
+
+    match /auditLog/{logId} {
+      allow read:   if verified() && isOrgAdmin(resource.data.orgId);
+      allow create: if verified()
+                    && isOrgAdmin(request.resource.data.orgId)
+                    && request.resource.data.actorId == request.auth.uid;
+      allow update: if false;  // immutable
+      allow delete: if false;
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // COLLECTION: expenseTemplates/{templateId}
+    //
+    // Per-user quick-fill templates created from submitted claims.
+    //
+    // Read/Create/Delete: owner of the template only.
+    // Update: owner only; userId is immutable.
+    // ══════════════════════════════════════════════════════════════════
+
+    match /expenseTemplates/{templateId} {
+      allow read:   if verified() && resource.data.userId == request.auth.uid;
+      allow create: if verified() && request.resource.data.userId == request.auth.uid;
+      allow update: if verified()
+                    && resource.data.userId == request.auth.uid
+                    && request.resource.data.userId == resource.data.userId;
+      allow delete: if verified() && resource.data.userId == request.auth.uid;
     }
 
   }

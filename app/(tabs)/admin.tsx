@@ -1,4 +1,5 @@
 import {
+  addDoc,
   collection,
   doc,
   getDoc,
@@ -30,8 +31,10 @@ import { Ionicons } from "@expo/vector-icons";
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as XLSX from 'xlsx';
 
 import { usePostHog } from "posthog-react-native";
+import { useRouter } from "expo-router";
 import { ThemedText } from "../../components/themed-text";
 import { ThemedView } from "../../components/themed-view";
 import { useAuth } from "../context/AuthProvider";
@@ -61,6 +64,15 @@ type Claim = {
   departmentName?: string;
   approvalThreshold?: number;
   l1ApprovedBy?: string;
+  // claim types
+  claimType?: "receipt" | "mileage" | "perdiem";
+  mileageFrom?: string;
+  mileageTo?: string;
+  mileageDistance?: number;
+  perDiemDays?: number;
+  perDiemDestination?: string;
+  // policy
+  policyNote?: string;
 };
 
 type ConfirmModal = {
@@ -72,9 +84,10 @@ type ConfirmModal = {
 type HistoryFilter = "all" | "approved" | "rejected";
 
 export default function AdminScreen() {
-  const { role, orgId, user, refreshMembership, isBusiness } = useAuth();
+  const { role, orgId, user, refreshMembership, isBusiness, isPro } = useAuth();
   const posthog = usePostHog();
-  const insets = useSafeAreaInsets();
+  const router  = useRouter();
+  const insets  = useSafeAreaInsets();
   const { tokens: t, mode } = useTheme();
   const isDark = mode === "dark";
 
@@ -89,12 +102,21 @@ export default function AdminScreen() {
     visible: false, claim: null, action: null
   });
 
+  // bulk selection state
+  const [selectionMode, setSelectionMode]     = useState(false);
+  const [selectedIds, setSelectedIds]         = useState<Set<string>>(new Set());
+
   // search and filter state for both tabs
   const [exportLoading, setExportLoading]           = useState(false);
   const [search, setSearch]                         = useState("");
   const [categoryFilter, setCategoryFilter]         = useState<string | null>(null);
   const [historyFilter, setHistoryFilter]           = useState<HistoryFilter>("all");
   const [approvalThreshold, setApprovalThreshold]   = useState<number | null>(null);
+
+  // date-range filter for history exports
+  const [exportDateFrom, setExportDateFrom] = useState("");
+  const [exportDateTo, setExportDateTo]     = useState("");
+  const [showDateFilter, setShowDateFilter] = useState(false);
 
   // re-check membership on mount so promotions show up without restarting the app
   useEffect(() => { refreshMembership(); }, []);
@@ -196,8 +218,20 @@ export default function AdminScreen() {
           c.category.toLowerCase().includes(q)
       );
     }
+    if (exportDateFrom) {
+      list = list.filter(c => {
+        const d = c.purchaseDate ?? (c.createdAt?.toDate?.()?.toISOString().slice(0, 10) ?? "");
+        return d >= exportDateFrom;
+      });
+    }
+    if (exportDateTo) {
+      list = list.filter(c => {
+        const d = c.purchaseDate ?? (c.createdAt?.toDate?.()?.toISOString().slice(0, 10) ?? "");
+        return d <= exportDateTo;
+      });
+    }
     return list;
-  }, [historyClaims, historyFilter, search]);
+  }, [historyClaims, historyFilter, search, exportDateFrom, exportDateTo]);
 
   // CSV and PDF export helpers
 
@@ -299,6 +333,37 @@ export default function AdminScreen() {
     }
   }
 
+  async function handleExportXLSX() {
+    if (exportLoading || filteredHistory.length === 0) return;
+    setExportLoading(true);
+    try {
+      const rows = filteredHistory.map(claimToRow);
+      const wsData = [
+        ["Reference", "Employee", "Merchant", "Amount (£)", "Category", "Department", "Status", "Payment Status", "Approved By", "Notes", "Purchase Date", "Submitted Date"],
+        ...rows.map(r => [r.claimRef, r.employee, r.merchant, parseFloat(r.amount), r.category, r.department, r.status, r.paymentStatus, r.approvedBy, r.notes, r.purchaseDate, r.submittedDate])
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      ws["!cols"] = [8, 24, 20, 10, 14, 16, 12, 14, 20, 24, 14, 14].map(wch => ({ wch }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Claims");
+      const base64 = XLSX.write(wb, { type: "base64", bookType: "xlsx" });
+      const uri = (FileSystem.documentDirectory ?? "") + "claimio_export.xlsx";
+      await FileSystem.writeAsStringAsync(uri, base64, { encoding: FileSystem.EncodingType.Base64 });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          dialogTitle: "Export Claims Excel"
+        });
+      } else {
+        Alert.alert("Saved", uri);
+      }
+    } catch (e: any) {
+      Alert.alert("Export Error", e?.message ?? "Failed to export.");
+    } finally {
+      setExportLoading(false);
+    }
+  }
+
   // opens/closes the approve/reject confirmation modal
 
   const openConfirmModal  = (claim: Claim, action: "approved" | "rejected") => {
@@ -328,6 +393,18 @@ export default function AdminScreen() {
         l1ApprovedAt:  serverTimestamp(),
         adminFeedback: adminMessage.trim() || null,
       });
+      addDoc(collection(db, "auditLog"), {
+        orgId:         claim.orgId,
+        claimId:       claim.id,
+        action:        "pending_l2",
+        actor:         approvedBy,
+        actorId:       adminId,
+        amount:        claim.amount,
+        merchant:      claim.merchant,
+        userEmail:     claim.userEmail,
+        adminFeedback: adminMessage.trim() || null,
+        timestamp:     serverTimestamp(),
+      }).catch(() => {});
       currentUser?.getIdToken().then(token => {
         fetch(NOTIFY_URL, {
           method: "POST",
@@ -352,6 +429,19 @@ export default function AdminScreen() {
         ? { approvedAt: serverTimestamp() }
         : { rejectedAt: serverTimestamp() }),
     });
+
+    addDoc(collection(db, "auditLog"), {
+      orgId:         claim.orgId,
+      claimId:       claim.id,
+      action,
+      actor:         approvedBy,
+      actorId:       adminId,
+      amount:        claim.amount,
+      merchant:      claim.merchant,
+      userEmail:     claim.userEmail,
+      adminFeedback: adminMessage.trim() || null,
+      timestamp:     serverTimestamp(),
+    }).catch(() => {});
 
     // notify the employee in the background, don't wait on it
     currentUser?.getIdToken().then((token) => {
@@ -395,6 +485,116 @@ export default function AdminScreen() {
         category: claim.category,
       });
     }
+  };
+
+  // enters/exits bulk selection mode
+  const toggleSelectionMode = () => {
+    if (!isPro && !isBusiness) {
+      Alert.alert(
+        "Pro Feature",
+        "Bulk approval requires Pro or Business plan. Upgrade to unlock batch actions.",
+        [
+          { text: "Later", style: "cancel" },
+          { text: "Upgrade", onPress: () => router.push("../plans") },
+        ]
+      );
+      return;
+    }
+    setSelectionMode(prev => {
+      if (prev) setSelectedIds(new Set());
+      return !prev;
+    });
+  };
+
+  const toggleSelectId = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkAction = (bulkAction: "approved" | "rejected") => {
+    const count = selectedIds.size;
+    if (count === 0) return;
+    const label = bulkAction === "approved" ? "Approve" : "Reject";
+    Alert.alert(
+      `${label} ${count} claim${count !== 1 ? "s" : ""}?`,
+      `This will ${bulkAction === "approved" ? "approve and pay" : "reject"} all ${count} selected claim${count !== 1 ? "s" : ""}.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: label,
+          style: bulkAction === "rejected" ? "destructive" : "default",
+          onPress: () => processBulkAction(bulkAction),
+        },
+      ]
+    );
+  };
+
+  const processBulkAction = async (bulkAction: "approved" | "rejected") => {
+    const currentUser = auth.currentUser;
+    const approvedBy  = currentUser?.displayName || currentUser?.email || "Unknown";
+    const adminId     = currentUser?.uid || null;
+
+    const claimsToProcess = filteredPending.filter(
+      c => selectedIds.has(c.id) && c.userId !== user?.uid
+    );
+
+    const promises = claimsToProcess.map(async (claim) => {
+      await updateDoc(doc(db, "claims", claim.id), {
+        status:          bulkAction,
+        statusUpdatedAt: serverTimestamp(),
+        approvedBy,
+        adminId,
+        ...(bulkAction === "approved"
+          ? { approvedAt: serverTimestamp() }
+          : { rejectedAt: serverTimestamp() }),
+      });
+
+      addDoc(collection(db, "auditLog"), {
+        orgId:         claim.orgId,
+        claimId:       claim.id,
+        action:        bulkAction,
+        actor:         approvedBy,
+        actorId:       adminId,
+        amount:        claim.amount,
+        merchant:      claim.merchant,
+        userEmail:     claim.userEmail,
+        adminFeedback: null,
+        timestamp:     serverTimestamp(),
+      }).catch(() => {});
+
+      if (bulkAction === "approved") {
+        currentUser?.getIdToken().then(token => {
+          fetch(REIMBURSE_URL, {
+            method:  "POST",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body:    JSON.stringify({ claimId: claim.id, orgId: claim.orgId }),
+          }).catch(() => {});
+        }).catch(() => {});
+      }
+
+      currentUser?.getIdToken().then(token => {
+        fetch(NOTIFY_URL, {
+          method:  "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body:    JSON.stringify({ claimId: claim.id, status: bulkAction, adminFeedback: null }),
+        }).catch(() => {});
+      }).catch(() => {});
+    });
+
+    await Promise.allSettled(promises);
+
+    if (bulkAction === "approved") {
+      posthog.capture("bulk_claims_approved", { count: selectedIds.size });
+    } else {
+      posthog.capture("bulk_claims_rejected", { count: selectedIds.size });
+    }
+
+    setSelectionMode(false);
+    setSelectedIds(new Set());
   };
 
   // styles (defined before the access guard so hooks are always called in order)
@@ -868,6 +1068,61 @@ export default function AdminScreen() {
       fontStyle: "italic"
     },
 
+    // bulk selection header controls
+    selectBtn: {
+      paddingHorizontal: 14,
+      paddingVertical: 6,
+      borderRadius: 999,
+      backgroundColor: t.surfaceAlt,
+      marginLeft: 8,
+    },
+    selectBtnText: {
+      color: t.accent,
+      fontSize: 13,
+      fontWeight: "700",
+    },
+    selectBtnActive: {
+      backgroundColor: t.accent + "22",
+    },
+
+    // sticky bulk action bar
+    bulkBar: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      backgroundColor: t.surface,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: t.border,
+      gap: 8,
+    },
+    bulkCountText: {
+      flex: 1,
+      color: t.textSecondary,
+      fontSize: 13,
+      fontWeight: "600",
+    },
+    bulkApproveBtn: {
+      backgroundColor: t.success,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 999,
+    },
+    bulkRejectBtn: {
+      backgroundColor: t.error,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 999,
+    },
+    bulkBtnText: {
+      color: "#fff",
+      fontWeight: "700",
+      fontSize: 13,
+    },
+
     // misc
     center: {
       flex: 1,
@@ -948,6 +1203,17 @@ export default function AdminScreen() {
 
   const HistoryStatusFilter = (
     <View>
+      {isBusiness && (
+        <TouchableOpacity
+          onPress={() => router.push("../admin/audit-log")}
+          activeOpacity={0.7}
+          style={{ alignSelf: "flex-end", marginBottom: 10 }}
+        >
+          <ThemedText style={{ color: t.accent, fontSize: 13, fontWeight: "600" }}>
+            View Audit Log →
+          </ThemedText>
+        </TouchableOpacity>
+      )}
       <View style={styles.historyFilterRow}>
         {(["all", "approved", "rejected"] as HistoryFilter[]).map((f) => (
           <TouchableOpacity
@@ -965,34 +1231,66 @@ export default function AdminScreen() {
           </TouchableOpacity>
         ))}
       </View>
+      {/* date range filter toggle */}
+      <TouchableOpacity
+        style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}
+        onPress={() => {
+          if (showDateFilter) { setExportDateFrom(""); setExportDateTo(""); }
+          setShowDateFilter(v => !v);
+        }}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="calendar-outline" size={14} color={t.textSecondary} style={{ marginRight: 6 }} />
+        <ThemedText style={{ color: t.textSecondary, fontSize: 12, fontWeight: "600" }}>
+          {showDateFilter ? "Clear Date Filter" : "Filter by Date"}
+        </ThemedText>
+      </TouchableOpacity>
+
+      {showDateFilter && (
+        <View style={{ flexDirection: "row", gap: 8, marginBottom: 10 }}>
+          <View style={{ flex: 1, backgroundColor: t.surface, borderRadius: 12, padding: 10 }}>
+            <ThemedText style={{ color: t.textTertiary, fontSize: 10, fontWeight: "700", marginBottom: 4 }}>FROM</ThemedText>
+            <TextInput
+              value={exportDateFrom}
+              onChangeText={setExportDateFrom}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor={t.textTertiary}
+              style={{ color: t.text, fontSize: 13 }}
+              keyboardType="numbers-and-punctuation"
+            />
+          </View>
+          <View style={{ flex: 1, backgroundColor: t.surface, borderRadius: 12, padding: 10 }}>
+            <ThemedText style={{ color: t.textTertiary, fontSize: 10, fontWeight: "700", marginBottom: 4 }}>TO</ThemedText>
+            <TextInput
+              value={exportDateTo}
+              onChangeText={setExportDateTo}
+              placeholder="YYYY-MM-DD"
+              placeholderTextColor={t.textTertiary}
+              style={{ color: t.text, fontSize: 13 }}
+              keyboardType="numbers-and-punctuation"
+            />
+          </View>
+        </View>
+      )}
+
       {filteredHistory.length > 0 && (
         <View style={styles.exportRow}>
-          <TouchableOpacity
-            style={styles.exportBtn}
-            onPress={handleExportCSV}
-            disabled={exportLoading}
-            activeOpacity={0.7}
-          >
+          <TouchableOpacity style={styles.exportBtn} onPress={handleExportCSV} disabled={exportLoading} activeOpacity={0.7}>
             {exportLoading
               ? <ActivityIndicator size="small" color={t.accent} />
-              : <>
-                  <Ionicons name="document-text-outline" size={14} color={t.accent} style={{ marginRight: 5 }} />
-                  <ThemedText style={styles.exportBtnText}>CSV</ThemedText>
-                </>
+              : <><Ionicons name="document-text-outline" size={14} color={t.accent} style={{ marginRight: 5 }} /><ThemedText style={styles.exportBtnText}>CSV</ThemedText></>
             }
           </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.exportBtn}
-            onPress={handleExportPDF}
-            disabled={exportLoading}
-            activeOpacity={0.7}
-          >
+          <TouchableOpacity style={styles.exportBtn} onPress={handleExportXLSX} disabled={exportLoading} activeOpacity={0.7}>
             {exportLoading
               ? <ActivityIndicator size="small" color={t.accent} />
-              : <>
-                  <Ionicons name="print-outline" size={14} color={t.accent} style={{ marginRight: 5 }} />
-                  <ThemedText style={styles.exportBtnText}>PDF</ThemedText>
-                </>
+              : <><Ionicons name="grid-outline" size={14} color={t.accent} style={{ marginRight: 5 }} /><ThemedText style={styles.exportBtnText}>Excel</ThemedText></>
+            }
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.exportBtn} onPress={handleExportPDF} disabled={exportLoading} activeOpacity={0.7}>
+            {exportLoading
+              ? <ActivityIndicator size="small" color={t.accent} />
+              : <><Ionicons name="print-outline" size={14} color={t.accent} style={{ marginRight: 5 }} /><ThemedText style={styles.exportBtnText}>PDF</ThemedText></>
             }
           </TouchableOpacity>
         </View>
@@ -1020,17 +1318,30 @@ export default function AdminScreen() {
           <ThemedText type="title" style={styles.title}>Admin Panel</ThemedText>
           <ThemedText style={styles.subtitle}>Review & action expense claims</ThemedText>
         </View>
-        <View style={styles.countBadge}>
-          <Ionicons
-            name={tab === "pending" ? "time-outline" : "checkmark-done-outline"}
-            size={12} color={t.textSecondary}
-            style={{ marginRight: 4 }}
-          />
-          <ThemedText style={styles.countBadgeText}>
-            {tab === "pending"
-              ? `${filteredPending.length} pending`
-              : `${filteredHistory.length} processed`}
-          </ThemedText>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <View style={styles.countBadge}>
+            <Ionicons
+              name={tab === "pending" ? "time-outline" : "checkmark-done-outline"}
+              size={12} color={t.textSecondary}
+              style={{ marginRight: 4 }}
+            />
+            <ThemedText style={styles.countBadgeText}>
+              {tab === "pending"
+                ? `${filteredPending.length} pending`
+                : `${filteredHistory.length} processed`}
+            </ThemedText>
+          </View>
+          {tab === "pending" && (
+            <TouchableOpacity
+              style={[styles.selectBtn, selectionMode && styles.selectBtnActive]}
+              onPress={selectionMode ? () => { setSelectionMode(false); setSelectedIds(new Set()); } : toggleSelectionMode}
+              activeOpacity={0.7}
+            >
+              <ThemedText style={styles.selectBtnText}>
+                {selectionMode ? "Cancel" : "Select"}
+              </ThemedText>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -1064,111 +1375,196 @@ export default function AdminScreen() {
         loading ? (
           <View style={styles.center}><ActivityIndicator size="large" color={t.accent} /></View>
         ) : (
-          <FlatList
-            data={filteredPending}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
-            showsVerticalScrollIndicator={false}
-            ListHeaderComponent={CategoryChips}
-            ListEmptyComponent={
-              <EmptyState message={
-                search.trim() || categoryFilter
-                  ? "No claims match your search"
-                  : "No pending claims"
-              } />
-            }
-            renderItem={({ item }) => (
-              <ThemedView style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <View>
-                    <ThemedText style={styles.amount}>£{Number(item.amount).toFixed(2)}</ThemedText>
-                    <ThemedText style={styles.merchant}>{item.merchant}</ThemedText>
-                  </View>
-                  <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
-                    <View style={styles.categoryBadge}>
-                      <ThemedText style={styles.categoryText}>{item.category}</ThemedText>
-                    </View>
-                    {item.status === "pending_l2" && (
-                      <View style={[styles.categoryBadge, { backgroundColor: "#7C3AED" + "33" }]}>
-                        <ThemedText style={[styles.categoryText, { color: "#A78BFA" }]}>L2 Review</ThemedText>
-                      </View>
-                    )}
-                  </View>
-                </View>
-
-                <View style={styles.divider} />
-
-                <View style={styles.infoRow}>
-                  <ThemedText style={styles.infoLabel}>Employee</ThemedText>
-                  <ThemedText style={styles.infoValue}>{item.userEmail}</ThemedText>
-                </View>
-
-                <View style={styles.infoRow}>
-                  <ThemedText style={styles.infoLabel}>Category</ThemedText>
-                  <ThemedText style={styles.infoValue}>{item.category}</ThemedText>
-                </View>
-
-                {item.departmentName ? (
-                  <View style={styles.infoRow}>
-                    <ThemedText style={styles.infoLabel}>Department</ThemedText>
-                    <ThemedText style={styles.infoValue}>{item.departmentName}</ThemedText>
-                  </View>
-                ) : null}
-
-                {item.description ? (
-                  <View style={styles.infoRow}>
-                    <ThemedText style={styles.infoLabel}>Note</ThemedText>
-                    <ThemedText style={styles.infoValue}>{item.description}</ThemedText>
-                  </View>
-                ) : null}
-
-                {item.paymentStatus === "paid" && (
-                  <View style={[styles.paymentBadge, styles.paymentBadgePaid]}>
-                    <ThemedText style={styles.paymentBadgeText}>💳 Paid</ThemedText>
-                  </View>
-                )}
-                {item.paymentStatus === "failed" && (
-                  <View style={[styles.paymentBadge, styles.paymentBadgeFailed]}>
-                    <ThemedText style={styles.paymentBadgeText}>⚠️ Payment Failed</ThemedText>
-                  </View>
-                )}
-
-                {item.receiptUrl ? (
+          <>
+            <FlatList
+              data={filteredPending}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={{ paddingBottom: selectionMode ? insets.bottom + 80 : insets.bottom + 24 }}
+              showsVerticalScrollIndicator={false}
+              ListHeaderComponent={CategoryChips}
+              ListEmptyComponent={
+                <EmptyState message={
+                  search.trim() || categoryFilter
+                    ? "No claims match your search"
+                    : "No pending claims"
+                } />
+              }
+              renderItem={({ item }) => {
+                const isSelected = selectedIds.has(item.id);
+                return (
                   <TouchableOpacity
-                    style={styles.receiptWrapper}
-                    onPress={() => setSelectedImage(item.receiptUrl!)}
+                    activeOpacity={selectionMode ? 0.7 : 1}
+                    onPress={selectionMode ? () => toggleSelectId(item.id) : undefined}
                   >
-                    <Image source={{ uri: item.receiptUrl }} style={styles.receiptImage} resizeMode="cover" />
-                    <View style={styles.receiptOverlay}>
-                      <ThemedText style={styles.receiptOverlayText}>Tap to view receipt</ThemedText>
-                    </View>
-                  </TouchableOpacity>
-                ) : (
-                  <View style={styles.noReceiptRow}>
-                    <ThemedText style={styles.noReceipt}>No receipt attached</ThemedText>
-                  </View>
-                )}
+                    <ThemedView style={[styles.card, selectionMode && isSelected && { borderWidth: 2, borderColor: t.accent }]}>
+                      <View style={styles.cardHeader}>
+                        {selectionMode && (
+                          <Ionicons
+                            name={isSelected ? "checkmark-circle" : "ellipse-outline"}
+                            size={22}
+                            color={isSelected ? t.accent : t.border}
+                            style={{ marginRight: 10, alignSelf: "center" }}
+                          />
+                        )}
+                        <View style={{ flex: 1 }}>
+                          <ThemedText style={styles.amount}>£{Number(item.amount).toFixed(2)}</ThemedText>
+                          <ThemedText style={styles.merchant}>{item.merchant}</ThemedText>
+                        </View>
+                        <View style={{ flexDirection: "row", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                          <View style={styles.categoryBadge}>
+                            <ThemedText style={styles.categoryText}>{item.category}</ThemedText>
+                          </View>
+                          {item.claimType === "mileage" && (
+                            <View style={[styles.categoryBadge, { backgroundColor: "#0EA5E933" }]}>
+                              <ThemedText style={[styles.categoryText, { color: "#0EA5E9" }]}>🚗 Mileage</ThemedText>
+                            </View>
+                          )}
+                          {item.claimType === "perdiem" && (
+                            <View style={[styles.categoryBadge, { backgroundColor: "#F59E0B33" }]}>
+                              <ThemedText style={[styles.categoryText, { color: "#F59E0B" }]}>🌙 Per Diem</ThemedText>
+                            </View>
+                          )}
+                          {item.status === "pending_l2" && (
+                            <View style={[styles.categoryBadge, { backgroundColor: "#7C3AED" + "33" }]}>
+                              <ThemedText style={[styles.categoryText, { color: "#A78BFA" }]}>L2 Review</ThemedText>
+                            </View>
+                          )}
+                        </View>
+                      </View>
 
-                {item.userId === user?.uid ? (
-                  <View style={styles.selfClaimNotice}>
-                    <Ionicons name="lock-closed-outline" size={14} color={t.textTertiary} style={{ marginRight: 6 }} />
-                    <ThemedText style={styles.selfClaimText}>You cannot approve your own claim</ThemedText>
-                  </View>
-                ) : (
-                  <View style={styles.buttonRow}>
-                    <TouchableOpacity style={styles.approveBtn} onPress={() => openConfirmModal(item, "approved")}>
-                      <ThemedText style={styles.btnText} numberOfLines={1}>
-                        {item.status === "pending_l2" ? "Final Approve" : "Approve & Pay"}
-                      </ThemedText>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.rejectBtn} onPress={() => openConfirmModal(item, "rejected")}>
-                      <ThemedText style={styles.btnText} numberOfLines={1}>Reject</ThemedText>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </ThemedView>
+                      <View style={styles.divider} />
+
+                      <View style={styles.infoRow}>
+                        <ThemedText style={styles.infoLabel}>Employee</ThemedText>
+                        <ThemedText style={styles.infoValue}>{item.userEmail}</ThemedText>
+                      </View>
+
+                      <View style={styles.infoRow}>
+                        <ThemedText style={styles.infoLabel}>Category</ThemedText>
+                        <ThemedText style={styles.infoValue}>{item.category}</ThemedText>
+                      </View>
+
+                      {item.claimType === "mileage" && item.mileageFrom && (
+                        <View style={styles.infoRow}>
+                          <ThemedText style={styles.infoLabel}>Route</ThemedText>
+                          <ThemedText style={styles.infoValue} numberOfLines={2}>
+                            {item.mileageFrom} → {item.mileageTo}
+                          </ThemedText>
+                        </View>
+                      )}
+                      {item.claimType === "mileage" && item.mileageDistance != null && (
+                        <View style={styles.infoRow}>
+                          <ThemedText style={styles.infoLabel}>Distance</ThemedText>
+                          <ThemedText style={styles.infoValue}>{item.mileageDistance} miles @ 45p/mile</ThemedText>
+                        </View>
+                      )}
+                      {item.claimType === "perdiem" && item.perDiemDestination && (
+                        <View style={styles.infoRow}>
+                          <ThemedText style={styles.infoLabel}>Destination</ThemedText>
+                          <ThemedText style={styles.infoValue}>{item.perDiemDestination}</ThemedText>
+                        </View>
+                      )}
+                      {item.claimType === "perdiem" && item.perDiemDays != null && (
+                        <View style={styles.infoRow}>
+                          <ThemedText style={styles.infoLabel}>Days</ThemedText>
+                          <ThemedText style={styles.infoValue}>{item.perDiemDays} day{item.perDiemDays !== 1 ? "s" : ""} @ £25/day</ThemedText>
+                        </View>
+                      )}
+
+                      {item.policyNote ? (
+                        <View style={[styles.infoRow, { backgroundColor: "#FEF3C7", borderRadius: 8, paddingHorizontal: 8, marginVertical: 4 }]}>
+                          <Ionicons name="warning-outline" size={14} color="#D97706" style={{ marginRight: 6 }} />
+                          <ThemedText style={[styles.infoValue, { color: "#D97706", flex: 1, fontSize: 12 }]}>{item.policyNote}</ThemedText>
+                        </View>
+                      ) : null}
+
+                      {item.departmentName ? (
+                        <View style={styles.infoRow}>
+                          <ThemedText style={styles.infoLabel}>Department</ThemedText>
+                          <ThemedText style={styles.infoValue}>{item.departmentName}</ThemedText>
+                        </View>
+                      ) : null}
+
+                      {item.description ? (
+                        <View style={styles.infoRow}>
+                          <ThemedText style={styles.infoLabel}>Note</ThemedText>
+                          <ThemedText style={styles.infoValue}>{item.description}</ThemedText>
+                        </View>
+                      ) : null}
+
+                      {item.paymentStatus === "paid" && (
+                        <View style={[styles.paymentBadge, styles.paymentBadgePaid]}>
+                          <ThemedText style={styles.paymentBadgeText}>💳 Paid</ThemedText>
+                        </View>
+                      )}
+                      {item.paymentStatus === "failed" && (
+                        <View style={[styles.paymentBadge, styles.paymentBadgeFailed]}>
+                          <ThemedText style={styles.paymentBadgeText}>⚠️ Payment Failed</ThemedText>
+                        </View>
+                      )}
+
+                      {item.receiptUrl ? (
+                        <TouchableOpacity
+                          style={styles.receiptWrapper}
+                          onPress={() => setSelectedImage(item.receiptUrl!)}
+                        >
+                          <Image source={{ uri: item.receiptUrl }} style={styles.receiptImage} resizeMode="cover" />
+                          <View style={styles.receiptOverlay}>
+                            <ThemedText style={styles.receiptOverlayText}>Tap to view receipt</ThemedText>
+                          </View>
+                        </TouchableOpacity>
+                      ) : (
+                        <View style={styles.noReceiptRow}>
+                          <ThemedText style={styles.noReceipt}>No receipt attached</ThemedText>
+                        </View>
+                      )}
+
+                      {!selectionMode && (
+                        item.userId === user?.uid ? (
+                          <View style={styles.selfClaimNotice}>
+                            <Ionicons name="lock-closed-outline" size={14} color={t.textTertiary} style={{ marginRight: 6 }} />
+                            <ThemedText style={styles.selfClaimText}>You cannot approve your own claim</ThemedText>
+                          </View>
+                        ) : (
+                          <View style={styles.buttonRow}>
+                            <TouchableOpacity style={styles.approveBtn} onPress={() => openConfirmModal(item, "approved")}>
+                              <ThemedText style={styles.btnText} numberOfLines={1}>
+                                {item.status === "pending_l2" ? "Final Approve" : "Approve & Pay"}
+                              </ThemedText>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.rejectBtn} onPress={() => openConfirmModal(item, "rejected")}>
+                              <ThemedText style={styles.btnText} numberOfLines={1}>Reject</ThemedText>
+                            </TouchableOpacity>
+                          </View>
+                        )
+                      )}
+                    </ThemedView>
+                  </TouchableOpacity>
+                );
+              }}
+            />
+            {selectionMode && (
+              <View style={[styles.bulkBar, { bottom: insets.bottom }]}>
+                <ThemedText style={styles.bulkCountText}>
+                  {selectedIds.size} selected
+                </ThemedText>
+                <TouchableOpacity
+                  style={styles.bulkApproveBtn}
+                  onPress={() => handleBulkAction("approved")}
+                  activeOpacity={0.8}
+                >
+                  <ThemedText style={styles.bulkBtnText}>Approve All</ThemedText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.bulkRejectBtn}
+                  onPress={() => handleBulkAction("rejected")}
+                  activeOpacity={0.8}
+                >
+                  <ThemedText style={styles.bulkBtnText}>Reject All</ThemedText>
+                </TouchableOpacity>
+              </View>
             )}
-          />
+          </>
         )
       ) : (
 
@@ -1217,8 +1613,38 @@ export default function AdminScreen() {
                 </View>
                 <View style={styles.infoRow}>
                   <ThemedText style={styles.infoLabel}>Category</ThemedText>
-                  <ThemedText style={styles.infoValue}>{item.category}</ThemedText>
+                  <ThemedText style={styles.infoValue}>
+                    {item.category}
+                    {item.claimType === "mileage" ? "  🚗 Mileage" : item.claimType === "perdiem" ? "  🌙 Per Diem" : ""}
+                  </ThemedText>
                 </View>
+
+                {item.claimType === "mileage" && item.mileageFrom && (
+                  <View style={styles.infoRow}>
+                    <ThemedText style={styles.infoLabel}>Route</ThemedText>
+                    <ThemedText style={styles.infoValue} numberOfLines={2}>
+                      {item.mileageFrom} → {item.mileageTo}
+                    </ThemedText>
+                  </View>
+                )}
+                {item.claimType === "mileage" && item.mileageDistance != null && (
+                  <View style={styles.infoRow}>
+                    <ThemedText style={styles.infoLabel}>Distance</ThemedText>
+                    <ThemedText style={styles.infoValue}>{item.mileageDistance} miles</ThemedText>
+                  </View>
+                )}
+                {item.claimType === "perdiem" && item.perDiemDestination && (
+                  <View style={styles.infoRow}>
+                    <ThemedText style={styles.infoLabel}>Destination</ThemedText>
+                    <ThemedText style={styles.infoValue}>{item.perDiemDestination}</ThemedText>
+                  </View>
+                )}
+                {item.claimType === "perdiem" && item.perDiemDays != null && (
+                  <View style={styles.infoRow}>
+                    <ThemedText style={styles.infoLabel}>Days</ThemedText>
+                    <ThemedText style={styles.infoValue}>{item.perDiemDays} day{item.perDiemDays !== 1 ? "s" : ""}</ThemedText>
+                  </View>
+                )}
 
                 {item.departmentName ? (
                   <View style={styles.infoRow}>
