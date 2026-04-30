@@ -1,3 +1,5 @@
+import React, { useEffect, useMemo, useState } from "react";
+
 import {
   collection,
   doc,
@@ -7,8 +9,6 @@ import {
   query,
   where
 } from "firebase/firestore";
-
-import { useEffect, useMemo, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
@@ -292,7 +292,7 @@ export default function AnalyticsScreen() {
     } catch (e: any) { Alert.alert("Export Error", e?.message ?? "Failed to export."); }
   }
 
-  async function exportCSV()  { runExport("csv",  rows => rows.map(rowToCSV),  "Reference,Employee,Merchant,Amount (£),Category,Status,Payment Status,Approved By,Notes,Purchase Date,Submitted Date\n",  "claims_export.csv",  "text/csv",  "Export CSV"); }
+  async function exportCSV()  { runExport("csv",  rows => rowData(rows).map(rowToCSV),  "Reference,Employee,Merchant,Amount (£),Category,Status,Payment Status,Approved By,Notes,Purchase Date,Submitted Date\n",  "claims_export.csv",  "text/csv",  "Export CSV"); }
   async function exportPDF()  {
     posthog.capture("analytics_export_triggered", { format: "pdf", period, scope });
     try {
@@ -684,7 +684,7 @@ export default function AnalyticsScreen() {
     </ScrollView>
   );
 
-  const tabContent: Record<NavTab, JSX.Element> = {
+  const tabContent: Record<NavTab, React.ReactElement> = {
     summary:   SummaryTab,
     charts:    ChartsTab,
     breakdown: BreakdownTab,
