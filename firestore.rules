@@ -327,9 +327,21 @@ service cloud.firestore {
     // ══════════════════════════════════════════════════════════════════
 
     match /policies/{policyId} {
-      allow read:   if verified();
-      allow create: if false;   // parsePolicy Azure Function only
-      allow update: if false;   // Azure Function only
+      allow read: if verified();
+
+      // AI-parsed policies (receipt_required, category_limit, submission_window, general text)
+      // are created exclusively by the parsePolicy Azure Function (Admin SDK).
+      //
+      // Exception: org admins may create/delete the approval_required_above policy directly
+      // from the manage-policies screen — it carries no user-supplied text and its value
+      // is a plain number, so it doesn't need LLM parsing.
+      allow create: if verified()
+                    && isOrgAdmin(request.resource.data.orgId)
+                    && request.resource.data.type == "approval_required_above"
+                    && request.resource.data.value is number
+                    && request.resource.data.value > 0;
+
+      allow update: if false;  // Azure Function only
       allow delete: if verified() && isOrgAdmin(resource.data.orgId);
     }
 

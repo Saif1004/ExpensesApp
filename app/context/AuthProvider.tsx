@@ -139,15 +139,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await Purchases.logIn(uid);
 
       // validate server-side because the client can't write plan fields directly
-      const token = await auth.currentUser?.getIdToken();
+      // Force-refresh the token (true) so we never send a token that is about
+      // to expire — a stale token would silently fail and the plan wouldn't sync.
+      const token = await auth.currentUser?.getIdToken(true);
       if (!token) return;
 
-      await fetch(process.env.EXPO_PUBLIC_SYNC_PLAN_URL!, {
+      const res = await fetch(process.env.EXPO_PUBLIC_SYNC_PLAN_URL!, {
         method:  "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
         body:    JSON.stringify({ orgId: oid }),
       });
-      // caller will refresh the plan after this resolves
+
+      if (!res.ok) {
+        console.warn("RevenueCat plan sync returned", res.status);
+      }
+      // caller re-reads the org doc after this resolves to pick up the updated plan
     } catch (err) {
       console.log("RevenueCat sync error:", err);
     }

@@ -6,6 +6,10 @@
  *  - Credit gate (returns an error response if no credits remain)
  *  - Deduction of 1 credit per AI call
  *
+ * Uses a Firestore transaction to prevent race conditions where two concurrent
+ * requests both read 0 credits remaining and both reset the counter, effectively
+ * giving out double the monthly allowance.
+ *
  * Usage:
  *   const { creditError, remaining } = await checkAndDeductCredit(orgRef, orgData, planConfig, plan);
  *   if (creditError) return creditError;   // already a secureResponse-shaped value
@@ -36,23 +40,54 @@ async function checkAndDeductCredit(orgRef, orgData, planConfig, plan) {
     };
   }
 
-  let aiCreditsRemaining = orgData.aiCreditsRemaining ?? 0;
+  const db = admin.firestore();
 
-  // ── Monthly reset for paid recurring plans (pro / business) ──────────────
-  // Trial credits are a one-time allotment that expire with the trial — no reset.
-  if (plan === "pro" || plan === "business") {
-    const resetAt = orgData.aiCreditsResetAt?.toDate?.() ?? null;
-    if (!resetAt || resetAt < new Date()) {
-      aiCreditsRemaining = planConfig.aiCreditsPerPeriod;
-      await orgRef.update({
-        aiCreditsRemaining,
-        aiCreditsResetAt: new Date(Date.now() + MONTH_MS)
+  // ── Transactional read-reset-deduct to prevent race conditions ──────────────
+  // Without a transaction, two simultaneous requests could both see "resetAt
+  // expired", both reset to 50 credits, and each deduct 1 — giving 49 instead
+  // of 48 remaining. Over time this adds up to free credits.
+  let remaining = 0;
+  let outOfCredits = false;
+
+  try {
+    await db.runTransaction(async (tx) => {
+      const freshSnap = await tx.get(orgRef);
+      const data = freshSnap.data() || {};
+
+      let credits = data.aiCreditsRemaining ?? 0;
+      const resetAt = data.aiCreditsResetAt?.toDate?.() ?? null;
+
+      // Monthly reset only for paid recurring plans (not trial — one-time allotment)
+      if ((plan === "pro" || plan === "business") && (!resetAt || resetAt < new Date())) {
+        credits = planConfig.aiCreditsPerPeriod;
+        tx.update(orgRef, {
+          aiCreditsRemaining: credits - 1,          // reset + deduct in one write
+          aiCreditsResetAt:   new Date(Date.now() + MONTH_MS),
+        });
+        remaining = credits - 1;
+        return;
+      }
+
+      if (credits <= 0) {
+        outOfCredits = true;
+        return;
+      }
+
+      // Normal deduct path
+      tx.update(orgRef, {
+        aiCreditsRemaining: admin.firestore.FieldValue.increment(-1),
       });
-    }
+      remaining = credits - 1;
+    });
+  } catch (txErr) {
+    // Transaction failed (conflict or network) — fail open so a single AI call
+    // isn't blocked by a transient error, but log it for monitoring.
+    console.error("aiCredits transaction error:", txErr?.message);
+    return { creditError: null, remaining: 1 }; // treat as 1 credit remaining
   }
 
   // ── Credit gate ───────────────────────────────────────────────────────────
-  if (aiCreditsRemaining <= 0) {
+  if (outOfCredits) {
     return {
       creditError: secureResponse(
         {
@@ -67,12 +102,7 @@ async function checkAndDeductCredit(orgRef, orgData, planConfig, plan) {
     };
   }
 
-  // ── Deduct 1 credit ───────────────────────────────────────────────────────
-  await orgRef.update({
-    aiCreditsRemaining: admin.firestore.FieldValue.increment(-1)
-  });
-
-  return { creditError: null, remaining: aiCreditsRemaining - 1 };
+  return { creditError: null, remaining };
 }
 
 module.exports = { checkAndDeductCredit };

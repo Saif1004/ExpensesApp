@@ -127,9 +127,11 @@ app.http("validateClaim", {
       const monthlyLimit = planConfig.claimsPerMonth ?? null;
 
       if (monthlyLimit !== null) {
-        // filter by user first, then narrow by date in memory to avoid a composite index
-        const now           = new Date();
-        const startOfMonth  = new Date(now.getFullYear(), now.getMonth(), 1);
+        // Use UTC month boundary to avoid timezone skew between server and user.
+        // Count only non-rejected claims — rejected claims shouldn't penalise users
+        // who had a legitimate claim blocked by policy.
+        const now = new Date();
+        const startOfMonthUtc = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 
         const userClaimsSnap = await db
           .collection("claims")
@@ -137,8 +139,11 @@ app.http("validateClaim", {
           .get();
 
         const monthCount = userClaimsSnap.docs.filter(d => {
-          const createdAt = d.data().createdAt?.toDate?.() ?? null;
-          return createdAt && createdAt >= startOfMonth;
+          const data = d.data();
+          // Exclude rejected claims — only count pending + approved
+          if (data.status === "rejected") return false;
+          const createdAt = data.createdAt?.toDate?.() ?? null;
+          return createdAt && createdAt >= startOfMonthUtc;
         }).length;
 
         if (monthCount >= monthlyLimit) {
@@ -272,22 +277,33 @@ Reply with JSON only — no explanation outside the JSON:
       }
 
       // --- Duplicate detection ---
-      // Flag if same user submitted the same merchant + amount within the last 30 days
-      // Only applies to receipt claims — mileage and per-diem can legitimately repeat
+      // Flag if same user submitted a similar merchant + same amount within the last 30 days.
+      // "Similar" = case-insensitive, whitespace-normalised merchant name match.
+      // Only applies to receipt claims — mileage and per-diem legitimately repeat.
       if (!claimType || claimType === "receipt") {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
+        // Normalise the submitted merchant name for comparison
+        const merchantNormalised = cleanMerchant.toLowerCase().replace(/\s+/g, " ").trim();
+
+        // Pull recent claims for this user + amount — Firestore can't do case-insensitive
+        // queries, so we filter merchant matching in memory after the amount index hit
         const dupSnap = await db.collection("claims")
           .where("userId", "==", userId)
-          .where("merchant", "==", cleanMerchant)
           .where("amount", "==", numericAmount)
-          .limit(5)
+          .limit(20)
           .get();
 
         const recentDup = dupSnap.docs.find(d => {
-          const createdAt = d.data().createdAt?.toDate?.() ?? null;
-          return createdAt && createdAt >= thirtyDaysAgo;
+          const data = d.data();
+          const createdAt = data.createdAt?.toDate?.() ?? null;
+          if (!createdAt || createdAt < thirtyDaysAgo) return false;
+          // Skip rejected claims — they shouldn't trigger duplicate warnings
+          if (data.status === "rejected") return false;
+          // Case-insensitive, whitespace-normalised merchant comparison
+          const existingMerchant = (data.merchant ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+          return existingMerchant === merchantNormalised;
         });
 
         if (recentDup) {

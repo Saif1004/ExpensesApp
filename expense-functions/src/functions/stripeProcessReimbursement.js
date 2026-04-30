@@ -47,6 +47,12 @@ app.http('stripeProcessReimbursement', {
 
       const claim = claimDoc.data();
 
+      // Claim must be in approved state before payment can be processed.
+      // This prevents admins from paying unapproved or rejected claims directly.
+      if (claim.status !== 'approved') {
+        return secureResponse({ error: 'Claim must be approved before payment can be processed.' }, 400);
+      }
+
       if (claim.paymentStatus === 'paid') {
         return secureResponse({ error: 'Claim already paid' }, 400);
       }

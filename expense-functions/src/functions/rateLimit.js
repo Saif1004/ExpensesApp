@@ -9,17 +9,30 @@ const IP_MAX_PER_MIN = 60;
 const ipStore = new Map(); // ip -> { count, windowStart }
 
 // pulls the real client ip from azure's forwarded headers
+// Azure Functions sets client-ip and may append to x-forwarded-for.
+// We take the LAST entry of x-forwarded-for (most recently added by Azure's
+// own infrastructure) to avoid spoofing via a user-supplied XFF header.
 function getClientIp(request) {
   const xff = request.headers.get("x-forwarded-for");
-  if (xff) return xff.split(",")[0].trim();
-  const clientIp = request.headers.get("client-ip") || "";
-  return clientIp.split(":")[0].trim() || "unknown";
+  if (xff && xff.trim()) {
+    const parts = xff.split(",").map(s => s.trim()).filter(Boolean);
+    // Use last entry — added by Azure's load balancer, harder to spoof
+    if (parts.length > 0) return parts[parts.length - 1];
+  }
+  const clientIp = request.headers.get("client-ip");
+  if (clientIp && clientIp.trim()) {
+    // Strip IPv6 port suffix if present (e.g. "1.2.3.4:50234")
+    return clientIp.split(":")[0].trim() || null;
+  }
+  return null;
 }
 
 // sliding window rate limit per ip, self-cleans stale entries occasionally
 function checkIpRateLimit(request, maxRequests = IP_MAX_PER_MIN, windowMs = WINDOW_1_MIN) {
   const ip = getClientIp(request);
-  if (!ip || ip === "unknown") return { allowed: true }; // can't block unknown IPs
+  // If we can't identify the IP, deny the request rather than allowing it —
+  // "unknown" IPs previously bypassed the rate limit entirely.
+  if (!ip) return { allowed: false, reason: "Cannot identify client IP" };
 
   const now    = Date.now();
   const entry  = ipStore.get(ip) || { count: 0, windowStart: now };
@@ -84,10 +97,14 @@ async function authAndLimit(request, field, maxRequests, windowMs = WINDOW_1_MIN
   // 1. ip check first — stops floods before we waste time on token verification
   const ipCheck = checkIpRateLimit(request);
   if (!ipCheck.allowed) {
+    const msg = ipCheck.reason === "Cannot identify client IP"
+      ? "Request origin could not be determined."
+      : "Too many requests from your IP. Please slow down.";
+    const status = ipCheck.reason === "Cannot identify client IP" ? 400 : 429;
     return {
       error: new Response(
-        JSON.stringify({ error: "Too many requests from your IP. Please slow down." }),
-        { status: 429, headers: { "Content-Type": "application/json", "Retry-After": "60" } }
+        JSON.stringify({ error: msg }),
+        { status, headers: { "Content-Type": "application/json", "Retry-After": "60" } }
       ),
     };
   }
