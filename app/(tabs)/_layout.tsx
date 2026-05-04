@@ -10,6 +10,7 @@ import {
 import { useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { usePostHog } from "posthog-react-native";
 
 import { useAuth } from "../context/AuthProvider";
 import { useTheme } from "../../hooks/useTheme";
@@ -47,6 +48,7 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const { role, authLoaded, user, orgId } = useAuth();
   const { tokens: t } = useTheme();
+  const posthog = usePostHog();
 
   const [claimsBadge, setClaimsBadge] = useState(0);
   const [usersBadge, setUsersBadge] = useState(0);
@@ -157,6 +159,7 @@ export default function TabLayout() {
       {/* ── HOME ── */}
       <Tabs.Screen
         name="home"
+        listeners={{ tabPress: () => posthog?.capture("tab_pressed", { tab: "home" }) }}
         options={{
           title: "Home",
           tabBarIcon: ({ color, focused }) => (
@@ -168,7 +171,12 @@ export default function TabLayout() {
       {/* ── CLAIMS (employee only) ── */}
       <Tabs.Screen
         name="claims"
-        listeners={{ tabPress: () => AsyncStorage.setItem(LAST_SEEN_CLAIMS, Date.now().toString()).then(() => setClaimsBadge(0)) }}
+        listeners={{
+          tabPress: () => {
+            posthog?.capture("tab_pressed", { tab: "claims" });
+            AsyncStorage.setItem(LAST_SEEN_CLAIMS, Date.now().toString()).then(() => setClaimsBadge(0));
+          },
+        }}
         options={{
           title: "Claims",
           href: isAdmin ? null : undefined,
@@ -182,7 +190,12 @@ export default function TabLayout() {
       {/* ── APPROVE (admin only) ── */}
       <Tabs.Screen
         name="admin"
-        listeners={{ tabPress: () => setAdminBadge(0) }}
+        listeners={{
+          tabPress: () => {
+            posthog?.capture("tab_pressed", { tab: "approve" });
+            setAdminBadge(0);
+          },
+        }}
         options={{
           title: "Approve",
           href: isAdmin ? undefined : null,
@@ -196,6 +209,7 @@ export default function TabLayout() {
       {/* ── ADD EXPENSE (centre) ── */}
       <Tabs.Screen
         name="add-expense"
+        listeners={{ tabPress: () => posthog?.capture("tab_pressed", { tab: "add_expense" }) }}
         options={{
           title: "",
           tabBarIcon: () => <AddIcon />,
@@ -205,6 +219,7 @@ export default function TabLayout() {
       {/* ── ANALYTICS (employee) / TEAM (admin) ── */}
       <Tabs.Screen
         name="Analytics"
+        listeners={{ tabPress: () => posthog?.capture("tab_pressed", { tab: "analytics" }) }}
         options={{
           title: "Analytics",
           href: isAdmin ? null : undefined,
@@ -216,7 +231,12 @@ export default function TabLayout() {
 
       <Tabs.Screen
         name="AdminUsers"
-        listeners={{ tabPress: () => setUsersBadge(0) }}
+        listeners={{
+          tabPress: () => {
+            posthog?.capture("tab_pressed", { tab: "team" });
+            setUsersBadge(0);
+          },
+        }}
         options={{
           title: "Team",
           href: isAdmin ? undefined : null,
@@ -230,6 +250,7 @@ export default function TabLayout() {
       {/* ── PROFILE ── */}
       <Tabs.Screen
         name="profile"
+        listeners={{ tabPress: () => posthog?.capture("tab_pressed", { tab: "profile" }) }}
         options={{
           title: "Profile",
           tabBarIcon: ({ color, focused }) => (

@@ -172,7 +172,7 @@ export default function AddExpenseScreen() {
         category,
         createdAt: serverTimestamp(),
       });
-      posthog.capture("template_saved");
+      posthog?.capture("template_saved");
       await loadTemplates();
     } catch (e: any) {
       Alert.alert("Error", "Could not save template.");
@@ -373,11 +373,11 @@ export default function AddExpenseScreen() {
         data.date ? "date" : null,
         data.category ? "category" : null,
       ].filter(Boolean);
-      posthog.capture("receipt_scanned", { fields_autofilled: filledFields.length });
+      posthog?.capture("receipt_scanned", { fields_autofilled: filledFields.length });
 
       Alert.alert("Receipt scanned", "Receipt fields auto-filled.");
     } catch (error: any) {
-      posthog.capture("receipt_scan_failed");
+      posthog?.capture("receipt_scan_failed");
       Alert.alert("Receipt Error", error?.message ?? "Something went wrong.");
       clearReceipt();
     } finally {
@@ -491,7 +491,7 @@ export default function AddExpenseScreen() {
       const result = await response.json();
 
       if (!response.ok || !result.valid) {
-        posthog.capture("expense_submission_failed", { reason: result.reason });
+        posthog?.capture("expense_submission_failed", { reason: result.reason });
         setSubmitError(result.reason ?? "Your claim could not be submitted. Please check the details and try again.");
         return;
       }
@@ -500,11 +500,11 @@ export default function AddExpenseScreen() {
       setSubmitError(null);
 
       if (claimType === "mileage") {
-        posthog.capture("mileage_claim_submitted", { distance: mileageDistance });
+        posthog?.capture("mileage_claim_submitted", { distance: mileageDistance });
       } else if (claimType === "perdiem") {
-        posthog.capture("perdiem_claim_submitted", { days: perDiemDays });
+        posthog?.capture("perdiem_claim_submitted", { days: perDiemDays });
       } else {
-        posthog.capture("expense_submitted", {
+        posthog?.capture("expense_submitted", {
           amount: Number(amount),
           category,
           has_receipt: !!receiptUrl,

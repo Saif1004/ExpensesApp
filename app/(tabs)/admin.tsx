@@ -412,7 +412,7 @@ export default function AdminScreen() {
           body: JSON.stringify({ claimId: claim.id, status: "pending_l2", adminFeedback: adminMessage.trim() || null }),
         }).catch(() => {});
       }).catch(() => {});
-      posthog.capture("claim_escalated_to_l2", { amount: claim.amount, category: claim.category });
+      posthog?.capture("claim_escalated_to_l2", { amount: claim.amount, category: claim.category });
       Alert.alert("Escalated", `This claim exceeds the £${approvalThreshold} threshold and needs a second approval.`);
       return;
     }
@@ -457,7 +457,7 @@ export default function AdminScreen() {
     }).catch(() => {});
 
     if (action === "approved") {
-      posthog.capture("claim_approved", {
+      posthog?.capture("claim_approved", {
         amount:   claim.amount,
         category: claim.category,
         reimburse: true,
@@ -480,7 +480,7 @@ export default function AdminScreen() {
         Alert.alert("Payment Error", err.message);
       }
     } else {
-      posthog.capture("claim_rejected", {
+      posthog?.capture("claim_rejected", {
         amount:   claim.amount,
         category: claim.category,
       });
@@ -588,9 +588,9 @@ export default function AdminScreen() {
     await Promise.allSettled(promises);
 
     if (bulkAction === "approved") {
-      posthog.capture("bulk_claims_approved", { count: selectedIds.size });
+      posthog?.capture("bulk_claims_approved", { count: selectedIds.size });
     } else {
-      posthog.capture("bulk_claims_rejected", { count: selectedIds.size });
+      posthog?.capture("bulk_claims_rejected", { count: selectedIds.size });
     }
 
     setSelectionMode(false);

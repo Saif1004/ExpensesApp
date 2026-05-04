@@ -200,7 +200,7 @@ export default function AdminUsers() {
         return;
       }
       await updateDoc(doc(db, "memberships", membershipId), { status: "approved" });
-      posthog.capture("member_request_approved");
+      posthog?.capture("member_request_approved");
 
       // ping the employee with a notification — fire and forget
       const notifyUrl = process.env.EXPO_PUBLIC_NOTIFY_MEMBERSHIP_STATUS_URL;
@@ -227,7 +227,7 @@ export default function AdminUsers() {
   const rejectUser = async (membershipId: string) => {
     try {
       await updateDoc(doc(db, "memberships", membershipId), { status: "rejected" });
-      posthog.capture("member_request_rejected");
+      posthog?.capture("member_request_rejected");
 
       // same notification flow for rejection
       const notifyUrl = process.env.EXPO_PUBLIC_NOTIFY_MEMBERSHIP_STATUS_URL;
@@ -287,7 +287,7 @@ export default function AdminUsers() {
       await updateDoc(doc(db, "memberships", budgetUser.membershipId), {
         budgetLimit: value
       });
-      posthog.capture("budget_limit_set", { limit: value ?? "removed" });
+      posthog?.capture("budget_limit_set", { limit: value ?? "removed" });
       closeBudgetModal();
       loadUsers(true);
     } catch {

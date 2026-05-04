@@ -34,7 +34,9 @@ import { ThemeProvider, useThemeContext } from "./context/ThemeContext";
 import { db } from "./firebase/firebaseConfig";
 
 const STRIPE_PK      = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY!;
-const POSTHOG_KEY    = process.env.EXPO_PUBLIC_POSTHOG_API_KEY!;
+// POSTHOG_KEY may be absent in local dev — guard all call sites with ?. so a
+// missing key never crashes the app (PostHogProvider throws if apiKey is undefined).
+const POSTHOG_KEY    = process.env.EXPO_PUBLIC_POSTHOG_API_KEY ?? "";
 const POSTHOG_HOST   = process.env.EXPO_PUBLIC_POSTHOG_HOST ?? "https://eu.i.posthog.com";
 const TERMS_URL      = "https://doc-hosting.flycricket.io/claimio-terms-of-use/1f9b2874-dd4b-4eea-b8e0-6ad1c9ab563b/terms";
 const PRIVACY_URL    = "https://doc-hosting.flycricket.io/claimio-privacy-policy/b73958a1-ae06-494d-b3a9-2c9b7183d4b3/privacy";
@@ -205,7 +207,7 @@ function TermsGate({ children }: { children: React.ReactNode }) {
         setDoc(doc(db, "users", user.uid), { termsAccepted: true }, { merge: true }),
         AsyncStorage.setItem(cacheKey, "true"),
       ]);
-      posthog.capture("terms_accepted");
+      posthog?.capture("terms_accepted");
     }
     setVisible(false);
   };
@@ -289,15 +291,35 @@ function TermsGate({ children }: { children: React.ReactNode }) {
   );
 }
 
+// maps raw expo-router paths to human-readable screen names for PostHog
+const SCREEN_NAMES: Record<string, string> = {
+  "/(tabs)/home":        "Home",
+  "/(tabs)/claims":      "My Claims",
+  "/(tabs)/admin":       "Approve Claims",
+  "/(tabs)/add-expense": "Add Expense",
+  "/(tabs)/Analytics":   "Analytics",
+  "/(tabs)/AdminUsers":  "Team",
+  "/(tabs)/profile":     "Profile",
+  "/(tabs)/chatbot":     "AI Assistant",
+  "/sign-in":            "Sign In",
+  "/sign-up":            "Sign Up",
+  "/social-onboarding":  "Onboarding",
+};
+
 // auto-tracks every screen view via expo-router's pathname
+// fires on every navigation — tabs, stack pushes, modals, deep links
 
 function ScreenTracker() {
   const pathname = usePathname();
   const posthog  = usePostHog();
+  const { role }  = useAuth();
 
   useEffect(() => {
-    if (pathname) posthog.screen(pathname);
-  }, [pathname]);
+    if (!pathname) return;
+    // strip dynamic segments for the name lookup (e.g. /claims/abc123 → /claims/abc123 stays raw)
+    const screenName = SCREEN_NAMES[pathname] ?? pathname;
+    posthog?.screen(screenName, { path: pathname, role: role ?? "unknown" });
+  }, [pathname, role]);
 
   return null;
 }
@@ -337,13 +359,21 @@ function AppShell() {
 }
 
 export default Sentry.wrap(function RootLayout() {
+  const inner = (
+    <StripeProvider publishableKey={STRIPE_PK} merchantIdentifier="merchant.com.saif1004.claimio">
+      <ThemeProvider>
+        <AppShell />
+      </ThemeProvider>
+    </StripeProvider>
+  );
+
+  // Only mount PostHogProvider when a key is actually available.
+  // Without this guard, a missing env var causes a fatal crash on launch.
+  if (!POSTHOG_KEY) return inner;
+
   return (
     <PostHogProvider apiKey={POSTHOG_KEY} options={{ host: POSTHOG_HOST }}>
-      <StripeProvider publishableKey={STRIPE_PK} merchantIdentifier="merchant.com.saif1004.claimio">
-        <ThemeProvider>
-          <AppShell />
-        </ThemeProvider>
-      </StripeProvider>
+      {inner}
     </PostHogProvider>
   );
 });

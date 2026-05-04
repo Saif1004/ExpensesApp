@@ -106,11 +106,11 @@ export default function SignIn() {
       if (!idToken) throw new Error("No ID token returned");
       const credential = GoogleAuthProvider.credential(idToken);
       const result     = await signInWithCredential(auth, credential);
-      posthog.identify(result.user.uid, {
+      posthog?.identify(result.user.uid, {
         $set: { email: result.user.email ?? undefined },
         $set_once: { first_login_date: new Date().toISOString() },
       });
-      posthog.capture("user_signed_in", { method: "google" });
+      posthog?.capture("user_signed_in", { method: "google" });
       await handleSocialAuth(result.user.uid);
     } catch (err: any) {
       const code = err?.code ?? "";
@@ -142,11 +142,11 @@ export default function SignIn() {
         idToken: appleCredential.identityToken!,
       });
       const result = await signInWithCredential(auth, oauthCredential);
-      posthog.identify(result.user.uid, {
+      posthog?.identify(result.user.uid, {
         $set: { email: result.user.email ?? undefined },
         $set_once: { first_login_date: new Date().toISOString() },
       });
-      posthog.capture("user_signed_in", { method: "apple" });
+      posthog?.capture("user_signed_in", { method: "apple" });
       await handleSocialAuth(result.user.uid);
     } catch (err: any) {
       if (err?.code !== "ERR_REQUEST_CANCELED") {
@@ -228,11 +228,11 @@ export default function SignIn() {
 
       failedAttemptsRef.current = 0;
       setLockedUntil(null);
-      posthog.identify(cred.user.uid, {
+      posthog?.identify(cred.user.uid, {
         $set: { email: cred.user.email ?? undefined },
         $set_once: { first_login_date: new Date().toISOString() },
       });
-      posthog.capture("user_signed_in", { method: "email" });
+      posthog?.capture("user_signed_in", { method: "email" });
       router.replace("/(tabs)/home");
 
     } catch (err: any) {
@@ -250,23 +250,23 @@ export default function SignIn() {
           const until = Date.now() + LOCKOUT_MS;
           setLockedUntil(until);
           failedAttemptsRef.current = 0;
-          posthog.capture("sign_in_failed", { reason: "account_locked" });
+          posthog?.capture("sign_in_failed", { reason: "account_locked" });
           Alert.alert(
             "Too many attempts",
             "Account temporarily locked for 15 minutes. Please try again later."
           );
         } else {
-          posthog.capture("sign_in_failed", { reason: "invalid_credentials" });
+          posthog?.capture("sign_in_failed", { reason: "invalid_credentials" });
           Alert.alert(
             "Incorrect credentials",
             `Email or password is incorrect. ${remaining} attempt${remaining !== 1 ? "s" : ""} remaining.`
           );
         }
       } else if (code === "auth/too-many-requests") {
-        posthog.capture("sign_in_failed", { reason: "too_many_requests" });
+        posthog?.capture("sign_in_failed", { reason: "too_many_requests" });
         Alert.alert("Too many attempts", "Account temporarily locked by the server. Try again later.");
       } else {
-        posthog.capture("sign_in_failed", { reason: "unknown" });
+        posthog?.capture("sign_in_failed", { reason: "unknown" });
         Alert.alert("Sign in failed", "Something went wrong. Please try again.");
       }
     } finally {
@@ -297,7 +297,7 @@ export default function SignIn() {
       }
 
       await sendPasswordResetEmail(auth, email);
-      posthog.capture("password_reset_requested");
+      posthog?.capture("password_reset_requested");
       Alert.alert(
         "Email sent",
         "If an account exists with that email, you will receive password reset instructions."

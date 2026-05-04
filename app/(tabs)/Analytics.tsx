@@ -244,7 +244,7 @@ export default function AnalyticsScreen() {
   }, [claims, scope]);
 
   async function generateAIInsights() {
-    posthog.capture("ai_insights_generated", { period, scope });
+    posthog?.capture("ai_insights_generated", { period, scope });
     try {
       setAiLoading(true);
       if (!user) return;
@@ -279,7 +279,7 @@ export default function AnalyticsScreen() {
   }
 
   async function runExport(format: string, getRows: (cs: Claim[]) => string[], header: string, filename: string, mime: string, dialogTitle: string) {
-    posthog.capture("analytics_export_triggered", { format, period, scope });
+    posthog?.capture("analytics_export_triggered", { format, period, scope });
     try {
       const cs = await getExportClaims();
       const data = format === "pdf" ? null : header + getRows(cs).join("\n");
@@ -294,7 +294,7 @@ export default function AnalyticsScreen() {
 
   async function exportCSV()  { runExport("csv",  rows => rowData(rows).map(rowToCSV),  "Reference,Employee,Merchant,Amount (£),Category,Status,Payment Status,Approved By,Notes,Purchase Date,Submitted Date\n",  "claims_export.csv",  "text/csv",  "Export CSV"); }
   async function exportPDF()  {
-    posthog.capture("analytics_export_triggered", { format: "pdf", period, scope });
+    posthog?.capture("analytics_export_triggered", { format: "pdf", period, scope });
     try {
       const cs   = await getExportClaims();
       const rows = rowData(cs);
@@ -308,7 +308,7 @@ export default function AnalyticsScreen() {
   }
   async function exportXero() {
     if (!requireBusiness()) return;
-    posthog.capture("analytics_export_triggered", { format: "xero", period, scope });
+    posthog?.capture("analytics_export_triggered", { format: "xero", period, scope });
     try {
       const cs = (await getExportClaims()).filter(c => c.status === "approved");
       if (!cs.length) { Alert.alert("No approved claims", "Xero export only includes approved claims."); return; }
@@ -320,7 +320,7 @@ export default function AnalyticsScreen() {
   }
   async function exportQBO() {
     if (!requireBusiness()) return;
-    posthog.capture("analytics_export_triggered", { format: "qbo", period, scope });
+    posthog?.capture("analytics_export_triggered", { format: "qbo", period, scope });
     try {
       const cs = (await getExportClaims()).filter(c => c.status === "approved");
       if (!cs.length) { Alert.alert("No approved claims", "QuickBooks export only includes approved claims."); return; }
@@ -332,7 +332,7 @@ export default function AnalyticsScreen() {
   }
   async function exportSage() {
     if (!requireBusiness()) return;
-    posthog.capture("analytics_export_triggered", { format: "sage", period, scope });
+    posthog?.capture("analytics_export_triggered", { format: "sage", period, scope });
     try {
       const cs = (await getExportClaims()).filter(c => c.status === "approved");
       if (!cs.length) { Alert.alert("No approved claims", "Sage export only includes approved claims."); return; }
