@@ -24,6 +24,9 @@
   },
   "submit": {
     "production": {
+      "ios": {
+        "ascAppId": "6762166701"
+      },
       "android": {
         "serviceAccountKeyPath": "/Users/saif1004/Downloads/expenseapp-3dafd-113490758f6b.json",
         "track": "internal"
