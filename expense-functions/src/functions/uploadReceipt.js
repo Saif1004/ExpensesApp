@@ -1,4 +1,5 @@
 const { app } = require("@azure/functions");
+const { randomUUID } = require("crypto");
 const {
   BlobServiceClient,
   StorageSharedKeyCredential,
@@ -7,6 +8,15 @@ const {
 } = require("@azure/storage-blob");
 const { authAndLimit } = require("./rateLimit");
 const { secureResponse } = require("./security");
+
+// magic-byte check — only allow JPEG, PNG, and WebP receipts
+function isAllowedImageBuffer(buffer) {
+  if (buffer.length < 12) return false;
+  const isJpeg = buffer[0] === 0xFF && buffer[1] === 0xD8 && buffer[2] === 0xFF;
+  const isPng  = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4E && buffer[3] === 0x47;
+  const isWebp = buffer.slice(8, 12).toString("ascii") === "WEBP";
+  return isJpeg || isPng || isWebp;
+}
 
 //////////////////////////////////////////////////////
 // Parse AccountName and AccountKey from connection string
@@ -64,6 +74,14 @@ app.http("uploadReceipt", {
 
       context.log("Starting receipt upload...");
 
+      // decode first so we can inspect the magic bytes before uploading
+      const buffer = Buffer.from(image, "base64");
+
+      // reject non-image files even if they pass the base64 check
+      if (!isAllowedImageBuffer(buffer)) {
+        return secureResponse({ error: "Only JPEG, PNG, and WebP images are accepted" }, 400);
+      }
+
       const blobServiceClient =
         BlobServiceClient.fromConnectionString(connectionString);
 
@@ -72,12 +90,11 @@ app.http("uploadReceipt", {
 
       await containerClient.createIfNotExists();
 
-      const fileName = `receipt-${Date.now()}.jpg`;
+      // use a UUID so blob names are not guessable from upload timestamps
+      const fileName = `receipt-${auth.uid}-${randomUUID()}.jpg`;
 
       const blockBlobClient =
         containerClient.getBlockBlobClient(fileName);
-
-      const buffer = Buffer.from(image, "base64");
 
       await blockBlobClient.uploadData(buffer, {
         blobHTTPHeaders: {
@@ -96,8 +113,9 @@ app.http("uploadReceipt", {
       const { accountName, accountKey } = parseConnectionString(connectionString);
       const sharedKeyCredential = new StorageSharedKeyCredential(accountName, accountKey);
 
+      // 30-day SAS expiry — long enough for admins to review, short enough to limit exposure
       const expiresOn = new Date();
-      expiresOn.setFullYear(expiresOn.getFullYear() + 1);
+      expiresOn.setDate(expiresOn.getDate() + 30);
 
       const sasToken = generateBlobSASQueryParameters(
         {
@@ -115,7 +133,7 @@ app.http("uploadReceipt", {
 
     } catch (error) {
       context.log("UPLOAD ERROR:", error?.message || error);
-      return secureResponse({ error: error?.message || "Receipt upload failed" }, 500);
+      return secureResponse({ error: "Receipt upload failed" }, 500);
     }
   }
 });

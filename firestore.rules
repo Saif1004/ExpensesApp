@@ -33,13 +33,14 @@ service cloud.firestore {
 
     // True if the calling user is an admin of the given org — either the
     // original owner OR a member explicitly promoted via the orgAdmins array.
-    // The orgAdmins array is maintained client-side by manage-employees and
-    // can only be written by the org owner (enforced by the organisations rule).
+    // The orgAdmins array is maintained by manage-employees and can only be
+    // written by the org owner (enforced by the organisations rule).
+    // NOTE: when removing a member, the admin panel also removes their UID
+    // from orgAdmins[] so stale entries cannot persist.
     function isOrgAdmin(orgId) {
-      // .get('orgAdmins', []) returns [] when the field is absent, avoiding
-      // the 'key in map' operator which can be unreliable on missing fields.
-      return get(/databases/$(database)/documents/organisations/$(orgId)).data.ownerId == request.auth.uid
-          || request.auth.uid in get(/databases/$(database)/documents/organisations/$(orgId)).data.get('orgAdmins', []);
+      let orgData = get(/databases/$(database)/documents/organisations/$(orgId)).data;
+      return orgData.ownerId == request.auth.uid
+          || request.auth.uid in orgData.get('orgAdmins', []);
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -212,8 +213,11 @@ service cloud.firestore {
 
     match /organisations/{orgId} {
 
-      // request.auth != null (not verified()) so new members can look up
-      // the org by invite code during sign-up before email is verified.
+      // Requires authentication. The invite-code lookup at sign-up runs before
+      // email is verified so we can't require verified() here without breaking
+      // the sign-up flow. Full fix: move invite-code lookup to a server-side
+      // Azure Function so unauthenticated users can never query org docs.
+      // Unauthenticated requests are blocked by Firebase by default.
       allow read: if request.auth != null;
 
       // request.auth != null (not verified()) — email not yet verified at sign-up time
@@ -283,10 +287,18 @@ service cloud.firestore {
       // Any org admin can approve/reject a claim (update status + feedback).
       // An admin CANNOT approve their own claim — this prevents self-approval fraud.
       // Financial and identity fields are completely locked.
+      // Status transition guard: only pending/pending_l2 claims may be actioned —
+      // prevents re-approving already-approved claims which would trigger duplicate payments.
       allow update: if verified()
                     && isOrgAdmin(resource.data.orgId)
                     // Self-approval prevention: admin cannot action their own claim
                     && resource.data.userId != request.auth.uid
+                    // Status transition guard: only action claims that are actually pending
+                    && (resource.data.status == 'pending' || resource.data.status == 'pending_l2')
+                    // Outbound status must be a valid terminal state
+                    && (request.resource.data.status == 'approved'
+                        || request.resource.data.status == 'rejected'
+                        || request.resource.data.status == 'pending_l2')
                     // Lock all financial and identity fields
                     && request.resource.data.userId       == resource.data.userId
                     && request.resource.data.orgId        == resource.data.orgId

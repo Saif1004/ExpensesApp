@@ -2,7 +2,6 @@ import { usePostHog } from "posthog-react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Image,
   Keyboard,
@@ -17,6 +16,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import AnimatedLoader from "../../components/AnimatedLoader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -1005,8 +1005,10 @@ export default function AddExpenseScreen() {
                       >
                         {ocrLoading ? (
                           <View style={styles.ocrLoading}>
-                            <ActivityIndicator color={t.accent} size="large" />
-                            <ThemedText style={styles.ocrText}>Scanning receipt…</ThemedText>
+                            <AnimatedLoader
+                              messages={["Uploading receipt…", "Scanning receipt…", "Reading details…", "Almost there…"]}
+                              intervalMs={1600}
+                            />
                           </View>
                         ) : (
                           <>
@@ -1115,7 +1117,10 @@ export default function AddExpenseScreen() {
                     activeOpacity={0.85}
                   >
                     {saving ? (
-                      <ActivityIndicator color={t.accentText} />
+                      <AnimatedLoader
+                        messages={["Submitting claim…", "Checking policies…", "Almost there…"]}
+                        intervalMs={1600}
+                      />
                     ) : (
                       <View style={styles.submitInner}>
                         <Ionicons name="send-outline" size={16} color="#fff" style={{ marginRight: 8 }} />
@@ -1219,7 +1224,10 @@ export default function AddExpenseScreen() {
                     activeOpacity={0.85}
                   >
                     {saving ? (
-                      <ActivityIndicator color={t.accentText} />
+                      <AnimatedLoader
+                        messages={["Submitting claim…", "Checking policies…", "Almost there…"]}
+                        intervalMs={1600}
+                      />
                     ) : (
                       <View style={styles.submitInner}>
                         <Ionicons name="car-outline" size={16} color="#fff" style={{ marginRight: 8 }} />
@@ -1301,7 +1309,10 @@ export default function AddExpenseScreen() {
                     activeOpacity={0.85}
                   >
                     {saving ? (
-                      <ActivityIndicator color={t.accentText} />
+                      <AnimatedLoader
+                        messages={["Submitting claim…", "Checking policies…", "Almost there…"]}
+                        intervalMs={1600}
+                      />
                     ) : (
                       <View style={styles.submitInner}>
                         <Ionicons name="moon-outline" size={16} color="#fff" style={{ marginRight: 8 }} />

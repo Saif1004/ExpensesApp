@@ -89,27 +89,60 @@ app.http("deleteAccount", {
 
         if (isOwner) {
 
-          // Delete every membership in this org
+          // Find other approved admins who could take over the org
+          const otherAdmins = await db.collection("memberships")
+            .where("orgId",  "==", orgId)
+            .where("role",   "==", "admin")
+            .where("status", "==", "approved")
+            .get();
+
+          const nextAdmin = otherAdmins.docs.find(d => d.data().userId !== uid);
+
+          // Count ALL other members (anyone who isn't the deleting owner)
           const allMemberships = await db.collection("memberships").where("orgId", "==", orgId).get();
-          allMemberships.docs.forEach(m => refsToDelete.push(m.ref));
+          const otherMembers = allMemberships.docs.filter(d => d.data().userId !== uid);
 
-          // Delete every claim in this org
-          const orgClaims = await db.collection("claims").where("orgId", "==", orgId).get();
-          orgClaims.docs.forEach(c => refsToDelete.push(c.ref));
+          if (nextAdmin) {
+            // PATH 1: Another admin exists — transfer ownership, remove the deleting user only.
+            // Employees and their data are completely untouched.
+            const newOwnerId = nextAdmin.data().userId;
+            const orgAdminsSnap = orgDoc.data()?.orgAdmins ?? [];
+            const updatedOrgAdmins = orgAdminsSnap.filter((id) => id !== uid);
+            if (!updatedOrgAdmins.includes(newOwnerId)) updatedOrgAdmins.push(newOwnerId);
 
-          // Delete every policy in this org
-          const orgPolicies = await db.collection("policies").where("orgId", "==", orgId).get();
-          orgPolicies.docs.forEach(p => refsToDelete.push(p.ref));
+            await orgDoc.ref.update({
+              ownerId:   newOwnerId,
+              orgAdmins: updatedOrgAdmins,
+            });
 
-          // Delete the org itself
-          refsToDelete.push(orgDoc.ref);
+            // Remove only the owner's own membership + their own claims
+            refsToDelete.push(memberDoc.ref);
+            const ownerClaims = await db.collection("claims").where("userId", "==", uid).get();
+            ownerClaims.docs.forEach(c => refsToDelete.push(c.ref));
+
+          } else if (otherMembers.length === 0) {
+            // PATH 2: Owner is the sole member — safe to delete everything.
+            allMemberships.docs.forEach(m => refsToDelete.push(m.ref));
+            const orgClaims = await db.collection("claims").where("orgId", "==", orgId).get();
+            orgClaims.docs.forEach(c => refsToDelete.push(c.ref));
+            const orgPolicies = await db.collection("policies").where("orgId", "==", orgId).get();
+            orgPolicies.docs.forEach(p => refsToDelete.push(p.ref));
+            refsToDelete.push(orgDoc.ref);
+
+          } else {
+            // PATH 3: Owner is sole admin but employees still exist — block deletion.
+            // We cannot destroy other people's data without their consent.
+            return secureResponse({
+              error: "OwnerHasMembers",
+              message: "You are the only admin for this organisation. Please promote another member to admin or remove all employees before deleting your account."
+            }, 409);
+          }
 
         } else {
 
-          // Non-owner: remove only this membership
+          // Non-owner: remove only this membership and their own claims
           refsToDelete.push(memberDoc.ref);
 
-          // Delete this user's claims
           const userClaims = await db.collection("claims").where("userId", "==", uid).get();
           userClaims.docs.forEach(c => refsToDelete.push(c.ref));
 

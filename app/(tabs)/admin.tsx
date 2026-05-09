@@ -4,6 +4,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
   onSnapshot,
   orderBy,
   query,
@@ -12,8 +13,8 @@ import {
   where
 } from "firebase/firestore";
 import { useEffect, useMemo, useState } from "react";
+import AnimatedLoader from "../../components/AnimatedLoader";
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
   Image,
@@ -113,6 +114,11 @@ export default function AdminScreen() {
   const [historyFilter, setHistoryFilter]           = useState<HistoryFilter>("all");
   const [approvalThreshold, setApprovalThreshold]   = useState<number | null>(null);
 
+  // history pagination — start at 100, grow by 100 on "Load more"
+  const HISTORY_PAGE = 100;
+  const [historyLimit, setHistoryLimit]   = useState(HISTORY_PAGE);
+  const [historyHasMore, setHistoryHasMore] = useState(false);
+
   // date-range filter for history exports
   const [exportDateFrom, setExportDateFrom] = useState("");
   const [exportDateTo, setExportDateTo]     = useState("");
@@ -160,7 +166,7 @@ export default function AdminScreen() {
     return unsub;
   }, [role, orgId, user]);
 
-  // real-time listener for approved/rejected claims
+  // real-time listener for approved/rejected claims — paginated to avoid full-collection reads
 
   useEffect(() => {
     if (role !== "admin" || !orgId || !user?.emailVerified) return;
@@ -169,20 +175,23 @@ export default function AdminScreen() {
       collection(db, "claims"),
       where("orgId",  "==", orgId),
       where("status", "in", ["approved", "rejected"]),
-      orderBy("createdAt", "desc")
+      orderBy("createdAt", "desc"),
+      limit(historyLimit + 1)   // fetch one extra to detect if there are more pages
     );
 
     const unsub = addListener(onSnapshot(q, (snapshot) => {
-      const data: Claim[] = snapshot.docs.map((docSnap) => ({
+      const hasMore = snapshot.docs.length > historyLimit;
+      const data: Claim[] = snapshot.docs.slice(0, historyLimit).map((docSnap) => ({
         id: docSnap.id,
         ...(docSnap.data() as Omit<Claim, "id">)
       }));
       setHistoryClaims(data);
+      setHistoryHasMore(hasMore);
       setHistoryLoading(false);
     }, () => {}));
 
     return unsub;
-  }, [role, orgId, user]);
+  }, [role, orgId, user, historyLimit]);
 
   // filtered and searched lists derived from the raw snapshots
 
@@ -235,6 +244,16 @@ export default function AdminScreen() {
 
   // CSV and PDF export helpers
 
+  // HTML-encode user-controlled fields before inserting into the PDF WebView template.
+  // adminFeedback (notes) is the highest-risk field — free text entered by the admin.
+  const htmlEncode = (str: string | undefined | null): string =>
+    String(str ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#x27;");
+
   function claimToRow(c: Claim) {
     const fmtDate = (val?: string) => val ? new Date(val).toLocaleDateString("en-GB") : "—";
     const fmtCreated = (c: Claim) => {
@@ -243,18 +262,18 @@ export default function AdminScreen() {
       return d ? d.toLocaleDateString("en-GB") : "—";
     };
     return {
-      claimRef:      c.id.slice(0, 8).toUpperCase(),
-      employee:      c.userEmail ?? "—",
-      merchant:      c.merchant ?? "—",
+      claimRef:      htmlEncode(c.id.slice(0, 8).toUpperCase()),
+      employee:      htmlEncode(c.userEmail ?? "—"),
+      merchant:      htmlEncode(c.merchant ?? "—"),
       amount:        Number(c.amount).toFixed(2),
-      category:      c.category ?? "—",
-      department:    c.departmentName ?? "—",
-      status:        c.status ?? "—",
-      paymentStatus: c.paymentStatus ?? "—",
-      approvedBy:    c.approvedBy ?? "—",
-      notes:         c.adminFeedback ?? c.description ?? "—",
-      purchaseDate:  fmtDate(c.purchaseDate),
-      submittedDate: fmtCreated(c),
+      category:      htmlEncode(c.category ?? "—"),
+      department:    htmlEncode(c.departmentName ?? "—"),
+      status:        htmlEncode(c.status ?? "—"),
+      paymentStatus: htmlEncode(c.paymentStatus ?? "—"),
+      approvedBy:    htmlEncode(c.approvedBy ?? "—"),
+      notes:         htmlEncode(c.adminFeedback ?? c.description ?? "—"),
+      purchaseDate:  htmlEncode(fmtDate(c.purchaseDate)),
+      submittedDate: htmlEncode(fmtCreated(c)),
     };
   }
 
@@ -542,6 +561,8 @@ export default function AdminScreen() {
       c => selectedIds.has(c.id) && c.userId !== user?.uid
     );
 
+    const failedPayments: string[] = [];
+
     const promises = claimsToProcess.map(async (claim) => {
       await updateDoc(doc(db, "claims", claim.id), {
         status:          bulkAction,
@@ -567,13 +588,18 @@ export default function AdminScreen() {
       }).catch(() => {});
 
       if (bulkAction === "approved") {
-        currentUser?.getIdToken().then(token => {
-          fetch(REIMBURSE_URL, {
+        try {
+          const token = await currentUser?.getIdToken();
+          const res   = await fetch(REIMBURSE_URL, {
             method:  "POST",
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
             body:    JSON.stringify({ claimId: claim.id, orgId: claim.orgId }),
-          }).catch(() => {});
-        }).catch(() => {});
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data.error) failedPayments.push(claim.id);
+        } catch {
+          failedPayments.push(claim.id);
+        }
       }
 
       currentUser?.getIdToken().then(token => {
@@ -589,6 +615,12 @@ export default function AdminScreen() {
 
     if (bulkAction === "approved") {
       posthog?.capture("bulk_claims_approved", { count: selectedIds.size });
+      if (failedPayments.length > 0) {
+        Alert.alert(
+          "Payment Warning",
+          `${failedPayments.length} claim${failedPayments.length !== 1 ? "s were" : " was"} approved but payment failed. Please review those claims manually.`
+        );
+      }
     } else {
       posthog?.capture("bulk_claims_rejected", { count: selectedIds.size });
     }
@@ -1277,19 +1309,19 @@ export default function AdminScreen() {
         <View style={styles.exportRow}>
           <TouchableOpacity style={styles.exportBtn} onPress={handleExportCSV} disabled={exportLoading} activeOpacity={0.7}>
             {exportLoading
-              ? <ActivityIndicator size="small" color={t.accent} />
+              ? <AnimatedLoader messages={["Exporting…", "Building file…", "Almost there…"]} intervalMs={1400} />
               : <><Ionicons name="document-text-outline" size={14} color={t.accent} style={{ marginRight: 5 }} /><ThemedText style={styles.exportBtnText}>CSV</ThemedText></>
             }
           </TouchableOpacity>
           <TouchableOpacity style={styles.exportBtn} onPress={handleExportXLSX} disabled={exportLoading} activeOpacity={0.7}>
             {exportLoading
-              ? <ActivityIndicator size="small" color={t.accent} />
+              ? <AnimatedLoader messages={["Exporting…", "Building file…", "Almost there…"]} intervalMs={1400} />
               : <><Ionicons name="grid-outline" size={14} color={t.accent} style={{ marginRight: 5 }} /><ThemedText style={styles.exportBtnText}>Excel</ThemedText></>
             }
           </TouchableOpacity>
           <TouchableOpacity style={styles.exportBtn} onPress={handleExportPDF} disabled={exportLoading} activeOpacity={0.7}>
             {exportLoading
-              ? <ActivityIndicator size="small" color={t.accent} />
+              ? <AnimatedLoader messages={["Exporting…", "Building file…", "Almost there…"]} intervalMs={1400} />
               : <><Ionicons name="print-outline" size={14} color={t.accent} style={{ marginRight: 5 }} /><ThemedText style={styles.exportBtnText}>PDF</ThemedText></>
             }
           </TouchableOpacity>
@@ -1373,7 +1405,9 @@ export default function AdminScreen() {
       {/* pending tab */}
       {tab === "pending" ? (
         loading ? (
-          <View style={styles.center}><ActivityIndicator size="large" color={t.accent} /></View>
+          <View style={styles.center}>
+            <AnimatedLoader messages={["Fetching claims…", "Loading queue…", "Almost there…"]} />
+          </View>
         ) : (
           <>
             <FlatList
@@ -1570,7 +1604,9 @@ export default function AdminScreen() {
 
         /* history tab */
         historyLoading ? (
-          <View style={styles.center}><ActivityIndicator size="large" color={t.accent} /></View>
+          <View style={styles.center}>
+            <AnimatedLoader messages={["Loading history…", "Fetching records…", "Almost there…"]} />
+          </View>
         ) : (
           <FlatList
             data={filteredHistory}
@@ -1584,6 +1620,19 @@ export default function AdminScreen() {
                   ? "No claims match your filter"
                   : "No processed claims yet"
               } />
+            }
+            ListFooterComponent={
+              historyHasMore && !search.trim() && historyFilter === "all" ? (
+                <TouchableOpacity
+                  onPress={() => setHistoryLimit(prev => prev + HISTORY_PAGE)}
+                  style={{ alignItems: "center", paddingVertical: 16 }}
+                  activeOpacity={0.7}
+                >
+                  <ThemedText style={{ color: t.accent, fontWeight: "600", fontSize: 14 }}>
+                    Load more
+                  </ThemedText>
+                </TouchableOpacity>
+              ) : null
             }
             renderItem={({ item }) => (
               <ThemedView style={styles.card}>

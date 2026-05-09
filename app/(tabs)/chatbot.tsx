@@ -1,5 +1,6 @@
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useEffect, useMemo, useRef, useState } from "react";
+import AnimatedLoader from "../../components/AnimatedLoader";
 import {
   Alert,
   Animated,
@@ -402,10 +403,11 @@ export default function ChatbotScreen() {
               }}
               ListFooterComponent={
                 botTyping ? (
-                  <View style={[styles.messageBubble, styles.botBubble]}>
-                    <ThemedText style={styles.botMessageText}>
-                      ...
-                    </ThemedText>
+                  <View style={[styles.messageBubble, styles.botBubble, { paddingVertical: 12 }]}>
+                    <AnimatedLoader
+                      messages={["Thinking…", "Checking your expenses…", "Almost there…"]}
+                      intervalMs={1600}
+                    />
                   </View>
                 ) : null
               }

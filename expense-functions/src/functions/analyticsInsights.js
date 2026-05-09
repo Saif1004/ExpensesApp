@@ -88,25 +88,29 @@ app.http("analyticsInsights", {
       // RATE LIMIT (per user, per minute)
       ////////////////////////////////////////////////////
 
+      // atomic transaction prevents TOCTOU bypass via parallel requests
       const userRef = db.collection("users").doc(userId);
-      const userSnap = await userRef.get();
-      const userData = userSnap.data() || {};
+      let analyticsRateLimitExceeded = false;
 
-      const rw = userData.rateLimitAnalytics || { count: 0, windowStart: 0 };
-      const now = Date.now();
-      const windowExpired = (now - rw.windowStart) > RATE_WINDOW_MS;
-      const newCount = windowExpired ? 1 : rw.count + 1;
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(userRef);
+        const userData = snap.data() || {};
+        const rw = userData.rateLimitAnalytics || { count: 0, windowStart: 0 };
+        const now = Date.now();
+        const windowExpired = (now - rw.windowStart) > RATE_WINDOW_MS;
+        const newCount = windowExpired ? 1 : rw.count + 1;
+        analyticsRateLimitExceeded = newCount > ANALYTICS_RATE_PER_MINUTE;
+        tx.set(userRef, {
+          rateLimitAnalytics: {
+            count:       newCount,
+            windowStart: windowExpired ? now : rw.windowStart
+          }
+        }, { merge: true });
+      });
 
-      if (newCount > ANALYTICS_RATE_PER_MINUTE) {
+      if (analyticsRateLimitExceeded) {
         return secureResponse({ error: "Too many requests. Wait a moment before generating another insight." }, 429);
       }
-
-      userRef.update({
-        rateLimitAnalytics: {
-          count: newCount,
-          windowStart: windowExpired ? now : rw.windowStart
-        }
-      });
 
       ////////////////////////////////////////////////////
       // CREDIT RESET + CHECK + DEDUCT
@@ -212,7 +216,8 @@ Be specific, reference the actual numbers, and keep the tone professional.
       return secureResponse({ insight: res.choices[0].message.content }, 200);
 
     } catch (err) {
-      return secureResponse({ error: err.message }, 500);
+      console.error("analyticsInsights error:", err?.message || err);
+      return secureResponse({ error: "Failed to generate insights. Please try again." }, 500);
     }
 
   }

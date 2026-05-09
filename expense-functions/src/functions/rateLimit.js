@@ -62,33 +62,43 @@ async function verifyToken(request) {
   if (!token) return null;
   try {
     return await admin.auth().verifyIdToken(token, true); // checkRevoked = true
-  } catch {
+  } catch (err) {
+    // Log revoked tokens explicitly — they indicate a potential session-fixation
+    // or account-sharing incident and should be visible in monitoring.
+    if (err?.code === "auth/id-token-revoked") {
+      console.warn("Revoked token presented:", err.message);
+    }
     return null;
   }
 }
 
-// per-user sliding window stored in firestore — survives across cold starts
+// per-user sliding window stored in firestore — survives across cold starts.
+// Uses a Firestore transaction to make read-check-increment atomic, preventing
+// the TOCTOU race where parallel requests both pass by reading the same count=0.
 async function checkRateLimit(userId, field, maxRequests, windowMs = WINDOW_1_MIN) {
   const db = admin.firestore();
   const userRef = db.collection("users").doc(userId);
 
-  const userSnap = await userRef.get();
-  const userData = userSnap.data() || {};
-  const rw = userData[field] || { count: 0, windowStart: 0 };
+  let allowed = false;
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(userRef);
+    const userData = snap.data() || {};
+    const rw = userData[field] || { count: 0, windowStart: 0 };
 
-  const now = Date.now();
-  const windowExpired = now - rw.windowStart > windowMs;
-  const newCount = windowExpired ? 1 : rw.count + 1;
+    const now = Date.now();
+    const windowExpired = now - rw.windowStart > windowMs;
+    const newCount = windowExpired ? 1 : rw.count + 1;
+    allowed = newCount <= maxRequests;
 
-  // fire-and-forget so we don't slow down the response
-  userRef.update({
-    [field]: {
-      count: newCount,
-      windowStart: windowExpired ? now : rw.windowStart,
-    },
-  }).catch(() => {});
+    tx.set(userRef, {
+      [field]: {
+        count:       newCount,
+        windowStart: windowExpired ? now : rw.windowStart,
+      }
+    }, { merge: true });
+  });
 
-  return { allowed: newCount <= maxRequests };
+  return { allowed };
 }
 
 // runs ip check → token verify → per-user limit in one go

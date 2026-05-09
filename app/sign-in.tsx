@@ -181,15 +181,16 @@ export default function SignIn() {
 
       if (!identifier.includes("@")) {
         const foundEmail = await findEmailFromUsername(identifier.trim().toLowerCase());
-        if (!foundEmail) {
-          Alert.alert("User not found", "No account with that username.");
-          return;
-        }
-        if (foundEmail === "OLD_ACCOUNT") {
-          Alert.alert(
-            "Sign in with email",
-            "This account was created before username login was available. Please sign in with your email address instead."
-          );
+        if (!foundEmail || foundEmail === "OLD_ACCOUNT") {
+          // Use a generic message to avoid confirming whether a username exists (enumeration prevention).
+          // Firebase's signInWithEmailAndPassword will also return auth/invalid-credential
+          // for unknown accounts, so the lockout counter still increments correctly.
+          Alert.alert("Sign in failed", "Email or password is incorrect.");
+          failedAttemptsRef.current += 1;
+          if (failedAttemptsRef.current >= MAX_ATTEMPTS) {
+            setLockedUntil(Date.now() + LOCKOUT_MS);
+            failedAttemptsRef.current = 0;
+          }
           return;
         }
         email = foundEmail;

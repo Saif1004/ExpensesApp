@@ -17,7 +17,8 @@
         "NSPhotoLibraryAddUsageDescription": "This app may save receipt images for expense records.",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "bundleIdentifier": "com.saif1004.claimio"
+      "bundleIdentifier": "com.saif1004.claimio",
+      "buildNumber": "2"
     },
     "android": {
       "icon": "./assets/images/icon.png",

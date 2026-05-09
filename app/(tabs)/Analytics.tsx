@@ -1,18 +1,20 @@
 import React, { useEffect, useMemo, useState } from "react";
+import AnimatedLoader from "../../components/AnimatedLoader";
 
 import {
   collection,
   doc,
   getDoc,
   getDocs,
+  limit,
   onSnapshot,
+  orderBy,
   query,
   where
 } from "firebase/firestore";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
-  ActivityIndicator,
   Alert,
   Dimensions,
   ScrollView,
@@ -134,10 +136,13 @@ export default function AnalyticsScreen() {
 
   useEffect(() => {
     if (!user || !user.emailVerified) return;
+    // Limit to 500 most-recent claims so the read stays fast as data grows.
+    // All periods (month / quarter / year / tax_year / all) filter in-memory from this set.
+    // 500 is a safe ceiling for any individual or org within realistic usage.
     const q =
       scope === "org" && role === "admin" && orgId
-        ? query(collection(db, "claims"), where("orgId", "==", orgId))
-        : query(collection(db, "claims"), where("userId", "==", user.uid));
+        ? query(collection(db, "claims"), where("orgId", "==", orgId), orderBy("createdAt", "desc"), limit(500))
+        : query(collection(db, "claims"), where("userId", "==", user.uid), orderBy("createdAt", "desc"), limit(500));
     setLoading(true);
     const unsub = addListener(onSnapshot(q, snap => {
       setAllClaims(snap.docs.map(d => ({ id: d.id, ...d.data() } as Claim)));
@@ -432,7 +437,11 @@ export default function AnalyticsScreen() {
 
   // ── Early returns (after all hooks) ─────────────────────────────────────────
   if (!isPro) return <PaywallScreen />;
-  if (loading) return <View style={[styles.container, styles.center]}><ActivityIndicator size="large" color={t.accent} /></View>;
+  if (loading) return (
+    <View style={[styles.container, styles.center]}>
+      <AnimatedLoader messages={["Fetching your data…", "Building charts…", "Crunching numbers…", "Almost there…"]} />
+    </View>
+  );
 
   // ── Tab content ─────────────────────────────────────────────────────────────
 
@@ -484,7 +493,7 @@ export default function AnalyticsScreen() {
       <View style={styles.aiCard}>
         <ThemedText style={styles.aiTitle}>✦ Spending Analysis</ThemedText>
         {aiLoading
-          ? <ActivityIndicator color={t.accent} />
+          ? <AnimatedLoader messages={["Analysing your spending…", "Spotting trends…", "Generating insights…", "Almost there…"]} intervalMs={1800} />
           : <ThemedText style={styles.aiText}>{aiInsight || "Tap below to generate spending insights for this period."}</ThemedText>
         }
         <TouchableOpacity style={styles.aiBtn} onPress={generateAIInsights}>

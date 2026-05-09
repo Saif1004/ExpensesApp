@@ -13,6 +13,8 @@ const SECURITY_HEADERS = {
   "Cache-Control": "no-store, no-cache, must-revalidate",
   "Pragma": "no-cache",
   "Referrer-Policy": "no-referrer",
+  // Restrictive CSP — these are JSON API endpoints, no scripts or frames expected
+  "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
   // CORS locked to the web domain — mobile apps don't send Origin so they're unaffected
   "Access-Control-Allow-Origin": "https://claimio.org",
   "Access-Control-Allow-Methods": "POST, OPTIONS",

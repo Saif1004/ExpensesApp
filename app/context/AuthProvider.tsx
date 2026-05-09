@@ -20,6 +20,7 @@ import React, {
   useRef,
   useState
 } from "react";
+import AnimatedLoader from "../../components/AnimatedLoader";
 import { AppState, Platform } from "react-native";
 import { OrgPlan, PLAN_LIMITS } from "../../constants/planLimits";
 import { unsubscribeAll } from "../../utils/listenerStore";
@@ -470,11 +471,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     refreshMembership, refreshOrgPlan
   ]);
 
-  // don't render until we know who the user is
+  // don't render until we know who the user is.
+  // Render a loader instead of null — returning null blocks the UI thread
+  // and triggers iOS "App Hanging" detection in Sentry.
 
   const roleLoaded = role !== null || !user;
 
-  if (!authLoaded || !roleLoaded) return null;
+  if (!authLoaded || !roleLoaded) {
+    return (
+      <AnimatedLoader
+        messages={["Loading your account…", "Fetching organisation…", "Almost there…"]}
+        overlay={false}
+      />
+    );
+  }
 
   return (
     <AuthContext.Provider value={value}>

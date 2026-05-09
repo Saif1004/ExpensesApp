@@ -100,7 +100,8 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!user) return;
 
-    const q = query(collection(db, "claims"), where("userId", "==", user.uid));
+    // limit to 200 so the listener stays fast at scale; covers all realistic user histories
+    const q = query(collection(db, "claims"), where("userId", "==", user.uid), limit(200));
     const unsub = addListener(onSnapshot(q, (snapshot) => {
       let spend = 0, pendingCount = 0, approvedCount = 0;
       snapshot.docs.forEach(doc => {

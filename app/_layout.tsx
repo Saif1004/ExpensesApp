@@ -14,8 +14,10 @@ GoogleSignin.configure({
 });
 
 // kick off sentry before anything else loads
+// DSN is stored as an EAS Sensitive env var (EXPO_PUBLIC_SENTRY_DSN) — not hardcoded.
+// If missing in local dev, Sentry initialises silently with no DSN (no crash, no reporting).
 Sentry.init({
-  dsn: "https://7ed0bbc868847a712d655357b3f2d554@o4511227413331968.ingest.de.sentry.io/4511227415429200",
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN ?? "",
   tracesSampleRate: 1.0,
   _experiments: { profilesSampleRate: 1.0 },
 });

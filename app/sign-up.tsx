@@ -35,13 +35,13 @@ import GoogleLogo from "../components/GoogleLogo";
 
 // shared helper functions
 
-const generateInviteCode = () => {
+// Use crypto.getRandomValues() (available in React Native's Hermes engine) for
+// cryptographically secure invite codes — Math.random() is predictable from timestamp.
+const generateInviteCode = (): string => {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return code;
+  const bytes = new Uint8Array(6);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes).map(b => chars[b % chars.length]).join('');
 };
 
 const usernameExists = async (username: string) => {
