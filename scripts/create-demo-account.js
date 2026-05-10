@@ -16,6 +16,9 @@
  * Run: node scripts/create-demo-account.js
  */
 
+// Load .env.demo so the private key (multi-line) is parsed correctly
+require("../node_modules/dotenv").config({ path: __dirname + "/.env.demo" });
+
 const admin = require("../expense-functions/node_modules/firebase-admin");
 
 // ── Credentials from environment — never hardcoded ────────────────────────
