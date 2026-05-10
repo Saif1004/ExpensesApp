@@ -68,7 +68,7 @@ export default function ChatbotScreen() {
       if (!user) return;
 
       try {
-        const token = await user.getIdToken();
+        const token = await user.getIdToken(true);
 
         const res = await fetch(CHATBOT_URL, {
           method: "POST",
@@ -122,7 +122,7 @@ export default function ChatbotScreen() {
 
     try {
 
-      const token = await user.getIdToken();
+      const token = await user.getIdToken(true);
 
       const response = await fetch(CHATBOT_URL, {
         method: "POST",

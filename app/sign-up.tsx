@@ -344,7 +344,7 @@ export default function SignUp() {
       try { await sendEmailVerification(cred.user); } catch {}
 
       // 2. Resolve the invite code via the server (prevents direct Firestore enumeration)
-      const idToken = await cred.user.getIdToken();
+      const idToken = await cred.user.getIdToken(true);
       const resolveRes = await fetch(RESOLVE_INVITE_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${idToken}` },

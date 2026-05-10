@@ -253,7 +253,7 @@ export default function AnalyticsScreen() {
     try {
       setAiLoading(true);
       if (!user) return;
-      const token = await user.getIdToken();
+      const token = await user.getIdToken(true);
       const res = await fetch(AI_URL, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }, body: JSON.stringify({ stats: { ...stats, period } }) });
       const result = await res.json();
       setAiInsight(result?.error ? result.error : (result?.insight ?? ""));

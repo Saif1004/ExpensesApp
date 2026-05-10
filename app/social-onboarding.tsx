@@ -228,7 +228,7 @@ export default function SocialOnboarding() {
       // let admins know someone requested to join
       const notifyJoinUrl = process.env.EXPO_PUBLIC_NOTIFY_JOIN_REQUEST_URL;
       if (notifyJoinUrl) {
-        user?.getIdToken().then(token =>
+        user?.getIdToken(true).then(token =>
           fetch(notifyJoinUrl, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
