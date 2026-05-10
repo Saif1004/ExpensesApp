@@ -231,8 +231,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (err) {
       console.log("Membership load error:", err);
-      setRole("employee");
-      setStatus("none");
+      // Preserve an already-established approved/pending status on transient errors
+      // (network blip, Firestore timeout while app is foregrounding).
+      // Only reset to "none" if we have never successfully loaded membership —
+      // this prevents the AppState refresh loop from kicking users back to onboarding.
+      setRole(prev => prev ?? "employee");
+      setStatus(prev => (prev === "approved" || prev === "pending") ? prev : "none");
     }
   }, [loadOrgData]);
 
