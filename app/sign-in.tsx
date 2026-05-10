@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { usePostHog } from "posthog-react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -15,7 +16,7 @@ import {
   signOut,
 } from "firebase/auth";
 import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
-import { useRef, useMemo, useState } from "react";
+import { useRef, useMemo, useState, useEffect } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -48,9 +49,29 @@ export default function SignIn() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading]           = useState(false);
 
-  // track failed logins for client-side lockout
+  // track failed logins for client-side lockout (persisted so app restart doesn't reset it)
+  const LOCKOUT_KEY     = "@signin_lockout_until";
+  const ATTEMPTS_KEY    = "@signin_failed_attempts";
   const failedAttemptsRef             = useRef(0);
   const [lockedUntil, setLockedUntil] = useState<number | null>(null);
+
+  // rehydrate lockout state from storage on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const [storedUntil, storedAttempts] = await Promise.all([
+          AsyncStorage.getItem(LOCKOUT_KEY),
+          AsyncStorage.getItem(ATTEMPTS_KEY),
+        ]);
+        if (storedUntil) {
+          const until = parseInt(storedUntil, 10);
+          if (until > Date.now()) setLockedUntil(until);
+          else await AsyncStorage.removeItem(LOCKOUT_KEY); // expired — clear it
+        }
+        if (storedAttempts) failedAttemptsRef.current = parseInt(storedAttempts, 10);
+      } catch {}
+    })();
+  }, []);
 
   // looks up the email for a given username
 
@@ -188,8 +209,13 @@ export default function SignIn() {
           Alert.alert("Sign in failed", "Email or password is incorrect.");
           failedAttemptsRef.current += 1;
           if (failedAttemptsRef.current >= MAX_ATTEMPTS) {
-            setLockedUntil(Date.now() + LOCKOUT_MS);
+            const until = Date.now() + LOCKOUT_MS;
+            setLockedUntil(until);
             failedAttemptsRef.current = 0;
+            AsyncStorage.setItem(LOCKOUT_KEY, String(until)).catch(() => {});
+            AsyncStorage.removeItem(ATTEMPTS_KEY).catch(() => {});
+          } else {
+            AsyncStorage.setItem(ATTEMPTS_KEY, String(failedAttemptsRef.current)).catch(() => {});
           }
           return;
         }
@@ -229,6 +255,7 @@ export default function SignIn() {
 
       failedAttemptsRef.current = 0;
       setLockedUntil(null);
+      AsyncStorage.multiRemove([LOCKOUT_KEY, ATTEMPTS_KEY]).catch(() => {});
       posthog?.identify(cred.user.uid, {
         $set: { email: cred.user.email ?? undefined },
         $set_once: { first_login_date: new Date().toISOString() },
@@ -245,12 +272,15 @@ export default function SignIn() {
         code === "auth/user-not-found"
       ) {
         failedAttemptsRef.current += 1;
+        AsyncStorage.setItem(ATTEMPTS_KEY, String(failedAttemptsRef.current)).catch(() => {});
         const remaining = MAX_ATTEMPTS - failedAttemptsRef.current;
 
         if (failedAttemptsRef.current >= MAX_ATTEMPTS) {
           const until = Date.now() + LOCKOUT_MS;
           setLockedUntil(until);
           failedAttemptsRef.current = 0;
+          AsyncStorage.setItem(LOCKOUT_KEY, String(until)).catch(() => {});
+          AsyncStorage.removeItem(ATTEMPTS_KEY).catch(() => {});
           posthog?.capture("sign_in_failed", { reason: "account_locked" });
           Alert.alert(
             "Too many attempts",

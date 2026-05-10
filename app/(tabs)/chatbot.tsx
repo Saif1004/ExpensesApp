@@ -1,6 +1,5 @@
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useEffect, useMemo, useRef, useState } from "react";
-import AnimatedLoader from "../../components/AnimatedLoader";
 import {
   Alert,
   Animated,
@@ -313,6 +312,46 @@ export default function ChatbotScreen() {
   // Guard: show paywall if not pro (after all hooks)
   if (!isPro) return <PaywallScreen />;
 
+  // compact 3-dot typing indicator for the bot bubble
+  const TypingDots = () => {
+    const dot1 = useRef(new Animated.Value(0.3)).current;
+    const dot2 = useRef(new Animated.Value(0.3)).current;
+    const dot3 = useRef(new Animated.Value(0.3)).current;
+
+    useEffect(() => {
+      const pulse = (dot: Animated.Value, delay: number) =>
+        Animated.loop(
+          Animated.sequence([
+            Animated.delay(delay),
+            Animated.timing(dot, { toValue: 1,   duration: 300, useNativeDriver: true }),
+            Animated.timing(dot, { toValue: 0.3, duration: 300, useNativeDriver: true }),
+            Animated.delay(500),
+          ])
+        );
+      const a1 = pulse(dot1, 0);
+      const a2 = pulse(dot2, 200);
+      const a3 = pulse(dot3, 400);
+      a1.start(); a2.start(); a3.start();
+      return () => { a1.stop(); a2.stop(); a3.stop(); };
+    }, []);
+
+    return (
+      <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: 2 }}>
+        {[dot1, dot2, dot3].map((opacity, i) => (
+          <Animated.View
+            key={i}
+            style={{
+              width: 8, height: 8, borderRadius: 4,
+              backgroundColor: t.textSecondary,
+              opacity,
+              marginHorizontal: 3,
+            }}
+          />
+        ))}
+      </View>
+    );
+  };
+
   // individual chat message with a fade-in animation
 
   const MessageBubble = ({ item }: { item: ChatMessage }) => {
@@ -355,39 +394,42 @@ export default function ChatbotScreen() {
         keyboardVerticalOffset={Platform.OS === "ios" ? tabBarHeight + 10 : 0}
       >
 
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-          <View style={styles.container}>
+            <View style={styles.container}>
 
-            <ThemedText type="title" style={styles.title}>
-              Virtual Assistant
-            </ThemedText>
+            <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+              <View>
+                <ThemedText type="title" style={styles.title}>
+                  Virtual Assistant
+                </ThemedText>
 
-            {remainingAI !== null && creditLimit !== null && (
-              <ThemedText style={[
-                styles.credits,
-                remainingAI <= 5 && { color: t.warning },
-                remainingAI === 0 && { color: t.error }
-              ]}>
-                AI Credits: {remainingAI} / {creditLimit}
-              </ThemedText>
-            )}
-
-            <View style={styles.quickRow}>
-              {QUICK_QUESTIONS.map(q => (
-                <TouchableOpacity
-                  key={q}
-                  style={styles.quickBtn}
-                  onPress={() => sendMessage(q)}
-                  disabled={sending}
-                >
-                  <ThemedText style={styles.quickText}>
-                    {q}
+                {remainingAI !== null && creditLimit !== null && (
+                  <ThemedText style={[
+                    styles.credits,
+                    remainingAI <= 5 && { color: t.warning },
+                    remainingAI === 0 && { color: t.error }
+                  ]}>
+                    AI Credits: {remainingAI} / {creditLimit}
                   </ThemedText>
-                </TouchableOpacity>
-              ))}
-            </View>
+                )}
 
-            {/* message list */}
+                <View style={styles.quickRow}>
+                  {QUICK_QUESTIONS.map(q => (
+                    <TouchableOpacity
+                      key={q}
+                      style={styles.quickBtn}
+                      onPress={() => sendMessage(q)}
+                      disabled={sending}
+                    >
+                      <ThemedText style={styles.quickText}>
+                        {q}
+                      </ThemedText>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+
+            {/* message list — not inside TouchableWithoutFeedback so scrolling isn't blocked */}
             <FlatList
               ref={flatListRef}
               data={messages}
@@ -396,18 +438,15 @@ export default function ChatbotScreen() {
               style={{ flex: 1 }}
               contentContainerStyle={{ paddingBottom: 12 }}
               keyboardShouldPersistTaps="handled"
-              keyboardDismissMode="interactive"
+              keyboardDismissMode="on-drag"
               showsVerticalScrollIndicator={false}
               onContentSizeChange={() => {
                 flatListRef.current?.scrollToEnd({ animated: true });
               }}
               ListFooterComponent={
                 botTyping ? (
-                  <View style={[styles.messageBubble, styles.botBubble, { paddingVertical: 12 }]}>
-                    <AnimatedLoader
-                      messages={["Thinking…", "Checking your expenses…", "Almost there…"]}
-                      intervalMs={1600}
-                    />
+                  <View style={[styles.messageBubble, styles.botBubble]}>
+                    <TypingDots />
                   </View>
                 ) : null
               }
@@ -447,7 +486,6 @@ export default function ChatbotScreen() {
             </View>
 
           </View>
-        </TouchableWithoutFeedback>
 
       </KeyboardAvoidingView>
 

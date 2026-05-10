@@ -39,7 +39,7 @@ export default function PaymentSetupScreen() {
     if (!user || !cardComplete) return;
     setLoading(true);
     try {
-      const token = await user.getIdToken();
+      const token = await user.getIdToken(true);
 
       // Get SetupIntent client secret from Azure
       const res = await fetch(SETUP_URL, {

@@ -263,6 +263,7 @@ function membershipRejectedEmail({ employeeName, orgName }) {
 }
 
 module.exports = {
+  he,
   sendEmail, sendPush,
   claimApprovedEmail, claimRejectedEmail, newClaimAdminEmail,
   joinRequestAdminEmail, membershipApprovedEmail, membershipRejectedEmail,

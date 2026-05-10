@@ -1,6 +1,6 @@
 // firebase/firebaseConfig.js
 
-import ReactNativeAsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
 import { getApp, getApps, initializeApp } from "firebase/app";
 import {
   getAuth,
@@ -19,6 +19,23 @@ const firebaseConfig = {
   measurementId:     process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID,
 };
 
+// SecureStore-backed persistence adapter for Firebase Auth.
+// On iOS this uses the Keychain; on Android it uses the Keystore-backed
+// EncryptedSharedPreferences — both are hardware-backed on modern devices.
+// This replaces AsyncStorage (plaintext on rooted Android).
+//
+// Firebase Auth passes keys like "firebase:authUser:apiKey:[DEFAULT]" which
+// contain characters SecureStore rejects (only alphanumeric, ".", "-", "_"
+// are allowed). We replace every disallowed character with "_" to produce a
+// stable, valid key without losing uniqueness in practice.
+const sanitizeKey = (key) => key.replace(/[^a-zA-Z0-9._-]/g, "_");
+
+const SecureStoreAdapter = {
+  getItem:    (key) => SecureStore.getItemAsync(sanitizeKey(key)),
+  setItem:    (key, value) => SecureStore.setItemAsync(sanitizeKey(key), value),
+  removeItem: (key) => SecureStore.deleteItemAsync(sanitizeKey(key)),
+};
+
 // Guard against duplicate app initialisation (Expo hot-reload / StrictMode)
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
@@ -26,7 +43,7 @@ const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 let auth;
 try {
   auth = initializeAuth(app, {
-    persistence: getReactNativePersistence(ReactNativeAsyncStorage),
+    persistence: getReactNativePersistence(SecureStoreAdapter),
   });
 } catch {
   // Already initialised on a previous hot-reload — reuse existing instance

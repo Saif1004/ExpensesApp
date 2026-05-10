@@ -213,12 +213,10 @@ service cloud.firestore {
 
     match /organisations/{orgId} {
 
-      // Requires authentication. The invite-code lookup at sign-up runs before
-      // email is verified so we can't require verified() here without breaking
-      // the sign-up flow. Full fix: move invite-code lookup to a server-side
-      // Azure Function so unauthenticated users can never query org docs.
-      // Unauthenticated requests are blocked by Firebase by default.
-      allow read: if request.auth != null;
+      // Tightened to verified() — invite-code lookup is now handled by the resolveInviteCode
+      // server function so unverified users no longer need direct org read access.
+      // Full membership-scoped reads require a denormalised lookup doc (future work).
+      allow read: if verified();
 
       // request.auth != null (not verified()) — email not yet verified at sign-up time
       allow create: if request.auth != null

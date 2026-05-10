@@ -184,6 +184,12 @@ app.http("receiptOCR", {
         return secureResponse({ error: "No image provided" }, 400);
       }
 
+      // Reject oversized payloads before sending to Azure — prevents DoS / cost amplification
+      const MAX_BASE64_LEN = 13_500_000; // ~10 MB decoded
+      if (typeof image !== "string" || image.length > MAX_BASE64_LEN) {
+        return secureResponse({ error: "Image exceeds 10 MB limit" }, 400);
+      }
+
       // set up the azure document intelligence endpoint
 
       const endpoint = process.env.AZURE_DOC_ENDPOINT;
@@ -244,6 +250,12 @@ app.http("receiptOCR", {
         }
 
         await new Promise(r => setTimeout(r, 1500));
+      }
+
+      // if the job never completed within 20 polls, return a timeout error
+      if (result?.status !== "succeeded") {
+        context.log("OCR timed out after polling: status=%s", result?.status);
+        return secureResponse({ error: "OCR timed out — please try again" }, 504);
       }
 
       // pull the key fields out of the OCR result
@@ -323,15 +335,8 @@ app.http("receiptOCR", {
 
       }
 
-      // log what we got for debugging
-
-      context.log("OCR RESULT:", {
-        merchant,
-        amount,
-        date,
-        items,
-        category
-      });
+      // log only non-PII fields — merchant names and item descriptions are personal data
+      context.log("OCR RESULT: category=%s amount_present=%s", category, amount != null ? "yes" : "no");
 
       // send the extracted receipt data back
 

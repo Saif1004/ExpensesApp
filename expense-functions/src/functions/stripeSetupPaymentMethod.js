@@ -51,7 +51,7 @@ app.http('stripeSetupPaymentMethod', {
 
     } catch (err) {
       context.error('stripeSetupPaymentMethod error:', err);
-      return secureResponse({ error: err.message }, 500);
+      return secureResponse({ error: 'Internal server error' }, 500);
     }
   },
 });
@@ -82,6 +82,13 @@ app.http('stripeSavePaymentMethod', {
       const userDoc = await admin.firestore().collection('users').doc(uid).get();
       const { stripeCustomerId } = userDoc.data();
 
+      // Retrieve PM first and verify it doesn't already belong to a different customer
+      // (prevents an attacker from hijacking another user's card by supplying their pm_xxx ID)
+      const pm = await stripe.paymentMethods.retrieve(paymentMethodId);
+      if (pm.customer && pm.customer !== stripeCustomerId) {
+        return secureResponse({ error: 'Invalid payment method' }, 403);
+      }
+
       // Attach payment method to customer
       await stripe.paymentMethods.attach(paymentMethodId, { customer: stripeCustomerId });
 
@@ -90,8 +97,6 @@ app.http('stripeSavePaymentMethod', {
         invoice_settings: { default_payment_method: paymentMethodId },
       });
 
-      // Retrieve card details to display
-      const pm = await stripe.paymentMethods.retrieve(paymentMethodId);
       const card = pm.card;
 
       await admin.firestore().collection('users').doc(uid).update({
@@ -104,7 +109,7 @@ app.http('stripeSavePaymentMethod', {
 
     } catch (err) {
       context.error('stripeSavePaymentMethod error:', err);
-      return secureResponse({ error: err.message }, 500);
+      return secureResponse({ error: 'Internal server error' }, 500);
     }
   },
 });
@@ -169,7 +174,7 @@ app.http('stripeCheckOnboarding', {
 
     } catch (err) {
       context.error('stripeCheckOnboarding error:', err);
-      return secureResponse({ error: err.message }, 500);
+      return secureResponse({ error: 'Internal server error' }, 500);
     }
   },
 });

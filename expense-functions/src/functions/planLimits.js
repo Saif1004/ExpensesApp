@@ -1,4 +1,5 @@
 const { app } = require("@azure/functions");
+const { requireAuth, secureResponse } = require("./security");
 
 // Shared plan limits — keep in sync with constants/planLimits.ts on the frontend
 
@@ -42,10 +43,9 @@ app.http("planLimits", {
   authLevel: "anonymous",
 
   handler: async (request, context) => {
-    return {
-      status: 200,
-      jsonBody: PLAN_LIMITS
-    };
+    const { uid, authError } = await requireAuth(request);
+    if (authError) return authError;
+    return secureResponse(PLAN_LIMITS, 200);
   }
 });
 

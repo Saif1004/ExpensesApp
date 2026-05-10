@@ -386,6 +386,9 @@ export default function AdminScreen() {
   // opens/closes the approve/reject confirmation modal
 
   const openConfirmModal  = (claim: Claim, action: "approved" | "rejected") => {
+    // Defence-in-depth: Firestore rules already block self-approval,
+    // but prevent the modal opening at all for the admin's own claims
+    if (claim.userId === auth.currentUser?.uid) return;
     setAdminMessage("");
     setConfirmModal({ visible: true, claim, action });
   };
@@ -424,7 +427,7 @@ export default function AdminScreen() {
         adminFeedback: adminMessage.trim() || null,
         timestamp:     serverTimestamp(),
       }).catch(() => {});
-      currentUser?.getIdToken().then(token => {
+      currentUser?.getIdToken(true).then(token => {
         fetch(NOTIFY_URL, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -463,7 +466,7 @@ export default function AdminScreen() {
     }).catch(() => {});
 
     // notify the employee in the background, don't wait on it
-    currentUser?.getIdToken().then((token) => {
+    currentUser?.getIdToken(true).then((token) => {
       fetch(NOTIFY_URL, {
         method:  "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -482,7 +485,7 @@ export default function AdminScreen() {
         reimburse: true,
       });
       try {
-        const token = await currentUser?.getIdToken();
+        const token = await currentUser?.getIdToken(true);
         const res   = await fetch(REIMBURSE_URL, {
           method:  "POST",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -589,7 +592,7 @@ export default function AdminScreen() {
 
       if (bulkAction === "approved") {
         try {
-          const token = await currentUser?.getIdToken();
+          const token = await currentUser?.getIdToken(true);
           const res   = await fetch(REIMBURSE_URL, {
             method:  "POST",
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -602,7 +605,7 @@ export default function AdminScreen() {
         }
       }
 
-      currentUser?.getIdToken().then(token => {
+      currentUser?.getIdToken(true).then(token => {
         fetch(NOTIFY_URL, {
           method:  "POST",
           headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },

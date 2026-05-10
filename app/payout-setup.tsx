@@ -52,7 +52,7 @@ export default function PayoutSetupScreen() {
     if (!user) return null;
     setChecking(true);
     try {
-      const token = await user.getIdToken();
+      const token = await user.getIdToken(true);
       const res = await fetch(CHECK_URL, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -80,7 +80,7 @@ export default function PayoutSetupScreen() {
     if (!user) return;
     setLoading(true);
     try {
-      const token = await user.getIdToken();
+      const token = await user.getIdToken(true);
 
       // Step 1: Create Connect account (or retrieve existing)
       const createRes = await fetch(CREATE_URL, {

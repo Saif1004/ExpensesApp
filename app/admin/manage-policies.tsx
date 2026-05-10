@@ -168,7 +168,7 @@ const addPolicy = async()=>{
 
     const user = auth.currentUser;
     if (!user) return;
-    const token = await user.getIdToken();
+    const token = await user.getIdToken(true);
 
     const res = await fetch(AI_POLICY_URL,{
       method:"POST",

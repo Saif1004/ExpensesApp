@@ -308,7 +308,7 @@ export default function AddExpenseScreen() {
 
       // fresh token for the azure function calls
       if (!user) throw new Error("Not authenticated");
-      const idToken = await user.getIdToken();
+      const idToken = await user.getIdToken(true);
       const authHeaders = {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${idToken}`,
@@ -439,7 +439,7 @@ export default function AddExpenseScreen() {
       setSaving(true);
 
       // fresh token for the validate call
-      const idToken = await user.getIdToken();
+      const idToken = await user.getIdToken(true);
 
       // build the effective merchant and amount for mileage/perdiem
       const effectiveMerchant =

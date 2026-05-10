@@ -80,10 +80,15 @@ async function checkAndDeductCredit(orgRef, orgData, planConfig, plan) {
       remaining = credits - 1;
     });
   } catch (txErr) {
-    // Transaction failed (conflict or network) — fail open so a single AI call
-    // isn't blocked by a transient error, but log it for monitoring.
+    // Fail closed — a transient Firestore error should not bypass credit limits
     console.error("aiCredits transaction error:", txErr?.message);
-    return { creditError: null, remaining: 1 }; // treat as 1 credit remaining
+    return {
+      creditError: secureResponse(
+        { success: false, error: "Could not verify AI credits. Please try again." },
+        503
+      ),
+      remaining: 0
+    };
   }
 
   // ── Credit gate ───────────────────────────────────────────────────────────

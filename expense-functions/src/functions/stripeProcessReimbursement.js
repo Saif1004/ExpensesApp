@@ -130,7 +130,7 @@ app.http('stripeProcessReimbursement', {
           adminUid,
           employeeUid: claim.userId,
         },
-      });
+      }, { idempotencyKey: `reimburse-${claimId}` }); // prevents double-charge on network retry
 
       ////////////////////////////////////////////////////
       // UPDATE CLAIM
@@ -159,7 +159,7 @@ app.http('stripeProcessReimbursement', {
         } catch (_) {}
       }
 
-      return secureResponse({ error: err.message }, 500);
+      return secureResponse({ error: 'Payment processing failed. Please try again.' }, 500);
     }
   },
 });

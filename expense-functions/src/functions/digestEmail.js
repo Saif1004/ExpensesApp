@@ -1,6 +1,6 @@
 const { app } = require('@azure/functions');
 const admin = require('firebase-admin');
-const { sendEmail } = require('./notify');
+const { sendEmail, he } = require('./notify');
 
 ////////////////////////////////////////////////////
 // DIGEST EMAIL — Timer Trigger
@@ -128,9 +128,9 @@ function digestEmailTemplate({ adminName, orgName, pendingCount, recentClaims, w
         const statusLabel = c.status === 'approved' ? '✅ Approved' : '❌ Rejected';
         return `
         <tr>
-          <td style="padding:8px 12px;border-bottom:1px solid #E5E7EB;font-size:13px;">${c.merchant ?? '—'}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #E5E7EB;font-size:13px;">${he(c.merchant ?? '—')}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #E5E7EB;font-size:13px;">£${Number(c.amount).toFixed(2)}</td>
-          <td style="padding:8px 12px;border-bottom:1px solid #E5E7EB;font-size:13px;">${c.userEmail ?? '—'}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #E5E7EB;font-size:13px;">${he(c.userEmail ?? '—')}</td>
           <td style="padding:8px 12px;border-bottom:1px solid #E5E7EB;font-size:13px;color:${statusColor};font-weight:600;">${statusLabel}</td>
         </tr>`;
       }).join('')
@@ -157,8 +157,8 @@ function digestEmailTemplate({ adminName, orgName, pendingCount, recentClaims, w
           <!-- Body -->
           <tr>
             <td style="padding:32px 40px;">
-              <p style="color:#374151;font-size:15px;margin:0 0 24px;">Hi ${adminName},</p>
-              <p style="color:#6B7280;font-size:14px;margin:0 0 24px;">Here's your ${freq} summary for <strong>${orgName}</strong>.</p>
+              <p style="color:#374151;font-size:15px;margin:0 0 24px;">Hi ${he(adminName)},</p>
+              <p style="color:#6B7280;font-size:14px;margin:0 0 24px;">Here's your ${freq} summary for <strong>${he(orgName)}</strong>.</p>
 
               ${pendingSection}
 

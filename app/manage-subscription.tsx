@@ -22,6 +22,13 @@ import { useTheme } from "../hooks/useTheme";
 const isExpoGo = Constants.executionEnvironment === "storeClient";
 const SYNC_PLAN_URL = process.env.EXPO_PUBLIC_SYNC_PLAN_URL!;
 
+type PricingPackages = {
+  proMonthly:      string | null;
+  proAnnual:       string | null;
+  businessMonthly: string | null;
+  businessAnnual:  string | null;
+};
+
 //////////////////////////////////////////////////////
 // HELPERS
 //////////////////////////////////////////////////////
@@ -54,6 +61,34 @@ export default function ManageSubscriptionScreen() {
 
   const [restoring, setRestoring] = useState(false);
 
+  // load live localised prices from RevenueCat
+  const [pricing, setPricing] = useState<PricingPackages>({
+    proMonthly: null, proAnnual: null, businessMonthly: null, businessAnnual: null,
+  });
+  const [pricingLoaded, setPricingLoaded] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS === "web" || isExpoGo || __DEV__) { setPricingLoaded(true); return; }
+    (async () => {
+      try {
+        const Purchases = (await import("react-native-purchases")).default;
+        const offerings = await Purchases.getOfferings();
+        const pkgs = offerings.current?.availablePackages ?? [];
+        const next: PricingPackages = { proMonthly: null, proAnnual: null, businessMonthly: null, businessAnnual: null };
+        for (const pkg of pkgs) {
+          const id: string = (pkg as any).identifier ?? "";
+          const ps: string = (pkg as any).product?.priceString ?? "";
+          if      (id === "pro_monthly")       next.proMonthly      = ps;
+          else if (id === "pro_annual")        next.proAnnual       = ps;
+          else if (id === "business_monthly")  next.businessMonthly = ps;
+          else if (id === "business_annual")   next.businessAnnual  = ps;
+        }
+        setPricing(next);
+      } catch { /* leave nulls — fallback strings used */ }
+      finally { setPricingLoaded(true); }
+    })();
+  }, []);
+
   const planColors: Record<OrgPlan, string> = {
     free:     t.textSecondary,
     trial:    t.warning,
@@ -78,7 +113,7 @@ export default function ManageSubscriptionScreen() {
       const Purchases = (await import("react-native-purchases")).default;
       await Purchases.restorePurchases();
 
-      const token = await user!.getIdToken();
+      const token = await user!.getIdToken(true);
       const res = await fetch(SYNC_PLAN_URL, {
         method:  "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
@@ -467,7 +502,7 @@ export default function ManageSubscriptionScreen() {
         <View style={styles.pricingBox}>
           <Ionicons name="information-circle-outline" size={16} color={t.textTertiary} style={{ marginRight: 8, marginTop: 1 }} />
           <ThemedText style={styles.pricingText}>
-            Subscriptions auto-renew. Pricing is per organisation — your whole team gets access. Cancel anytime via the {Platform.OS === "ios" ? "App Store" : "Play Store"}.
+            Pricing is per organisation — your whole team gets access. Prices shown in your local currency. Subscriptions auto-renew; cancel anytime via the {Platform.OS === "ios" ? "App Store" : "Play Store"}.
           </ThemedText>
         </View>
 
@@ -475,8 +510,23 @@ export default function ManageSubscriptionScreen() {
         <View style={styles.section}>
           <ThemedText style={styles.sectionTitle}>PLAN PRICING</ThemedText>
           <View style={styles.pricingCard}>
-            <PricingRow plan="Pro"      monthly="£14.99/mo" annual="£11.99/mo (billed annually)" color={t.accent} styles={styles} />
-            <PricingRow plan="Business" monthly="£34.99/mo" annual="£27.99/mo (billed annually)" color="#A78BFA" isLast styles={styles} />
+            <PricingRow
+              plan="Pro"
+              monthly={pricing.proMonthly      ? `${pricing.proMonthly}/mo`  : `${PLAN_LIMITS.pro.priceMonthly}/mo`}
+              annual={pricing.proAnnual        ? `${pricing.proAnnual}/yr`   : `${PLAN_LIMITS.pro.priceAnnual}/yr`}
+              loading={!pricingLoaded}
+              color={t.accent}
+              styles={styles}
+            />
+            <PricingRow
+              plan="Business"
+              monthly={pricing.businessMonthly ? `${pricing.businessMonthly}/mo` : `${PLAN_LIMITS.business.priceMonthly}/mo`}
+              annual={pricing.businessAnnual   ? `${pricing.businessAnnual}/yr`  : `${PLAN_LIMITS.business.priceAnnual}/yr`}
+              loading={!pricingLoaded}
+              color="#A78BFA"
+              isLast
+              styles={styles}
+            />
           </View>
         </View>
 
@@ -541,12 +591,13 @@ function ActionRow({ icon, label, sublabel, onPress, loading, isLast, styles, t 
   );
 }
 
-function PricingRow({ plan, monthly, annual, color, isLast, styles }: {
+function PricingRow({ plan, monthly, annual, color, isLast, loading, styles }: {
   plan: string;
   monthly: string;
   annual: string;
   color: string;
   isLast?: boolean;
+  loading?: boolean;
   styles: any;
 }) {
   return (
@@ -555,8 +606,13 @@ function PricingRow({ plan, monthly, annual, color, isLast, styles }: {
         <ThemedText style={[styles.pricingPlanName, { color }]}>{plan}</ThemedText>
       </View>
       <View style={{ flex: 1, alignItems: "flex-end" }}>
-        <ThemedText style={styles.pricingMonthly}>{monthly}</ThemedText>
-        <ThemedText style={styles.pricingAnnual}>{annual}</ThemedText>
+        {loading
+          ? <ActivityIndicator size="small" color={color} />
+          : <>
+              <ThemedText style={styles.pricingMonthly}>{monthly}</ThemedText>
+              <ThemedText style={styles.pricingAnnual}>{annual} · billed annually</ThemedText>
+            </>
+        }
       </View>
     </View>
   );

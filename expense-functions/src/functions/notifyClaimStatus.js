@@ -6,6 +6,15 @@ const { sendEmail, sendPush, claimApprovedEmail, claimRejectedEmail } = require(
 
 // ── Webhook helpers ──────────────────────────────────────────────────────────
 
+// Allowlist check — prevents SSRF if an attacker writes an arbitrary URL to Firestore
+function isAllowedWebhook(url) {
+  if (!url || typeof url !== 'string') return false;
+  return url.startsWith('https://hooks.slack.com/services/')
+    || url.startsWith('https://outlook.office.com/webhook/')
+    || url.startsWith('https://outlook.office365.com/webhook/')
+    || /^https:\/\/[a-z0-9-]+\.webhook\.office\.com\//.test(url);
+}
+
 async function sendWebhook(url, payload) {
   if (!url) return;
   try {
@@ -72,8 +81,9 @@ app.http('notifyClaimStatus', {
       // load org webhook URLs (non-blocking — no error if missing)
       const orgDoc = await admin.firestore().collection('organisations').doc(claim.orgId).get().catch(() => null);
       const orgData = orgDoc?.exists ? orgDoc.data() : {};
-      const slackUrl = orgData.slackWebhookUrl || null;
-      const teamsUrl = orgData.teamsWebhookUrl || null;
+      // validate against allowlist before use — prevents SSRF via admin-written Firestore values
+      const slackUrl = isAllowedWebhook(orgData.slackWebhookUrl) ? orgData.slackWebhookUrl : null;
+      const teamsUrl = isAllowedWebhook(orgData.teamsWebhookUrl) ? orgData.teamsWebhookUrl : null;
 
       // notify all admins when a claim needs L2 sign-off
       if (status === 'pending_l2') {
@@ -180,7 +190,7 @@ app.http('notifyClaimStatus', {
 
     } catch (err) {
       context.error('notifyClaimStatus error:', err);
-      return secureResponse({ error: err.message }, 500);
+      return secureResponse({ error: 'Internal server error' }, 500);
     }
   },
 });

@@ -205,7 +205,7 @@ export default function AdminUsers() {
       // ping the employee with a notification — fire and forget
       const notifyUrl = process.env.EXPO_PUBLIC_NOTIFY_MEMBERSHIP_STATUS_URL;
       if (notifyUrl) {
-        user?.getIdToken().then(token =>
+        user?.getIdToken(true).then(token =>
           fetch(notifyUrl, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -232,7 +232,7 @@ export default function AdminUsers() {
       // same notification flow for rejection
       const notifyUrl = process.env.EXPO_PUBLIC_NOTIFY_MEMBERSHIP_STATUS_URL;
       if (notifyUrl) {
-        user?.getIdToken().then(token =>
+        user?.getIdToken(true).then(token =>
           fetch(notifyUrl, {
             method: 'POST',
             headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },

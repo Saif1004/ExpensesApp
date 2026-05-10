@@ -196,6 +196,22 @@ app.http("validateClaim", {
           submissionWindowDays = policy.value;
       });
 
+      // validate receiptUrl domain — only our own Azure Blob Storage is trusted
+      const ALLOWED_RECEIPT_HOSTNAME = process.env.AZURE_STORAGE_ACCOUNT_NAME
+        ? `${process.env.AZURE_STORAGE_ACCOUNT_NAME}.blob.core.windows.net`
+        : "saifexpensewin2026.blob.core.windows.net";
+
+      if (receiptUrl) {
+        try {
+          const parsedUrl = new URL(receiptUrl);
+          if (parsedUrl.hostname !== ALLOWED_RECEIPT_HOSTNAME) {
+            return secureResponse({ valid: false, reason: "Invalid receipt URL" }, 400);
+          }
+        } catch {
+          return secureResponse({ valid: false, reason: "Invalid receipt URL" }, 400);
+        }
+      }
+
       // check receipt requirement if the admin has configured one
       // mileage and per diem claims never have receipts — skip this check for them
 
@@ -322,36 +338,41 @@ Reply with JSON only — no explanation outside the JSON:
       // Flag if same user submitted a similar merchant + same amount within the last 30 days.
       // "Similar" = case-insensitive, whitespace-normalised merchant name match.
       // Only applies to receipt claims — mileage and per-diem legitimately repeat.
+      // Wrapped in its own try/catch so a missing index or transient Firestore error
+      // never blocks a legitimate claim submission.
       if (!claimType || claimType === "receipt") {
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        try {
+          const thirtyDaysAgo = new Date();
+          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-        // Normalise the submitted merchant name for comparison
-        const merchantNormalised = cleanMerchant.toLowerCase().replace(/\s+/g, " ").trim();
+          // Normalise the submitted merchant name for comparison
+          const merchantNormalised = cleanMerchant.toLowerCase().replace(/\s+/g, " ").trim();
 
-        // Push date + status filter to Firestore so we don't read stale/old claims.
-        // Merchant matching still happens in-memory (Firestore can't do case-insensitive).
-        // Uses composite index: userId ASC + amount ASC + createdAt DESC (firestore.indexes.json)
-        const dupSnap = await db.collection("claims")
-          .where("userId",    "==", userId)
-          .where("amount",    "==", numericAmount)
-          .where("status",    "in", ["pending", "approved"])
-          .where("createdAt", ">=", admin.firestore.Timestamp.fromDate(thirtyDaysAgo))
-          .limit(20)
-          .get();
+          // Uses composite index: userId ASC + amount ASC + status ASC + createdAt ASC
+          const dupSnap = await db.collection("claims")
+            .where("userId",    "==", userId)
+            .where("amount",    "==", numericAmount)
+            .where("status",    "in", ["pending", "approved"])
+            .where("createdAt", ">=", admin.firestore.Timestamp.fromDate(thirtyDaysAgo))
+            .limit(20)
+            .get();
 
-        const recentDup = dupSnap.docs.find(d => {
-          const data = d.data();
-          // Case-insensitive, whitespace-normalised merchant comparison
-          const existingMerchant = (data.merchant ?? "").toLowerCase().replace(/\s+/g, " ").trim();
-          return existingMerchant === merchantNormalised;
-        });
+          const recentDup = dupSnap.docs.find(d => {
+            const data = d.data();
+            // Case-insensitive, whitespace-normalised merchant comparison
+            const existingMerchant = (data.merchant ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+            return existingMerchant === merchantNormalised;
+          });
 
-        if (recentDup) {
-          return secureResponse({
-            valid: false,
-            reason: `Possible duplicate: you already submitted a £${numericAmount.toFixed(2)} claim at ${cleanMerchant} within the last 30 days (ref: ${recentDup.id.slice(0,8).toUpperCase()}). If this is a different expense, add a note to distinguish it.`
-          }, 400);
+          if (recentDup) {
+            return secureResponse({
+              valid: false,
+              reason: `Possible duplicate: you already submitted a £${numericAmount.toFixed(2)} claim at ${cleanMerchant} within the last 30 days (ref: ${recentDup.id.slice(0,8).toUpperCase()}). If this is a different expense, add a note to distinguish it.`
+            }, 400);
+          }
+        } catch (dupErr) {
+          // Non-fatal — log and continue so the claim isn't blocked by a transient index error
+          context.log("Duplicate detection skipped:", dupErr?.message);
         }
       }
 

@@ -72,7 +72,7 @@ app.http('notifyJoinRequest', {
 
     } catch (err) {
       context.error('notifyJoinRequest error:', err);
-      return secureResponse({ error: err.message }, 500);
+      return secureResponse({ error: 'Internal server error' }, 500);
     }
   },
 });
@@ -152,7 +152,7 @@ app.http('notifyMembershipStatus', {
 
     } catch (err) {
       context.error('notifyMembershipStatus error:', err);
-      return secureResponse({ error: err.message }, 500);
+      return secureResponse({ error: 'Internal server error' }, 500);
     }
   },
 });

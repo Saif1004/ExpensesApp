@@ -758,7 +758,7 @@ export default function PaywallScreen() {
       )}
 
       <ThemedText style={styles.legal}>
-        Subscriptions auto-renew. Cancel anytime in App Store / Play Store settings.
+        Prices shown in your local currency. Subscriptions are per organisation and auto-renew. Cancel anytime in App Store / Play Store settings.
       </ThemedText>
 
     </ScrollView>

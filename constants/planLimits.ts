@@ -54,7 +54,7 @@ export const PLAN_LIMITS: Record<
     analyticsAccess: true,
     claimsPerMonth: null,
     priceMonthly: "£14.99",
-    priceAnnual: "£143.88",           // £11.99/month billed annually (~20% saving)
+    priceAnnual: "£143.99",           // ~£12.00/month billed annually
     rcPackageId: "pro_monthly",       // RevenueCat package identifier (monthly)
     rcAnnualPackageId: "pro_annual",  // RevenueCat package identifier (annual)
     rcEntitlement: "pro"              // RevenueCat entitlement identifier
@@ -67,7 +67,7 @@ export const PLAN_LIMITS: Record<
     analyticsAccess: true,
     claimsPerMonth: null,
     priceMonthly: "£34.99",
-    priceAnnual: "£335.88",           // £27.99/month billed annually (~20% saving)
+    priceAnnual: "£334.99",           // ~£27.92/month billed annually
     rcPackageId: "business_monthly",
     rcAnnualPackageId: "business_annual",
     rcEntitlement: "business"

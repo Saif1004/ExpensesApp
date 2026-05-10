@@ -55,7 +55,13 @@ app.http('stripe-return', {
         '#4CAF50',
         '✅'
       ),
-      { status: 200, headers: { 'Content-Type': 'text/html' } }
+      { status: 200, headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'X-Frame-Options': 'DENY',
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'",
+        'Referrer-Policy': 'no-referrer',
+      } }
     );
   },
 });
@@ -72,7 +78,13 @@ app.http('stripe-refresh', {
         '#FF9800',
         '⚠️'
       ),
-      { status: 200, headers: { 'Content-Type': 'text/html' } }
+      { status: 200, headers: {
+        'Content-Type': 'text/html; charset=utf-8',
+        'X-Frame-Options': 'DENY',
+        'X-Content-Type-Options': 'nosniff',
+        'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'",
+        'Referrer-Policy': 'no-referrer',
+      } }
     );
   },
 });

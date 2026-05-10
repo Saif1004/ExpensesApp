@@ -1,7 +1,8 @@
 const { app } = require("@azure/functions");
 const admin = require("firebase-admin");
-const { checkRateLimit, WINDOW_15_MIN } = require("./rateLimit");
-const { requireAuth, secureResponse } = require("./security");
+const { BlobServiceClient } = require("@azure/storage-blob");
+const { authAndLimit, WINDOW_15_MIN } = require("./rateLimit");
+const { secureResponse } = require("./security");
 
 //////////////////////////////////////////////////////
 // FIREBASE INIT
@@ -32,6 +33,26 @@ async function deleteInBatches(refs) {
   }
 }
 
+// Delete receipt blobs from Azure Storage (GDPR right-to-erasure)
+async function deleteReceiptBlobs(receiptUrls) {
+  const connStr = process.env.AZURE_STORAGE_CONNECTION_STRING;
+  if (!connStr || receiptUrls.length === 0) return;
+  try {
+    const blobClient = BlobServiceClient.fromConnectionString(connStr);
+    await Promise.all(receiptUrls.map(async (url) => {
+      try {
+        const u = new URL(url);
+        // path is /<container>/<blobName>
+        const parts = u.pathname.split("/").filter(Boolean);
+        if (parts.length < 2) return;
+        const containerName = parts[0];
+        const blobName = parts.slice(1).join("/").split("?")[0]; // strip SAS query
+        await blobClient.getContainerClient(containerName).getBlockBlobClient(blobName).deleteIfExists();
+      } catch { /* non-fatal — blob may already be gone */ }
+    }));
+  } catch { /* non-fatal */ }
+}
+
 //////////////////////////////////////////////////////
 // DELETE ACCOUNT
 //////////////////////////////////////////////////////
@@ -45,20 +66,12 @@ app.http("deleteAccount", {
     try {
 
       ////////////////////////////////////////////////////
-      // OAUTH 2.0 — Bearer token verification
+      // OAUTH 2.0 + IP rate limit (irreversible action — both layers required)
       ////////////////////////////////////////////////////
 
-      const { uid, authError } = await requireAuth(request);
-      if (authError) return authError;
-
-      ////////////////////////////////////////////////////
-      // RATE LIMIT (5 per 15 minutes — irreversible action)
-      ////////////////////////////////////////////////////
-
-      const { allowed } = await checkRateLimit(uid, 'rateLimitDeleteAccount', 5, WINDOW_15_MIN);
-      if (!allowed) {
-        return secureResponse({ error: "Too many requests. Max 5 per 15 minutes." }, 429);
-      }
+      const auth = await authAndLimit(request, 'rateLimitDeleteAccount', 5, WINDOW_15_MIN);
+      if (auth.error) return auth.error;
+      const uid = auth.uid;
 
       ////////////////////////////////////////////////////
       // GATHER ALL REFS TO DELETE
@@ -172,7 +185,19 @@ app.http("deleteAccount", {
         return true;
       });
 
+      // Collect receipt blob URLs before wiping Firestore docs (GDPR erasure)
+      const claimRefs = uniqueRefs.filter(r => r.path.startsWith("claims/"));
+      const receiptUrls = [];
+      await Promise.all(claimRefs.map(async (ref) => {
+        const snap = await ref.get();
+        const url = snap.data()?.receiptUrl;
+        if (url && typeof url === "string" && url.startsWith("https://")) {
+          receiptUrls.push(url);
+        }
+      }));
+
       await deleteInBatches(uniqueRefs);
+      await deleteReceiptBlobs(receiptUrls);
 
       ////////////////////////////////////////////////////
       // DELETE FIREBASE AUTH USER
